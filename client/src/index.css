@@ -1,0 +1,180 @@
+/* Tailwind runs alongside MUI. Preflight (Tailwind's reset) is disabled in tailwind.config.js so
+   it can't fight MUI's <CssBaseline>, and every utility is `tw-` prefixed so a Tailwind class can
+   never collide with an emotion-generated one.
+   `@tailwind base` is still required: with preflight off it emits ONLY the `--tw-*` custom-property
+   defaults (not the reset), and without them ring/gradient/shadow utilities resolve to transparent. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tailwind's preflight normally zeroes `border-width` and sets `border-style: solid` on every
+   element — without it `tw-border-b` sets a bottom width but no style, so nothing paints, while
+   `tw-border` paints the OTHER three sides at the UA's default `medium` width. Preflight is off
+   here (it would fight MUI's CssBaseline), so that one reset is reinstated, scoped to elements
+   that actually carry a Tailwind border class. MUI's own class names never match, so its
+   components keep the borders their emotion styles declare.
+   This lives in @layer base so the utilities layer, emitted after it, always wins. */
+@layer base {
+  [class*='tw-border'] {
+    border-style: solid;
+    border-width: 0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Semantic status hues, mirroring theme.ts's palette for each colour scheme. StatusBadge is a
+   plain Tailwind element rather than an MUI component, so it can't read palette tokens off the
+   theme — it composes these variables with color-mix() to derive its tint and border. MUI stamps
+   `class="dark"` on <html> (theme.ts §colorSchemeSelector), which is what flips them. */
+:root {
+  --status-default: #6b7280;
+  --status-primary: #2563eb;
+  --status-secondary: #6b7280;
+  --status-success: #22c55e;
+  --status-error: #ef4444;
+  --status-warning: #f59e0b;
+  --status-info: #06b6d4;
+}
+
+.dark {
+  --status-default: #94a3b8;
+  --status-primary: #3b82f6;
+  --status-secondary: #94a3b8;
+  --status-success: #34d399;
+  --status-error: #f87171;
+  --status-warning: #fbbf24;
+  --status-info: #22d3ee;
+}
+
+/* Success Flow (md files/UI-2.md): briefly flash the row for a newly created/updated record. */
+@keyframes row-highlight-flash {
+  0% {
+    background-color: rgba(37, 99, 235, 0.18);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.row-highlight {
+  animation: row-highlight-flash 2.5s ease-out;
+}
+
+/* DataTable's toolbar refresh button spins while a background refetch is in flight. */
+@keyframes data-table-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Invoice printing — client/src/pages/payment-tracker/InvoicePage.tsx
+
+   The invoice renders inside the normal app shell, so printing has to strip the
+   sidebar, the page header and the page's own buttons.
+
+   Two mechanisms, because neither alone is enough:
+   - visibility:hidden on everything outside the sheet blanks arbitrary chrome
+     (including AppLayout's decorative background boxes) without needing a class
+     hook on each one. It cannot reclaim their space, only their ink.
+   - display:none on the drawer, plus neutralising the shell's 100vh flex layout
+     and the main pane's scrollport, reclaims that space — so the sheet starts at
+     the paper's origin and is not clipped to a single screen height.
+
+   The sheet deliberately stays in normal flow: position:absolute/fixed would pin
+   it to the first sheet and truncate an invoice that runs past one page.
+--------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+  }
+
+  .app-main {
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  .app-shell .MuiDrawer-root {
+    display: none !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .invoice-print-area,
+  .invoice-print-area * {
+    visibility: visible;
+  }
+
+  /* Controls that belong to the screen only (Print / Back buttons, breadcrumbs). */
+  .invoice-no-print {
+    display: none !important;
+  }
+
+  /* Force plain black-on-white regardless of the app's colour scheme, so printing
+     while in dark mode does not produce an inverted invoice. */
+  .invoice-print-area {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  .invoice-print-area * {
+    color: inherit !important;
+    background-color: transparent !important;
+    border-color: #bbbbbb !important;
+  }
+
+  /* Tinted blocks (table header, balance-due box) keep a light fill so the sheet
+     still has structure on paper; the accent rule prints as a solid dark line. */
+  .invoice-band {
+    background-color: #f1f2f4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .invoice-accent {
+    background-color: #111111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .invoice-print-area table {
+    page-break-inside: auto;
+  }
+
+  .invoice-print-area tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}

@@ -1,0 +1,824 @@
+// Event Management ERP — Phase 1 Data Model
+// Source of truth: docs/04_DATABASE_DESIGN.md + docs/10_IMPLEMENTATION_DECISIONS.md
+// Deviations from the docs are recorded in the implementation plan, not here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserGroupStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EventTypeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Per docs/10_IMPLEMENTATION_DECISIONS.md §2 — authoritative, supersedes earlier docs.
+// Simplified enquiry lifecycle. The customer record is only created/linked when an enquiry
+// reaches ORDER_CONFIRMED (see enquiries/service.ts changeStatus) — until then a prospective
+// customer's details live in the prospect_* columns on the Enquiry itself. ORDER_LOST is the
+// terminal "lost" bucket, reachable from any non-terminal status.
+enum EnquiryStatus {
+  PENDING
+  APPOINTMENT_FIXED
+  QUOTATION_TO_SHARE
+  QUOTATION_SHARED
+  ORDER_CONFIRMED
+  ORDER_LOST
+}
+
+enum AppointmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  REVISED
+}
+
+// docs/md files/Quotation/quotation.md — a quotation can originate from an Enquiry, an existing
+// Customer, an existing Order, or be a standalone MANUAL quotation with no linked record.
+enum QuotationSource {
+  ENQUIRY
+  CUSTOMER
+  ORDER
+  MANUAL
+}
+
+enum OrderStatus {
+  CONFIRMED
+  ADVANCE_PENDING
+  ADVANCE_RECEIVED
+  PLANNING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  BALANCE_PENDING
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentType {
+  ADVANCE
+  PARTIAL
+  FINAL
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK
+  CARD
+  CHEQUE
+}
+
+// "payment/payment.md" §Payment Status — the Payment Tracker's own four-state status.
+// Deliberately separate from the PENDING/PARTIAL/PAID/OVERDUE badge the Orders list derives on the
+// fly (client statusConfig.ts): this one is persisted because the tracker lets an authorized user
+// override it, which a purely derived value cannot support.
+enum PaymentTrackerStatus {
+  PENDING
+  ADVANCE_PAID
+  PARTIAL_PAYMENT
+  FULLY_PAID
+}
+
+enum TaskCategory {
+  PLANNING
+  EXECUTION
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+// "md files/task plan/scope.md" §Task Status — the Task Plan module's three-state status. Kept
+// separate from TaskStatus (which carries a SKIPPED state used by the legacy OrderTask checklist)
+// because the scope documents exactly three states for a task item.
+enum TaskItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+// A task group is built before it is handed to the team: DRAFT is a plan still being written
+// (excluded from the order's progress totals and marked as such on the card), PUBLISHED is live
+// work the team executes. Existing groups predate the column and are all PUBLISHED by default.
+enum TaskGroupStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum DocumentType {
+  QUOTATION_PDF
+  RECEIPT
+  AGREEMENT
+  EVENT_PHOTO
+  OTHER
+}
+
+enum SequenceType {
+  ENQUIRY
+  QUOTATION
+  ORDER
+  RECEIPT
+  INVOICE
+  // Not in 01_PROJECT_OVERVIEW.md's naming convention list, but customer_code is @unique
+  // and customers are always auto-created (never manual) — extending the same documented
+  // PREFIX-YYYY-NNNNN pattern used by every other entity for consistency.
+  CUSTOMER
+}
+
+// ---------------------------------------------------------------------------
+// Company / Access Control
+// ---------------------------------------------------------------------------
+
+model Company {
+  id            String  @id @default(uuid()) @db.Char(36)
+  companyName   String  @map("company_name")
+  contactPerson String? @map("contact_person")
+  mobile        String?
+  email         String?
+  address       String? @db.Text
+  logo          String?
+  // "GST Details" per 03_MODULES.md §9 — not in 04_DATABASE_DESIGN.md's field list. Only the
+  // GSTIN itself is added; registration type/state code etc. aren't documented anywhere.
+  gstNumber     String? @map("gst_number")
+  website       String?
+
+  // Branding + banking block printed on every quotation PDF — sourced from Company Settings per
+  // "md files/Quotation/quotation.md" §Company Settings. All optional: a fresh company may not have
+  // configured banking yet, and the PDF renderer simply omits any missing block.
+  bankName            String? @map("bank_name")
+  bankAccountName     String? @map("bank_account_name")
+  bankAccountNumber   String? @map("bank_account_number")
+  bankBranch          String? @map("bank_branch")
+  bankIfsc            String? @map("bank_ifsc")
+  bankUpi             String? @map("bank_upi")
+  authorizedSignatory String? @map("authorized_signatory")
+  footerMessage       String? @map("footer_message") @db.Text
+  // Standing terms printed on every quotation (view page + PDF). Held once at company level rather
+  // than per quotation: the terms are the same commercial policy for every document, so editing
+  // them in Settings updates what the next quotation prints without touching existing records.
+  termsAndConditions  String? @map("terms_and_conditions") @db.Text
+
+  status    CompanyStatus @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  userGroups        UserGroup[]
+  users             User[]
+  customers         Customer[]
+  eventTypes        EventType[]
+  taskTemplates     TaskTemplate[]
+  enquiries         Enquiry[]
+  quotations        Quotation[]
+  orders            Order[]
+  activityLogs      ActivityLog[]
+  documentSequences DocumentSequence[]
+  invoices          Invoice[]
+
+  @@map("companies")
+}
+
+// masters/user.md §1 — replaces the former hardcoded Role master. A group is just a named bundle of
+// permissions; administrators create as many as the business needs ("There is no restriction on the
+// number of User Groups").
+model UserGroup {
+  id          String          @id @default(uuid()) @db.Char(36)
+  companyId   String          @map("company_id") @db.Char(36)
+  groupName   String          @map("group_name")
+  description String?         @db.Text
+  status      UserGroupStatus @default(ACTIVE)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+
+  company     Company               @relation(fields: [companyId], references: [id])
+  users       User[]
+  permissions UserGroupPermission[]
+
+  @@unique([companyId, groupName])
+  @@map("user_groups")
+}
+
+// One row per granted permission. `module` and `action` are free-form strings validated against the
+// code-level catalog (src/modules/permissions/catalog.ts) rather than enums, so a new module or
+// action ships without a migration — user.md §Benefits: "Supports future modules without database
+// redesign".
+//
+// A row's presence *is* the grant: revoking deletes it. There is nothing to update afterwards and a
+// soft-deleted grant would be indistinguishable from a live one at read time, so unlike the
+// transactional tables these carry only created_at.
+model UserGroupPermission {
+  id          String   @id @default(uuid()) @db.Char(36)
+  userGroupId String   @map("user_group_id") @db.Char(36)
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  userGroup UserGroup @relation(fields: [userGroupId], references: [id])
+
+  @@unique([userGroupId, module, action])
+  @@map("user_group_permissions")
+}
+
+// user.md §User Permission Override — an extra permission granted to one user without touching
+// their group. Same presence-is-the-grant model as UserGroupPermission above.
+model UserPermissionOverride {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  module    String   @db.VarChar(50)
+  action    String   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, module, action])
+  @@map("user_permission_overrides")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Char(36)
+  companyId    String    @map("company_id") @db.Char(36)
+  userGroupId  String    @map("user_group_id") @db.Char(36)
+  // user.md §Create User — optional employee identifier, distinct from the login username.
+  employeeCode String?   @map("employee_code")
+  fullName     String    @map("full_name")
+  // The login identifier (user.md §Login Credentials): users sign in with username + password.
+  username     String    @unique
+  // Optional per user.md §Create User, but still unique when supplied so one address cannot be
+  // shared across accounts.
+  email        String?   @unique
+  mobile       String
+  city         String?
+  passwordHash String    @map("password_hash")
+  profilePhoto String?   @map("profile_photo")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  userGroup UserGroup @relation(fields: [userGroupId], references: [id])
+
+  permissionOverrides   UserPermissionOverride[]
+  assignedEnquiries     Enquiry[]                @relation("EnquiryAssignedUser")
+  followUpsCreated      EnquiryFollowUp[]        @relation("FollowUpCreatedBy")
+  quotationsCreated     Quotation[]              @relation("QuotationCreatedBy")
+  coordinatedOrders     Order[]                  @relation("OrderCoordinator")
+  paymentsReceived      Payment[]                @relation("PaymentReceivedBy")
+  invoicesIssued        Invoice[]                @relation("InvoiceIssuedBy")
+  tasksAssigned         OrderTask[]              @relation("OrderTaskAssignedTo")
+  tasksCompleted        OrderTask[]              @relation("OrderTaskCompletedBy")
+  documentsUploaded     OrderDocument[]          @relation("DocumentUploadedBy")
+  activityLogsPerformed ActivityLog[]            @relation("ActivityPerformedBy")
+
+  @@index([mobile])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id           String         @id @default(uuid()) @db.Char(36)
+  companyId    String         @map("company_id") @db.Char(36)
+  customerCode String         @unique @map("customer_code")
+  customerName String         @map("customer_name")
+  mobile       String
+  whatsapp     String?
+  email        String?
+  address      String?        @db.Text
+  // Not in 04_DATABASE_DESIGN.md's field list, but 03_MODULES.md's Customer List columns
+  // and 05_API_SPECIFICATION.md §6's list query params both reference a City filter/column.
+  city         String?
+  remarks      String?        @db.Text
+  status       CustomerStatus @default(ACTIVE)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  enquiries  Enquiry[]
+  quotations Quotation[]
+  orders     Order[]
+
+  @@index([mobile])
+  @@index([customerName])
+  @@index([city])
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Masters
+// ---------------------------------------------------------------------------
+
+model EventType {
+  id           String          @id @default(uuid()) @db.Char(36)
+  companyId    String          @map("company_id") @db.Char(36)
+  eventName    String          @map("event_name")
+  colorCode    String?         @map("color_code")
+  displayOrder Int             @default(0) @map("display_order")
+  status       EventTypeStatus @default(ACTIVE)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  deletedAt    DateTime?       @map("deleted_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  enquiries Enquiry[]
+
+  @@unique([companyId, eventName])
+  @@map("event_types")
+}
+
+model TaskTemplate {
+  id           String       @id @default(uuid()) @db.Char(36)
+  companyId    String       @map("company_id") @db.Char(36)
+  taskName     String       @map("task_name")
+  taskCategory TaskCategory @default(EXECUTION) @map("task_category")
+  displayOrder Int          @default(0) @map("display_order")
+  isDefault    Boolean      @default(true) @map("is_default")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@map("task_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Enquiry
+// ---------------------------------------------------------------------------
+
+model Enquiry {
+  id            String  @id @default(uuid()) @db.Char(36)
+  companyId     String  @map("company_id") @db.Char(36)
+  enquiryNumber String  @unique @map("enquiry_number")
+  // Nullable: a NEW-customer enquiry has no Customer row until it reaches ORDER_CONFIRMED. Its
+  // prospective details are held in the prospect_* columns below until then, at which point a
+  // Customer is created (or matched by mobile) and linked here. EXISTING-customer enquiries set
+  // this immediately and leave the prospect_* columns empty.
+  customerId    String? @map("customer_id") @db.Char(36)
+  eventTypeId   String  @map("event_type_id") @db.Char(36)
+
+  // Prospective (unconfirmed) customer details — populated only for NEW-customer enquiries that
+  // have not yet reached ORDER_CONFIRMED. Once confirmed, these are copied into a Customer row.
+  prospectName     String? @map("prospect_name")
+  prospectMobile   String? @map("prospect_mobile")
+  prospectWhatsapp String? @map("prospect_whatsapp")
+  prospectEmail    String? @map("prospect_email")
+  prospectAddress  String? @map("prospect_address") @db.Text
+  prospectCity     String? @map("prospect_city")
+
+  eventName       String?   @map("event_name")
+  eventDate       DateTime? @map("event_date")
+  mahal           String?
+  venue           String?
+  estimatedBudget Decimal?  @map("estimated_budget") @db.Decimal(12, 2)
+  // 03_MODULES.md's Event Information section lists "Notes" distinct from the appointment's
+  // "Discussion Notes" (appointmentNotes below) — not in 04_DATABASE_DESIGN.md's field list.
+  notes           String?   @db.Text
+
+  appointmentDate   DateTime?         @map("appointment_date")
+  appointmentTime   String?           @map("appointment_time")
+  // "Meeting Location"/"Meeting Place" per 02_BUSINESS_WORKFLOW.md §4 and 03_MODULES.md §3 —
+  // not in 04_DATABASE_DESIGN.md's field list.
+  meetingLocation   String?           @map("meeting_location")
+  appointmentNotes  String?           @map("appointment_notes") @db.Text
+  appointmentStatus AppointmentStatus @default(PENDING) @map("appointment_status")
+
+  assignedUserId String? @map("assigned_user_id") @db.Char(36)
+
+  // Denormalized cache of the latest/approved quotation — see docs/10_IMPLEMENTATION_DECISIONS.md §8.
+  // Kept in sync by the Enquiry/Quotation Service layer whenever a quotation is created, updated, or approved.
+  quotationAmount  Decimal? @map("quotation_amount") @db.Decimal(12, 2)
+  quotationVersion Int?     @map("quotation_version")
+
+  // Auto-set to the sum of the enquiry's approved quotation(s) total whenever one is approved
+  // (quotations/service.ts approve()) — a stored, user-editable field rather than a live
+  // computation, so a manual override afterward sticks instead of being recalculated away.
+  finalBudgetAmount Decimal? @map("final_budget_amount") @db.Decimal(12, 2)
+
+  status EnquiryStatus @default(PENDING)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company      Company           @relation(fields: [companyId], references: [id])
+  customer     Customer?         @relation(fields: [customerId], references: [id])
+  eventType    EventType         @relation(fields: [eventTypeId], references: [id])
+  assignedUser User?             @relation("EnquiryAssignedUser", fields: [assignedUserId], references: [id])
+  followUps    EnquiryFollowUp[]
+  quotations   Quotation[]
+  orders       Order[]
+
+  @@index([eventDate])
+  @@index([status])
+  @@map("enquiries")
+}
+
+// Child table: 02_BUSINESS_WORKFLOW.md §3 — "Multiple follow-ups can be recorded"
+// cannot be represented by a single status field.
+model EnquiryFollowUp {
+  id           String   @id @default(uuid()) @db.Char(36)
+  enquiryId    String   @map("enquiry_id") @db.Char(36)
+  followUpDate DateTime @map("follow_up_date")
+  notes        String?  @db.Text
+  outcome      String?
+  createdById  String?  @map("created_by_id") @db.Char(36)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  enquiry   Enquiry @relation(fields: [enquiryId], references: [id])
+  createdBy User?   @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
+
+  @@map("enquiry_followups")
+}
+
+// ---------------------------------------------------------------------------
+// Quotation
+// ---------------------------------------------------------------------------
+
+model Quotation {
+  id        String          @id @default(uuid()) @db.Char(36)
+  // companyId is stored directly (not derived through the enquiry) so MANUAL quotations — which have
+  // no linked enquiry/customer/order — can still be company-scoped in every query. See "md files/
+  // Quotation/quotation.md" §Quotation Creation Sources.
+  companyId String          @map("company_id") @db.Char(36)
+  source    QuotationSource @default(ENQUIRY)
+
+  // Exactly one of enquiryId / customerId / orderId is set (or none, for MANUAL). Enforced in the
+  // Service layer, not by the DB, because the valid-source combination is a business rule.
+  enquiryId  String? @map("enquiry_id") @db.Char(36)
+  customerId String? @map("customer_id") @db.Char(36)
+  orderId    String? @map("order_id") @db.Char(36)
+
+  // MANUAL-quotation customer snapshot — a customer contacted by phone/WhatsApp for whom no Customer
+  // record is created. Only populated when source = MANUAL.
+  manualCustomerName String? @map("manual_customer_name")
+  manualPhone        String? @map("manual_phone")
+  manualWhatsapp     String? @map("manual_whatsapp")
+  manualEmail        String? @map("manual_email")
+  manualAddress      String? @map("manual_address") @db.Text
+  manualGst          String? @map("manual_gst")
+
+  quotationNumber String          @map("quotation_number")
+  version         Int             @default(1)
+  quotationDate   DateTime        @map("quotation_date")
+  subtotal        Decimal         @db.Decimal(12, 2)
+  discount        Decimal         @default(0) @db.Decimal(12, 2)
+  // CGST and SGST rates are entered separately (e.g. 9.00 each). `tax` stores their combined amount.
+  // Per the Sanju quotation template.
+  cgstPercent     Decimal         @default(0) @map("cgst_percent") @db.Decimal(5, 2)
+  sgstPercent     Decimal         @default(0) @map("sgst_percent") @db.Decimal(5, 2)
+  tax             Decimal         @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal         @map("total_amount") @db.Decimal(12, 2)
+  remarks         String?         @db.Text
+  status          QuotationStatus @default(DRAFT)
+  pdfPath         String?         @map("pdf_path")
+  createdById     String?         @map("created_by_id") @db.Char(36)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+
+  company     Company          @relation(fields: [companyId], references: [id])
+  enquiry     Enquiry?         @relation(fields: [enquiryId], references: [id])
+  customer    Customer?        @relation(fields: [customerId], references: [id])
+  sourceOrder Order?           @relation("QuotationFromOrder", fields: [orderId], references: [id])
+  createdBy   User?            @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  items       QuotationItem[]
+  images      QuotationImage[]
+  orders      Order[]          @relation("OrderApprovedQuotation")
+
+  // Enquiry-sourced quotations are versioned (revisions) — the unique pair prevents duplicate
+  // versions. MySQL treats NULL enquiry_id as distinct, so non-enquiry quotations (always version 1)
+  // are unaffected by this constraint.
+  @@unique([enquiryId, version])
+  @@index([companyId])
+  @@index([quotationNumber])
+  @@map("quotations")
+}
+
+// docs/10_IMPLEMENTATION_DECISIONS.md §5 — quotations are itemized, not a lump sum.
+model QuotationItem {
+  id          String  @id @default(uuid()) @db.Char(36)
+  quotationId String  @map("quotation_id") @db.Char(36)
+  itemName    String  @map("item_name")
+  description String? @db.Text
+  quantity    Decimal @db.Decimal(10, 2)
+  unit        String?
+  rate        Decimal @db.Decimal(12, 2)
+  amount      Decimal @db.Decimal(12, 2)
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+
+  @@map("quotation_items")
+}
+
+// Sample decor images attached to a quotation — shown to the customer and rendered on a single
+// gallery page in the quotation PDF.
+model QuotationImage {
+  id          String    @id @default(uuid()) @db.Char(36)
+  quotationId String    @map("quotation_id") @db.Char(36)
+  fileName    String    @map("file_name")
+  filePath    String    @map("file_path")
+  caption     String?
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+
+  @@index([quotationId])
+  @@map("quotation_images")
+}
+
+// ---------------------------------------------------------------------------
+// Order
+// ---------------------------------------------------------------------------
+
+model Order {
+  id          String @id @default(uuid()) @db.Char(36)
+  companyId   String @map("company_id") @db.Char(36)
+  orderNumber String @unique @map("order_number")
+  enquiryId   String @map("enquiry_id") @db.Char(36)
+  quotationId String @map("quotation_id") @db.Char(36)
+  customerId  String @map("customer_id") @db.Char(36)
+
+  eventDate DateTime @map("event_date")
+  venue     String?
+  // "Requirements" per 02_BUSINESS_WORKFLOW.md §6 (copied from the enquiry at conversion time)
+  // and 03_MODULES.md Order Tab 1 — not in 04_DATABASE_DESIGN.md's field list.
+  notes     String?  @db.Text
+  // "Remarks" — listed separately from Requirements in 03_MODULES.md Order Tab 1; order-specific,
+  // not copied from the enquiry.
+  remarks   String?  @db.Text
+
+  totalAmount   Decimal @map("total_amount") @db.Decimal(12, 2)
+  paidAmount    Decimal @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  pendingAmount Decimal @default(0) @map("pending_amount") @db.Decimal(12, 2)
+
+  // 03_MODULES.md Order Tab 1 "Assigned Coordinator" — not in 04_DATABASE_DESIGN.md's field list, added to satisfy the documented UI.
+  coordinatorId String? @map("coordinator_id") @db.Char(36)
+
+  // 02_BUSINESS_WORKFLOW.md §14 — reason is mandatory when cancelling; enforced in the Service layer.
+  cancellationReason String? @map("cancellation_reason") @db.Text
+
+  status OrderStatus @default(CONFIRMED)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company           Company         @relation(fields: [companyId], references: [id])
+  enquiry           Enquiry         @relation(fields: [enquiryId], references: [id])
+  quotation         Quotation       @relation("OrderApprovedQuotation", fields: [quotationId], references: [id])
+  customer          Customer        @relation(fields: [customerId], references: [id])
+  coordinator       User?           @relation("OrderCoordinator", fields: [coordinatorId], references: [id])
+  paymentTracker    PaymentTracker?
+  invoice           Invoice?
+  payments          Payment[]
+  tasks             OrderTask[]
+  taskGroups        TaskGroup[]
+  documents         OrderDocument[]
+  // Quotations created from this order (revised/additional quotes) — the reverse of
+  // Quotation.sourceOrder. Distinct from `quotation` above, which is the approved quote the order
+  // was converted from.
+  derivedQuotations Quotation[]     @relation("QuotationFromOrder")
+
+  @@index([eventDate])
+  @@index([status])
+  @@map("orders")
+}
+
+// docs/10_IMPLEMENTATION_DECISIONS.md §6 — payment status is derived from Order.totalAmount / Order.paidAmount,
+// never stored on the payment row itself.
+model Payment {
+  id              String        @id @default(uuid()) @db.Char(36)
+  orderId         String        @map("order_id") @db.Char(36)
+  paymentDate     DateTime      @map("payment_date")
+  paymentType     PaymentType   @map("payment_type")
+  amount          Decimal       @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod @map("payment_method")
+  referenceNumber String?       @map("reference_number")
+  remarks         String?       @db.Text
+  receivedById    String?       @map("received_by_id") @db.Char(36)
+  receiptNumber   String        @unique @map("receipt_number")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  order      Order @relation(fields: [orderId], references: [id])
+  receivedBy User? @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
+
+  @@index([paymentDate])
+  @@map("payments")
+}
+
+// The tax invoice raised against an order. Only the number and issue date are stored: they must
+// never move once the document has been handed to a customer, so they are allocated on first view
+// and reused on every reprint. Everything else the invoice prints (line items, tax, payments,
+// balance) is read live from the order and its approved quotation rather than copied here — the
+// module's rule against duplicating order information (see PaymentTracker below) applies equally.
+model Invoice {
+  id            String   @id @default(uuid()) @db.Char(36)
+  companyId     String   @map("company_id") @db.Char(36)
+  orderId       String   @unique @map("order_id") @db.Char(36)
+  invoiceNumber String   @unique @map("invoice_number")
+  invoiceDate   DateTime @map("invoice_date")
+  issuedById    String?  @map("issued_by_id") @db.Char(36)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company  Company @relation(fields: [companyId], references: [id])
+  order    Order   @relation(fields: [orderId], references: [id])
+  issuedBy User?   @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
+
+  @@map("invoices")
+}
+
+// "payment/payment.md" — one tracker row per confirmed order, created automatically at conversion
+// and keyed by the existing Order ID. Holds ONLY what the tracker itself owns: budget, collected
+// and balance stay on Order, per the module's rule that it "should not duplicate customer or order
+// information".
+model PaymentTracker {
+  id      String @id @default(uuid()) @db.Char(36)
+  orderId String @unique @map("order_id") @db.Char(36)
+
+  paymentStatus PaymentTrackerStatus @default(PENDING) @map("payment_status")
+  // Set once someone chooses the status by hand; automatic recalculation then leaves it alone until
+  // it is switched back to Auto. Without this flag the next payment would silently revert the
+  // manual choice the doc explicitly allows ("authorized users can edit it if required").
+  statusManual  Boolean              @default(false) @map("status_manual")
+  remarks       String?              @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([paymentStatus])
+  @@map("payment_trackers")
+}
+
+// docs/10_IMPLEMENTATION_DECISIONS.md §7 — Planning (Tab 4) and Checklist (Tab 5) share one table,
+// distinguished by taskCategory.
+model OrderTask {
+  id            String       @id @default(uuid()) @db.Char(36)
+  orderId       String       @map("order_id") @db.Char(36)
+  taskName      String       @map("task_name")
+  taskCategory  TaskCategory @map("task_category")
+  assignedToId  String?      @map("assigned_to_id") @db.Char(36)
+  dueDate       DateTime?    @map("due_date")
+  completedDate DateTime?    @map("completed_date")
+  completedById String?      @map("completed_by_id") @db.Char(36)
+  remarks       String?      @db.Text
+  status        TaskStatus   @default(PENDING)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  order       Order @relation(fields: [orderId], references: [id])
+  assignedTo  User? @relation("OrderTaskAssignedTo", fields: [assignedToId], references: [id])
+  completedBy User? @relation("OrderTaskCompletedBy", fields: [completedById], references: [id])
+
+  @@map("order_tasks")
+}
+
+// ---------------------------------------------------------------------------
+// Task Plan — "md files/task plan/scope.md"
+// Replaces the separate Planning / Task Checklist views (OrderTask above) with a single
+// flexible structure: an order owns any number of user-defined Task Groups, each owning any
+// number of Task Items. OrderTask is retained so existing order data stays readable.
+// ---------------------------------------------------------------------------
+
+model TaskGroup {
+  id           String          @id @default(uuid()) @db.Char(36)
+  orderId      String          @map("order_id") @db.Char(36)
+  title        String
+  description  String?         @db.Text
+  status       TaskGroupStatus @default(PUBLISHED)
+  displayOrder Int             @default(0) @map("display_order")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  deletedAt    DateTime?       @map("deleted_at")
+
+  order Order      @relation(fields: [orderId], references: [id])
+  items TaskItem[]
+
+  @@index([orderId, displayOrder])
+  @@map("task_groups")
+}
+
+model TaskItem {
+  id           String         @id @default(uuid()) @db.Char(36)
+  taskGroupId  String         @map("task_group_id") @db.Char(36)
+  taskName     String         @map("task_name")
+  status       TaskItemStatus @default(PENDING)
+  remarks      String?        @db.Text
+  // Path relative to env.uploadPath — the optional completion photo. Served through an
+  // authenticated route (see modules/task-plan), never the public static /uploads mount.
+  photoPath    String?        @map("photo_path")
+  completedAt  DateTime?      @map("completed_at")
+  displayOrder Int            @default(0) @map("display_order")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  taskGroup TaskGroup @relation(fields: [taskGroupId], references: [id])
+
+  @@index([taskGroupId, displayOrder])
+  @@map("task_items")
+}
+
+model OrderDocument {
+  id           String       @id @default(uuid()) @db.Char(36)
+  orderId      String       @map("order_id") @db.Char(36)
+  documentType DocumentType @map("document_type")
+  fileName     String       @map("file_name")
+  filePath     String       @map("file_path")
+  uploadedById String?      @map("uploaded_by_id") @db.Char(36)
+  uploadedAt   DateTime     @default(now()) @map("uploaded_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  order      Order @relation(fields: [orderId], references: [id])
+  uploadedBy User? @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+
+  @@map("order_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Activity Log — append-only audit trail (docs/10_IMPLEMENTATION_DECISIONS.md §12)
+// ---------------------------------------------------------------------------
+
+model ActivityLog {
+  id            String   @id @default(uuid()) @db.Char(36)
+  companyId     String?  @map("company_id") @db.Char(36)
+  module        String
+  referenceId   String   @map("reference_id") @db.Char(36)
+  action        String
+  description   String?  @db.Text
+  metadata      Json?
+  performedById String?  @map("performed_by_id") @db.Char(36)
+  performedAt   DateTime @default(now()) @map("performed_at")
+
+  company     Company? @relation(fields: [companyId], references: [id])
+  performedBy User?    @relation("ActivityPerformedBy", fields: [performedById], references: [id])
+
+  @@index([module, referenceId])
+  @@map("activity_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Document numbering — docs/10_IMPLEMENTATION_DECISIONS.md §10 (counter table, not MAX()+1)
+// ---------------------------------------------------------------------------
+
+model DocumentSequence {
+  id           String       @id @default(uuid()) @db.Char(36)
+  companyId    String       @map("company_id") @db.Char(36)
+  sequenceType SequenceType @map("sequence_type")
+  year         Int
+  lastNumber   Int          @default(0) @map("last_number")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, sequenceType, year])
+  @@map("document_sequences")
+}
