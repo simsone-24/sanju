@@ -1,6 +1,6 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { Box, Button, CircularProgress, IconButton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Button, IconButton, Paper, Skeleton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,6 +10,7 @@ import * as calendarService from '../../services/calendarService';
 import type { CalendarEvent } from '../../types/calendar';
 import { CALENDAR_COLORS } from './calendarColors';
 import DayList from './DayList';
+import EventListPanel from './EventListPanel';
 import MonthGrid from './MonthGrid';
 import WeekGrid from './WeekGrid';
 import { startOfWeekMonday } from './weekUtils';
@@ -102,18 +103,46 @@ export default function CalendarPage() {
         breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Calendar' }]}
       />
 
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          mb: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1.5,
+        }}
+      >
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <IconButton onClick={() => shift(-1)} size="small">
-            <ChevronLeftIcon />
+            <ChevronLeftIcon fontSize="small" />
           </IconButton>
-          <Typography variant="h2" sx={{ minWidth: 200, textAlign: 'center' }}>
-            {periodLabel(view, referenceDate)}
+          {/* Month view gets the period as a display title — the month heavy, the year light behind
+              it — since that is the one thing every glance at a calendar starts from. Week and Day
+              keep the plain range label, which is a span rather than a single name. */}
+          <Typography
+            variant="h2"
+            sx={{ minWidth: { xs: 160, sm: 230 }, textAlign: 'center', fontSize: { xs: 22, sm: 30 }, letterSpacing: '-0.02em' }}
+          >
+            {view === 'month' ? (
+              <>
+                <Box component="span" sx={{ fontWeight: 800 }}>
+                  {referenceDate.format('MMMM')}
+                </Box>{' '}
+                <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary' }}>
+                  {referenceDate.format('YYYY')}
+                </Box>
+              </>
+            ) : (
+              periodLabel(view, referenceDate)
+            )}
           </Typography>
           <IconButton onClick={() => shift(1)} size="small">
-            <ChevronRightIcon />
+            <ChevronRightIcon fontSize="small" />
           </IconButton>
-          <Button size="small" onClick={() => patchParams({ date: dayjs() })}>
+          <Button size="small" variant="text" onClick={() => patchParams({ date: dayjs() })}>
             Today
           </Button>
         </Stack>
@@ -123,18 +152,38 @@ export default function CalendarPage() {
           exclusive
           value={view}
           onChange={(_event, next: ViewMode | null) => next && patchParams({ view: next })}
+          sx={{
+            bgcolor: 'background.default',
+            borderRadius: 999,
+            p: 0.5,
+            gap: 0.25,
+            '& .MuiToggleButtonGroup-grouped': {
+              border: 0,
+              borderRadius: '999px !important',
+              px: 2,
+              py: 0.5,
+              fontWeight: 600,
+              color: 'text.secondary',
+              '&.Mui-selected': {
+                bgcolor: 'background.paper',
+                color: 'primary.main',
+                boxShadow: '0 1px 4px rgba(15, 23, 42, 0.12)',
+              },
+              '&.Mui-selected:hover': { bgcolor: 'background.paper' },
+            },
+          }}
         >
           <ToggleButton value="month">Month</ToggleButton>
           <ToggleButton value="week">Week</ToggleButton>
           <ToggleButton value="day">Day</ToggleButton>
         </ToggleButtonGroup>
-      </Stack>
+      </Paper>
 
-      <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap' }}>
+      <Stack direction="row" spacing={2.5} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
         {Object.values(CALENDAR_COLORS).map((entry) => (
-          <Stack key={entry.label} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: entry.hex }} />
-            <Typography variant="caption" color="text.secondary">
+          <Stack key={entry.label} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: entry.hex, flexShrink: 0 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
               {entry.label}
             </Typography>
           </Stack>
@@ -142,17 +191,27 @@ export default function CalendarPage() {
       </Stack>
 
       {isLoading ? (
-        <CircularProgress size={28} />
+        <Skeleton variant="rounded" height={view === 'day' ? 320 : 480} />
       ) : (
-        <>
-          {view === 'month' && (
-            <MonthGrid referenceDate={referenceDate} events={events ?? []} onEventClick={handleEventClick} />
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            {view === 'month' && (
+              <MonthGrid referenceDate={referenceDate} events={events ?? []} onEventClick={handleEventClick} />
+            )}
+            {view === 'week' && (
+              <WeekGrid referenceDate={referenceDate} events={events ?? []} onEventClick={handleEventClick} />
+            )}
+            {view === 'day' && <DayList events={events ?? []} onEventClick={handleEventClick} />}
+          </Box>
+
+          {(view === 'month' || view === 'week') && (
+            <EventListPanel
+              title={view === 'month' ? "This Month's Orders" : "This Week's Orders"}
+              events={events ?? []}
+              onEventClick={handleEventClick}
+            />
           )}
-          {view === 'week' && (
-            <WeekGrid referenceDate={referenceDate} events={events ?? []} onEventClick={handleEventClick} />
-          )}
-          {view === 'day' && <DayList events={events ?? []} onEventClick={handleEventClick} />}
-        </>
+        </Stack>
       )}
     </Box>
   );

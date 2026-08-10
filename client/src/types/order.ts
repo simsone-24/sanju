@@ -1,21 +1,16 @@
+import type { PaymentTrackerStatus } from './paymentTracker';
 import type { QuotationStatus } from './quotation';
 
-export type OrderStatus =
-  | 'CONFIRMED'
-  | 'ADVANCE_PENDING'
-  | 'ADVANCE_RECEIVED'
-  | 'PLANNING'
-  | 'READY'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
-  | 'BALANCE_PENDING'
-  | 'CLOSED'
-  | 'CANCELLED';
+// Order/event lifecycle — 4 stages only. Payment standing (Payment Tracker) and task planning are
+// tracked independently and don't derive from this field.
+export type OrderStatus = 'YET_TO_START' | 'IN_PROGRESS' | 'ORDER_CLOSED' | 'REJECTED';
 
 export interface OrderListItem {
   id: string;
   orderNumber: string;
-  eventDate: string;
+  // Null on an order raised from an enquiry that was confirmed before an event date was known —
+  // confirming an enquiry always produces an order, and the date is filled in on the order after.
+  eventDate: string | null;
   venue: string | null;
   totalAmount: string;
   paidAmount: string;
@@ -25,17 +20,17 @@ export interface OrderListItem {
   customer: { id: string; customerName: string; mobile: string };
   // Event name/type come from the linked enquiry — Order itself has no event name column.
   enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
+  /** The Payment Tracker's stored status, so both modules report the same payment standing. */
+  paymentTracker: { paymentStatus: PaymentTrackerStatus } | null;
 }
-
-// Dashboard-card buckets grouping the 10-status workflow (server: ORDER_STATUS_GROUPS).
-export type OrderStatusGroup = 'PLANNING' | 'WORK_STARTED' | 'COMPLETED' | 'CANCELLED';
 
 export interface OrderStats {
   total: number;
-  planning: number;
-  workStarted: number;
-  completed: number;
-  cancelled: number;
+  todayEvents: number;
+  tomorrowEvents: number;
+  thisWeekEvents: number;
+  thisMonthEvents: number;
+  closed: number;
 }
 
 export interface OrderPaymentSummary {
@@ -76,6 +71,8 @@ export interface OrderDetail extends OrderListItem {
   // returns a superset (see orderDetailSelect).
   enquiry: { id: string; enquiryNumber: string; eventName: string | null; eventType: { eventName: string } };
   customer: { id: string; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
+  // Null when the enquiry was confirmed without any quotation — the order's total then comes from
+  // the enquiry's final/estimated budget instead.
   quotation: {
     id: string;
     quotationNumber: string;
@@ -85,7 +82,7 @@ export interface OrderDetail extends OrderListItem {
     pdfPath: string | null;
     status: QuotationStatus;
     quotationDate: string;
-  };
+  } | null;
   coordinator: { id: string; fullName: string } | null;
   payments: OrderPaymentSummary[];
   tasks: OrderTaskSummary[];
@@ -96,6 +93,11 @@ export interface OrderTimelineEntry {
   id: string;
   action: string;
   description: string | null;
+  /**
+   * Free-form JSON column. STATUS_CHANGE entries carry `{ from, to }`; entries logged before that
+   * was recorded, and every other action, carry nothing — so it is read defensively, never cast.
+   */
+  metadata: Record<string, unknown> | null;
   performedAt: string;
   performedBy: { id: string; fullName: string } | null;
 }
@@ -119,7 +121,6 @@ export interface ListOrdersParams {
   limit: number;
   search?: string;
   status?: OrderStatus;
-  statusGroup?: OrderStatusGroup;
   customerId?: string;
   eventDateFrom?: string;
   eventDateTo?: string;

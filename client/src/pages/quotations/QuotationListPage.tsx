@@ -16,11 +16,11 @@ import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
 import { LastUpdated } from '../../components/LastUpdated';
-import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { resolveStatusConfig } from '../../components/statusConfig';
@@ -30,6 +30,7 @@ import { CARD_SURFACE } from '../../components/ui/Card';
 import { IconButton } from '../../components/ui/IconButton';
 import { Menu, MenuItem } from '../../components/ui/Menu';
 import { SelectField } from '../../components/ui/Select';
+import { SCROLL_ANCHORS } from '../../constants/scrollAnchors';
 import { usePermission } from '../../hooks/usePermission';
 import * as customerService from '../../services/customerService';
 import * as quotationService from '../../services/quotationService';
@@ -55,8 +56,8 @@ const SOURCE_OPTIONS: { value: QuotationSource; label: string }[] = [
 // literal values (DataTable's rowAccentColor callback runs outside a theme-aware sx function).
 const QUOTATION_ROW_ACCENT: Record<QuotationStatus, string> = {
   DRAFT: '#94A3B8',
-  SENT: '#06B6D4',
-  APPROVED: '#22C55E',
+  SENT: '#64748B',
+  APPROVED: '#10B981',
   REJECTED: '#EF4444',
   REVISED: '#F59E0B',
 };
@@ -410,6 +411,7 @@ export default function QuotationListPage() {
       key: 'quotationNumber',
       header: 'Quotation No',
       sortable: true,
+      align: 'center',
       width: 160,
       // A real anchor, so the number also supports middle-click and ctrl-click to open in a new tab.
       render: (row) => (
@@ -431,6 +433,7 @@ export default function QuotationListPage() {
       key: 'customer',
       header: 'Customer',
       sortable: true,
+      align: 'center',
       width: 160,
       render: (row) => (
         <div className="tw-min-w-0">
@@ -445,10 +448,11 @@ export default function QuotationListPage() {
     {
       key: 'event',
       header: 'Event',
+      align: 'center',
       width: 155,
       render: (row) =>
         row.eventType ? (
-          <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
+          <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-2">
             <span
               aria-hidden
               className="tw-h-2 tw-w-2 tw-shrink-0 tw-rounded-full"
@@ -469,7 +473,7 @@ export default function QuotationListPage() {
     {
       key: 'totalAmount',
       header: 'Amount',
-      align: 'right',
+      align: 'center',
       sortable: true,
       width: 125,
       render: (row) => (
@@ -511,6 +515,7 @@ export default function QuotationListPage() {
       key: 'quotationDate',
       header: 'Quotation Date',
       sortable: true,
+      align: 'center',
       width: 130,
       render: (row) => (
         <div className="tw-min-w-0">
@@ -573,28 +578,53 @@ export default function QuotationListPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Quotation Management"
-        subtitle="Manage customer quotations, revisions and approvals."
-        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Quotations' }]}
-        titleAdornment={
-          totalRecords === undefined ? undefined : (
-            <span className="tw-inline-flex tw-items-center tw-rounded-full tw-bg-slate-100 tw-px-2.5 tw-py-0.5 tw-text-[0.6875rem] tw-font-semibold tw-text-ink-muted dark:tw-bg-slate-700 dark:tw-text-ink-dark-muted">
-              {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
-            </span>
-          )
-        }
-        actions={
-          <>
+      {/* Premium hero header — a soft brand wash and a decorative ring make the page open like a
+          dashboard, and the record-count pill keeps the running total right beside the title. */}
+      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-4 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
+        <div
+          aria-hidden
+          className="tw-pointer-events-none tw-absolute -tw-right-20 -tw-top-24 tw-h-60 tw-w-60 tw-rounded-full tw-bg-gradient-to-br tw-from-brand/15 tw-to-cyan-400/10 tw-blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="tw-pointer-events-none tw-absolute -tw-bottom-24 tw-right-48 tw-h-44 tw-w-44 tw-rounded-[2rem] tw-border tw-border-brand/10"
+        />
+
+        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Quotations' }]} />
+
+        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-3">
+          <div className="tw-min-w-0">
+            <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
+              <h1 className="tw-m-0 tw-text-[1.75rem] tw-font-extrabold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
+                Quotation Management
+              </h1>
+              {totalRecords !== undefined && (
+                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
+                  {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+                </span>
+              )}
+            </div>
+            <p className="tw-m-0 tw-mt-1.5 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              Manage customer quotations, revisions and approvals.
+            </p>
+          </div>
+
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2.5">
             <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />
             {canCreate && (
-              <Button variant="primary" startIcon={<AddIcon fontSize="small" />} onClick={() => navigate('/quotations/new')}>
+              <Button
+                variant="primary"
+                size="md"
+                className="tw-h-10 tw-px-5 tw-shadow-md"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={() => navigate('/quotations/new')}
+              >
                 Create Quotation
               </Button>
             )}
-          </>
-        }
-      />
+          </div>
+        </div>
+      </section>
 
       {/* Summary tiles, matching the Orders index. Each status metric doubles as a one-click
           filter; Revenue is a total, not a filter, so it carries no onClick. */}
@@ -658,7 +688,7 @@ export default function QuotationListPage() {
       {/* Compact filter bar: everything on one line, wrapping only when the viewport forces it.
           Filters apply as they change, so there is no Apply button — clearing is handled by the
           active-filter chips below. */}
-      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-2.5 tw-px-3 tw-py-2.5`}>
+      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-3 tw-px-4 tw-py-3`}>
         <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
           <div className="tw-flex-[2] tw-basis-[220px]">
             <SearchBar
@@ -732,7 +762,7 @@ export default function QuotationListPage() {
             />
           </div>
 
-          <Button variant="outlined" onClick={resetFilters}>
+          <Button variant="outlined" className="tw-h-10" onClick={resetFilters}>
             Reset
           </Button>
         </div>
@@ -747,7 +777,7 @@ export default function QuotationListPage() {
               {activeFilters.map((filter) => (
                 <span
                   key={filter.key}
-                  className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-hairline tw-bg-white tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-text-ink dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark"
+                  className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-brand/15 tw-bg-brand/[0.06] tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-font-medium tw-text-ink dark:tw-border-brand-light/20 dark:tw-bg-brand-light/10 dark:tw-text-ink-dark"
                 >
                   {filter.label}
                   <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
@@ -861,7 +891,9 @@ export default function QuotationListPage() {
           <MenuItem
             icon={<RequestQuoteIcon fontSize="small" />}
             onClick={() => {
-              navigate(`/quotations/new?enquiryId=${menuRow.enquiryId}`);
+              navigate(`/quotations/new?enquiryId=${menuRow.enquiryId}`, {
+                state: { scrollTo: SCROLL_ANCHORS.quotationItems },
+              });
               setMenuState(null);
             }}
           >

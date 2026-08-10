@@ -1,6 +1,39 @@
-import { Prisma } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
-import { ListOrdersParams, ORDER_STATUS_GROUPS } from './types';
+import { ListOrdersParams, OrderStatsParams } from './types';
+
+// Shared by listOrders and getOrderStats — every filter that isn't pagination, the dashboard
+// cards' own status/date-window, or eventDate, so the two stay in lockstep by construction.
+function buildOrderWhereBase(params: OrderStatsParams): Prisma.OrderWhereInput {
+  return {
+    companyId: params.companyId,
+    deletedAt: null,
+    ...(params.customerId ? { customerId: params.customerId } : {}),
+    ...(params.search
+      ? {
+          OR: [
+            { orderNumber: { contains: params.search } },
+            { customer: { customerName: { contains: params.search } } },
+            { customer: { mobile: { contains: params.search } } },
+          ],
+        }
+      : {}),
+  };
+}
+
+function buildOrderWhere(params: OrderStatsParams): Prisma.OrderWhereInput {
+  return {
+    ...buildOrderWhereBase(params),
+    ...(params.eventDateFrom || params.eventDateTo
+      ? {
+          eventDate: {
+            ...(params.eventDateFrom ? { gte: params.eventDateFrom } : {}),
+            ...(params.eventDateTo ? { lte: params.eventDateTo } : {}),
+          },
+        }
+      : {}),
+  };
+}
 
 const orderListSelect = {
   id: true,
@@ -16,6 +49,10 @@ const orderListSelect = {
   // The event's name/type live on the linked enquiry, not the order — surfaced here so the Orders
   // list can show an Event column ("md files/order/filter.md" §Orders Table).
   enquiry: { select: { eventName: true, eventType: { select: { eventName: true } } } },
+  // The Payment Tracker's own stored status, so the Orders module reports the same payment standing
+  // the tracker does (Advance Paid / Partial Payment / Fully Paid) instead of a second vocabulary
+  // derived from the amounts alone — which could not tell an advance apart from a part payment.
+  paymentTracker: { select: { paymentStatus: true } },
 } satisfies Prisma.OrderSelect;
 
 const orderDetailSelect = {
@@ -81,30 +118,8 @@ const orderDetailSelect = {
 
 export async function listOrders(params: ListOrdersParams) {
   const where: Prisma.OrderWhereInput = {
-    companyId: params.companyId,
-    deletedAt: null,
+    ...buildOrderWhere(params),
     ...(params.status ? { status: params.status } : {}),
-    ...(params.statusGroup && !params.status
-      ? { status: { in: [...ORDER_STATUS_GROUPS[params.statusGroup]] } }
-      : {}),
-    ...(params.customerId ? { customerId: params.customerId } : {}),
-    ...(params.eventDateFrom || params.eventDateTo
-      ? {
-          eventDate: {
-            ...(params.eventDateFrom ? { gte: params.eventDateFrom } : {}),
-            ...(params.eventDateTo ? { lte: params.eventDateTo } : {}),
-          },
-        }
-      : {}),
-    ...(params.search
-      ? {
-          OR: [
-            { orderNumber: { contains: params.search } },
-            { customer: { customerName: { contains: params.search } } },
-            { customer: { mobile: { contains: params.search } } },
-          ],
-        }
-      : {}),
   };
 
   const [records, totalRecords] = await Promise.all([
@@ -124,21 +139,47 @@ export async function listOrders(params: ListOrdersParams) {
   return { records, totalRecords };
 }
 
-// Dashboard-card counts, one per ORDER_STATUS_GROUPS bucket plus an overall total.
-export async function getOrderStats(companyId: string) {
-  const baseWhere: Prisma.OrderWhereInput = { companyId, deletedAt: null };
-  const countIn = (group: keyof typeof ORDER_STATUS_GROUPS) =>
-    prisma.order.count({ where: { ...baseWhere, status: { in: [...ORDER_STATUS_GROUPS[group]] } } });
+// eventDate is always stored at UTC midnight (z.coerce.date() on a plain "YYYY-MM-DD" — see
+// orders/validation.ts), so these windows are built the same way for an exact match.
+function startOfUTCDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
 
-  const [total, planning, workStarted, completed, cancelled] = await Promise.all([
+function addUTCDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+// Dashboard-card counts. The total and Order Closed narrow along with every other active list
+// filter (search, customer, event date range), same as before. The four event-date windows are
+// fixed, absolute ranges ("today" always means today) — built from buildOrderWhereBase so an
+// active eventDate quick-filter never doubles up with, or hides, what these actually count.
+export async function getOrderStats(params: OrderStatsParams) {
+  const baseWhere = buildOrderWhere(params);
+  const dateWindowWhere = buildOrderWhereBase(params);
+
+  const today = startOfUTCDay(new Date());
+  const tomorrow = addUTCDays(today, 1);
+  // Sunday-start week, matching the client's quick-range pills (dayjs .startOf('week')).
+  const weekStart = addUTCDays(today, -today.getUTCDay());
+  const weekEnd = addUTCDays(weekStart, 6);
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+
+  const countEventWindow = (from: Date, to: Date) =>
+    prisma.order.count({ where: { ...dateWindowWhere, eventDate: { gte: from, lte: to } } });
+
+  const [total, todayEvents, tomorrowEvents, thisWeekEvents, thisMonthEvents, closed] = await Promise.all([
     prisma.order.count({ where: baseWhere }),
-    countIn('PLANNING'),
-    countIn('WORK_STARTED'),
-    countIn('COMPLETED'),
-    countIn('CANCELLED'),
+    countEventWindow(today, today),
+    countEventWindow(tomorrow, tomorrow),
+    countEventWindow(weekStart, weekEnd),
+    countEventWindow(monthStart, monthEnd),
+    prisma.order.count({ where: { ...baseWhere, status: OrderStatus.ORDER_CLOSED } }),
   ]);
 
-  return { total, planning, workStarted, completed, cancelled };
+  return { total, todayEvents, tomorrowEvents, thisWeekEvents, thisMonthEvents, closed };
 }
 
 export function findOrderById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
@@ -218,6 +259,9 @@ export function getOrderActivityLog(id: string, client: PrismaClientOrTx = prism
       id: true,
       action: true,
       description: true,
+      // STATUS_CHANGE rows carry { from, to } — the Order Details progress tracker reads the stage
+      // each entry moved the order into. Rows logged before that was recorded simply have none.
+      metadata: true,
       performedAt: true,
       performedBy: { select: { id: true, fullName: true } },
     },

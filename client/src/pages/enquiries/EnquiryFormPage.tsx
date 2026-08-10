@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import FlagIcon from '@mui/icons-material/Flag';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -24,12 +24,6 @@ import {
   InputAdornment,
   MenuItem,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -37,8 +31,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useState, type ReactNode } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Controller, useForm, type Control } from 'react-hook-form';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
@@ -75,19 +69,24 @@ import type {
 import { formatCurrency, formatDate } from '../../utils/format';
 import { enquiryFormSchema, type EnquiryFormValues } from '../../validation/enquirySchemas';
 import { EnquiryCustomerDetailsCard } from './EnquiryCustomerDetailsCard';
-import { canCreateQuotationForEnquiry } from './enquiryStatusTransitions';
+import { orderConfirmedWarning } from './enquiryOrderConfirmGuard';
+import { EnquiryQuotationDialog } from './EnquiryQuotationDialog';
+import { useEnquiryQuotations } from './useEnquiryQuotations';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
+import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
+import {
+  EMPTY_QUOTATION_DRAFT_ITEM,
+  quotationDraftTotals,
+  toQuotationItemsInput,
+  type QuotationDraftItem,
+  type QuotationDraftTotals,
+} from '../quotations/quotationDraft';
 
-// Sharing-status phrasing for the enquiry-facing Quotation table's status select — DRAFT/SENT/
-// APPROVED/REJECTED read as "has this been shared with, and accepted by, the customer" rather
-// than the raw quotation lifecycle terms used on the Quotations list.
+// Sharing-status phrasing for the enquiry-facing Quotation table's status select — statusConfig.ts's
+// QUOTATION_STATUS_CONFIG already uses this same "has this been shared with, and accepted by, the
+// customer" phrasing, so both modules read identically.
 function quotationStatusLabel(status: QuotationStatus): string {
-  if (status === 'DRAFT') return 'Quotation Not Shared';
-  if (status === 'SENT') return 'Quotation Shared';
-  if (status === 'APPROVED') return 'Quotation Confirmed';
-  if (status === 'REJECTED') return 'Quotation Rejected';
-  // REVISED never reaches here since quotationDisplayStatus normalizes it to DRAFT first.
   return resolveStatusConfig('quotation', status).label;
 }
 
@@ -109,14 +108,6 @@ function quotationStatusOptions(status: QuotationStatus, canEdit: boolean, canAp
   return allowed.includes(status) ? allowed : [status, ...allowed];
 }
 
-interface QuotationDraftItem {
-  itemName: string;
-  quantity: string;
-  rate: string;
-}
-
-const EMPTY_QUOTATION_DRAFT_ITEM: QuotationDraftItem = { itemName: '', quantity: '', rate: '' };
-
 // md files/forms.md "Enquiry Module": the Enquiry Status field, driving the documented
 // Enquiry → ... → Closed workflow (docs/10_IMPLEMENTATION_DECISIONS.md §2).
 //
@@ -131,6 +122,7 @@ const EMPTY_QUOTATION_DRAFT_ITEM: QuotationDraftItem = { itemName: '', quantity:
 type InitialEnquiryStatus = EnquiryStatus;
 
 interface EnquiryStatusSectionProps {
+  control: Control<EnquiryFormValues>;
   enquiry: EnquiryDetail | null;
   createStatus: InitialEnquiryStatus;
   onCreateStatusChange: (status: InitialEnquiryStatus) => void;
@@ -147,7 +139,7 @@ const INITIAL_STATUS_OPTIONS: InitialEnquiryStatus[] = [
   'ORDER_LOST',
 ];
 
-function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: EnquiryStatusSectionProps) {
+function EnquiryStatusSection({ control, enquiry, createStatus, onCreateStatusChange }: EnquiryStatusSectionProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   // masters/user.md §Enquiries — Change Status and Convert to Order are permissions of their own.
@@ -157,6 +149,14 @@ function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: E
   const [pendingStatus, setPendingStatus] = useState<EnquiryStatus | null>(null);
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // "md files/Enquiry/flow.md" §3 — the pre-condition to confirm past before Order Confirmed.
+  // Shares its cache with the Quotation section above, so no extra request is made.
+  const { data: quotations } = useEnquiryQuotations(enquiry?.id);
+  const orderConfirmWarning =
+    pendingStatus === 'ORDER_CONFIRMED'
+      ? orderConfirmedWarning((quotations?.records ?? []).map((quotation) => quotation.status))
+      : null;
 
   const mutation = useMutation({
     mutationFn: (input: { status: EnquiryStatus; remarks?: string }) => {
@@ -195,6 +195,22 @@ function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: E
   if (!enquiry) {
     return (
       <FormSection title="Enquiry Status" subtitle="Choose the status this enquiry should start at." icon={<FlagIcon />}>
+        {/* Sits above Status: the follow-up is the step that decides where the enquiry goes
+            next, so it is read before the status it feeds. Saved with the form like any other
+            enquiry field — unlike Status, which posts its own change immediately. */}
+        <Controller
+          name="followUpDate"
+          control={control}
+          render={({ field }) => (
+            <DatePickerField
+              label="Follow-up Date"
+              margin="none"
+              value={field.value ? dayjs(field.value) : null}
+              onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+              helperText="When the customer should next be contacted. Leave empty if none is due."
+            />
+          )}
+        />
         <TextField
           select
           label="Status"
@@ -228,6 +244,22 @@ function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: E
         </Typography>
         <StatusBadge type="enquiry" status={enquiry.status} />
       </Stack>
+      {/* Sits above Status: the follow-up is the step that decides where the enquiry goes
+          next, so it is read before the status it feeds. Saved with the form like any other
+          enquiry field — unlike Status, which posts its own change immediately. */}
+      <Controller
+        name="followUpDate"
+        control={control}
+        render={({ field }) => (
+          <DatePickerField
+            label="Follow-up Date"
+            margin="none"
+            value={field.value ? dayjs(field.value) : null}
+            onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+            helperText="When the customer should next be contacted. Leave empty if none is due."
+          />
+        )}
+      />
       <TextField
         select
         label="Status"
@@ -264,6 +296,8 @@ function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: E
         message={
           <Stack spacing={1.5}>
             {error && <Alert severity="error">{error}</Alert>}
+            {/* flow.md §3: a warning, not a block — Yes still goes through. */}
+            {orderConfirmWarning && <Alert severity="warning">{orderConfirmWarning}</Alert>}
             <TextField
               label="Remarks"
               fullWidth
@@ -286,17 +320,15 @@ function EnquiryStatusSection({ enquiry, createStatus, onCreateStatusChange }: E
 interface QuotationDraftControls {
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
+  /** Discards the draft entirely — clears the items and taxes and unticks the checkbox. */
+  onCancel: () => void;
   items: QuotationDraftItem[];
-  onItemChange: (index: number, field: keyof QuotationDraftItem, value: string) => void;
-  onRemoveItem: (index: number) => void;
+  onItemsChange: (items: QuotationDraftItem[]) => void;
   cgstPercent: string;
   sgstPercent: string;
   onCgstChange: (value: string) => void;
   onSgstChange: (value: string) => void;
-  subtotal: number;
-  cgstAmount: number;
-  sgstAmount: number;
-  total: number;
+  totals: QuotationDraftTotals;
   error: string | null;
 }
 
@@ -314,12 +346,10 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
   const [previewQuotationId, setPreviewQuotationId] = useState<string | null>(null);
+  // "md files/Enquiry/flow.md" §2.3: Create Quotation opens a modal rather than navigating away.
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const { data: quotations } = useQuery({
-    queryKey: ['quotations', { enquiryId: enquiry?.id }],
-    queryFn: () => quotationService.list({ page: 1, limit: 50, enquiryId: enquiry!.id }),
-    enabled: Boolean(enquiry?.id),
-  });
+  const { data: quotations } = useEnquiryQuotations(enquiry?.id);
 
   // Editable Status column: every row's dropdown always offers all four of Not Shared/Shared/
   // Confirmed/Rejected (quotationStatusOptions), regardless of the row's current status. The
@@ -411,142 +441,28 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
 
           {draft.enabled && (
             <Box sx={{ mt: 2 }}>
-              <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Item</TableCell>
-                      <TableCell sx={{ fontWeight: 700, width: 110 }} align="right">
-                        Quantity
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700, width: 130 }} align="right">
-                        Unit Price
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700, width: 130 }} align="right">
-                        Sub Total
-                      </TableCell>
-                      <TableCell sx={{ width: 48 }} />
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {draft.items.map((item, index) => {
-                      const subtotal = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
-                      const isTrailingEmpty = index === draft.items.length - 1 && !item.itemName.trim();
-                      return (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
-                              value={item.itemName}
-                              onChange={(event) => draft.onItemChange(index, 'itemName', event.target.value)}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={item.quantity}
-                              onChange={(event) => draft.onItemChange(index, 'quantity', event.target.value)}
-                              slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={item.rate}
-                              onChange={(event) => draft.onItemChange(index, 'rate', event.target.value)}
-                              slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
-                            />
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {subtotal ? formatCurrency(subtotal) : '—'}
-                          </TableCell>
-                          <TableCell>
-                            {draft.items.length > 1 && !isTrailingEmpty && (
-                              <IconButton size="small" title="Delete item" onClick={() => draft.onRemoveItem(index)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {draft.error && (
-                <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-                  {draft.error}
-                </Typography>
-              )}
-
-              <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                <TextField
-                  label="CGST %"
-                  type="number"
-                  size="small"
-                  sx={{ width: 130 }}
-                  value={draft.cgstPercent}
-                  onChange={(event) => draft.onCgstChange(event.target.value)}
-                  slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
-                />
-                <TextField
-                  label="SGST %"
-                  type="number"
-                  size="small"
-                  sx={{ width: 130 }}
-                  value={draft.sgstPercent}
-                  onChange={(event) => draft.onSgstChange(event.target.value)}
-                  slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
-                />
-              </Stack>
-
-              <Stack sx={{ mt: 1.5, alignItems: 'flex-end', gap: 0.5 }}>
-                <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Subtotal
-                  </Typography>
-                  <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-                    {formatCurrency(draft.subtotal)}
-                  </Typography>
-                </Stack>
-                {draft.cgstAmount > 0 && (
-                  <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      CGST
-                    </Typography>
-                    <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-                      {formatCurrency(draft.cgstAmount)}
-                    </Typography>
-                  </Stack>
-                )}
-                {draft.sgstAmount > 0 && (
-                  <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      SGST
-                    </Typography>
-                    <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-                      {formatCurrency(draft.sgstAmount)}
-                    </Typography>
-                  </Stack>
-                )}
-                <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', alignItems: 'baseline', gap: 1 }}>
-                  <Typography variant="h4">Grand Total</Typography>
-                  <Typography variant="h4" sx={{ minWidth: 120, textAlign: 'right' }}>
-                    {formatCurrency(draft.total)}
-                  </Typography>
-                </Stack>
-              </Stack>
+              <QuotationItemsEditor
+                items={draft.items}
+                onItemsChange={draft.onItemsChange}
+                cgstPercent={draft.cgstPercent}
+                sgstPercent={draft.sgstPercent}
+                onCgstChange={draft.onCgstChange}
+                onSgstChange={draft.onSgstChange}
+                totals={draft.totals}
+                error={draft.error}
+              />
 
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
                 Saving the enquiry will also create this quotation and move the enquiry to "Quotation to Share".
               </Typography>
+
+              {/* The counterpart of the dialog's Cancel: discards the draft and leaves the enquiry
+                  itself untouched, so the form's own Save/Cancel still mean what they did before. */}
+              <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 1.5 }}>
+                <Button size="small" variant="outlined" startIcon={<CloseIcon />} onClick={draft.onCancel}>
+                  Cancel Quotation
+                </Button>
+              </Stack>
             </Box>
           )}
         </Box>
@@ -554,7 +470,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
     );
   }
 
-  const showCreateQuotation = canCreateQuotation && canCreateQuotationForEnquiry(enquiry.status);
+  const showCreateQuotation = canCreateQuotation;
 
   const quotationColumns: DataTableColumn<QuotationListItem>[] = [
     { key: 'quotationNumber', header: 'Quotation No' },
@@ -611,7 +527,8 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
               <VisibilityIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          {canEdit && (row.status === 'DRAFT' || row.status === 'SENT') && (
+          {/* No status gate — enq.md §6/§7: a quotation stays editable at every stage. */}
+          {canEdit && (
             <Tooltip title="Edit">
               <IconButton
                 size="small"
@@ -634,10 +551,13 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
       <Box sx={{ gridColumn: '1 / -1' }}>
         {showCreateQuotation && (
           <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 1.5 }}>
+            {/* Contained, matching the Enquiry Detail page's identical action: MUI's default text
+                variant left this reading as a caption rather than an available option. */}
             <Button
               size="small"
+              variant="contained"
               startIcon={<RequestQuoteIcon />}
-              onClick={() => navigate(`/quotations/new?enquiryId=${enquiry.id}`)}
+              onClick={() => setCreateDialogOpen(true)}
             >
               Create Quotation
             </Button>
@@ -664,7 +584,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
           open={pendingStatusChange !== null}
           title={
             pendingStatusChange?.target === 'APPROVED'
-              ? 'Finalize Quotation?'
+              ? 'Confirm Quotation?'
               : pendingStatusChange?.target === 'SENT'
                 ? 'Mark Quotation as Shared?'
                 : 'Change Quotation Status?'
@@ -675,7 +595,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
               {!statusChangeError && pendingStatusChange && (
                 <Typography variant="body2">
                   {pendingStatusChange.target === 'APPROVED' &&
-                    `Finalize quotation "${pendingStatusChange.quotationNumber}"? This enables converting the enquiry to an order. Only one quotation per enquiry can be finalized.`}
+                    `Confirm quotation "${pendingStatusChange.quotationNumber}"? This moves the enquiry to Order Confirmed and raises the order. Other quotations stay available as history.`}
                   {pendingStatusChange.target === 'SENT' &&
                     `Mark quotation "${pendingStatusChange.quotationNumber}" as shared with the customer?`}
                   {pendingStatusChange.target === 'DRAFT' &&
@@ -697,6 +617,21 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
         />
 
         <QuotationPreviewDialog quotationId={previewQuotationId} onClose={() => setPreviewQuotationId(null)} />
+
+        {/* flow.md §2.3: raised in place, and saving returns the user to the Enquiry List. */}
+        <EnquiryQuotationDialog
+          open={createDialogOpen}
+          enquiry={{
+            id: enquiry.id,
+            enquiryNumber: enquiry.enquiryNumber,
+            customerName: enquiry.customer.customerName,
+          }}
+          onClose={() => setCreateDialogOpen(false)}
+          onSaved={() => {
+            setCreateDialogOpen(false);
+            navigate('/enquiries', { state: { highlightId: enquiry.id } });
+          }}
+        />
       </Box>
     </FormSection>
   );
@@ -776,6 +711,10 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     mahal: cleanOptional(values.mahal),
     venue: cleanOptional(values.venue),
     estimatedBudget: values.estimatedBudget ? Number(values.estimatedBudget) : undefined,
+    // Sent on create as well as update: an enquiry logged straight into Order Confirmed converts
+    // immediately, and these are the figures its order's budget and opening advance come from.
+    finalBudgetAmount: values.finalBudgetAmount ? Number(values.finalBudgetAmount) : undefined,
+    advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : undefined,
     notes: cleanOptional(values.notes),
     appointmentDate: cleanOptional(values.appointmentDate),
     appointmentTime: cleanOptional(values.appointmentTime),
@@ -783,19 +722,25 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     appointmentNotes: cleanOptional(values.appointmentNotes),
     appointmentStatus: values.appointmentStatus,
     assignedUserId: cleanOptional(values.assignedUserId),
+    followUpDate: cleanOptional(values.followUpDate),
     status: values.status,
   };
 }
 
 function toUpdateInput(values: EnquiryFormValues): UpdateEnquiryInput {
+  // finalBudgetAmount/advanceAmount ride along in `rest` — toCreateInput carries them now that they
+  // are settable at creation too.
   const { customer: _customer, status: _status, ...rest } = toCreateInput(values);
-  const finalBudgetAmount = values.finalBudgetAmount ? Number(values.finalBudgetAmount) : undefined;
+  // Explicit null rather than the omission cleanOptional() produces: clearing the field is how a
+  // user records that the follow-up is no longer owed, and an omitted field would leave the stored
+  // date in place.
+  const followUpDate = values.followUpDate?.trim() ? values.followUpDate : null;
   // A still-unconfirmed enquiry (customerType NEW) keeps its customer details on the enquiry itself,
   // so edits to them are sent as prospect fields. A linked (EXISTING) enquiry's customer is locked.
   if (values.customerType === 'NEW') {
     return {
       ...rest,
-      finalBudgetAmount,
+      followUpDate,
       customerName: values.customerName ?? '',
       mobile: values.mobile ?? '',
       whatsapp: cleanOptional(values.whatsapp),
@@ -804,7 +749,7 @@ function toUpdateInput(values: EnquiryFormValues): UpdateEnquiryInput {
       city: cleanOptional(values.city),
     };
   }
-  return { ...rest, finalBudgetAmount };
+  return { ...rest, followUpDate };
 }
 
 const EMPTY_VALUES: EnquiryFormValues = {
@@ -823,8 +768,10 @@ const EMPTY_VALUES: EnquiryFormValues = {
   venue: '',
   estimatedBudget: '',
   finalBudgetAmount: '',
+  advanceAmount: '',
   notes: '',
   appointmentDate: '',
+  followUpDate: '',
   appointmentTime: '',
   meetingLocation: '',
   appointmentNotes: '',
@@ -867,6 +814,12 @@ export default function EnquiryFormPage() {
   const [quotationSgst, setQuotationSgst] = useState('');
   const [quotationItemsError, setQuotationItemsError] = useState<string | null>(null);
   const [quotationPreviewOpen, setQuotationPreviewOpen] = useState(true);
+
+  // "md files/Enquiry/flow.md" §3 — create mode's Order Confirmed confirmation. The message is
+  // held in state to show the popup; the acknowledgement is a ref because onSubmit re-runs from
+  // the popup's own handler and has to see the answer within the same tick.
+  const [pendingOrderConfirmWarning, setPendingOrderConfirmWarning] = useState<string | null>(null);
+  const orderConfirmAcknowledged = useRef(false);
 
   const { data: existingEnquiry } = useQuery({
     queryKey: ['enquiry', id],
@@ -928,6 +881,7 @@ export default function EnquiryFormPage() {
       venue: existingEnquiry.venue ?? '',
       estimatedBudget: existingEnquiry.estimatedBudget ?? '',
       finalBudgetAmount: existingEnquiry.finalBudgetAmount ?? '',
+      advanceAmount: existingEnquiry.advanceAmount ?? '',
       notes: existingEnquiry.notes ?? '',
       appointmentDate: existingEnquiry.appointmentDate ?? '',
       appointmentTime: existingEnquiry.appointmentTime ?? '',
@@ -935,6 +889,7 @@ export default function EnquiryFormPage() {
       appointmentNotes: existingEnquiry.appointmentNotes ?? '',
       appointmentStatus: existingEnquiry.appointmentStatus,
       assignedUserId: existingEnquiry.assignedUser?.id ?? '',
+      followUpDate: existingEnquiry.followUpDate ?? '',
     });
     if (!isProspect) {
       setSelectedCustomer({
@@ -1024,31 +979,18 @@ export default function EnquiryFormPage() {
 
   const saving = createMutation.isPending || updateMutation.isPending || createQuotationMutation.isPending;
 
-  function updateQuotationItem(index: number, field: keyof QuotationDraftItem, value: string) {
-    setQuotationItems((prev) => {
-      const next = prev.map((item, i) => (i === index ? { ...item, [field]: value } : item));
-      // Mirrors QuotationFormPage's auto-add-row behaviour: typing into the trailing empty row
-      // spawns a fresh one, so there's never an explicit "Add Item" button to click.
-      if (field === 'itemName' && index === prev.length - 1 && value.trim() !== '') {
-        next.push({ ...EMPTY_QUOTATION_DRAFT_ITEM });
-      }
-      return next;
-    });
-  }
+  const quotationTotals = quotationDraftTotals(quotationItems, quotationCgst, quotationSgst);
 
-  function removeQuotationItem(index: number) {
-    setQuotationItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  // Backs out of the inline quotation draft: the enquiry is still saved on its own, just without a
+  // quotation attached. Ticking the checkbox again starts from an empty table rather than resuming
+  // the abandoned one.
+  function cancelQuotationDraft() {
+    setAddQuotationNow(false);
+    setQuotationItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+    setQuotationCgst('');
+    setQuotationSgst('');
+    setQuotationItemsError(null);
   }
-
-  const quotationSubtotal = quotationItems.reduce(
-    (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0),
-    0,
-  );
-  const quotationCgstNum = Number(quotationCgst) || 0;
-  const quotationSgstNum = Number(quotationSgst) || 0;
-  const quotationCgstAmount = Math.round(((quotationSubtotal * quotationCgstNum) / 100) * 100) / 100;
-  const quotationSgstAmount = Math.round(((quotationSubtotal * quotationSgstNum) / 100) * 100) / 100;
-  const quotationGrandTotal = quotationSubtotal + quotationCgstAmount + quotationSgstAmount;
 
   // Mirrors whichever customer source is currently selected, so the preview's "To:" line matches
   // what will actually be sent to quotationService.create() once the enquiry is saved.
@@ -1092,12 +1034,12 @@ export default function EnquiryFormPage() {
               rate: Number(item.rate) || 0,
               amount: (Number(item.quantity) || 0) * (Number(item.rate) || 0),
             }))}
-          subtotal={quotationSubtotal}
-          cgstPercent={quotationCgstNum}
-          sgstPercent={quotationSgstNum}
-          cgstAmount={quotationCgstAmount}
-          sgstAmount={quotationSgstAmount}
-          total={quotationGrandTotal}
+          subtotal={quotationTotals.subtotal}
+          cgstPercent={quotationTotals.cgstPercent}
+          sgstPercent={quotationTotals.sgstPercent}
+          cgstAmount={quotationTotals.cgstAmount}
+          sgstAmount={quotationTotals.sgstAmount}
+          total={quotationTotals.total}
           images={[]}
         />
       </Box>
@@ -1128,22 +1070,26 @@ export default function EnquiryFormPage() {
     // it's still cheap to fix, rather than after the enquiry is already saved.
     let quotationItemsInput: QuotationItemInput[] | null = null;
     if (!isEdit && addQuotationNow) {
-      const validItems = quotationItems.filter((item) => item.itemName.trim() !== '');
-      if (validItems.length === 0) {
-        setQuotationItemsError('Add at least one item, or turn off "Create a quotation for this enquiry now".');
+      const parsed = toQuotationItemsInput(
+        quotationItems,
+        'Add at least one item, or turn off "Create a quotation for this enquiry now".',
+      );
+      if (parsed.items === null) {
+        setQuotationItemsError(parsed.error);
         return;
       }
-      const hasInvalidItem = validItems.some((item) => !(Number(item.quantity) > 0) || !(Number(item.rate) >= 0));
-      if (hasInvalidItem) {
-        setQuotationItemsError('Enter a valid quantity and unit price for every item.');
+      quotationItemsInput = parsed.items;
+    }
+
+    // "md files/Enquiry/flow.md" §3 — creating an enquiry straight into Order Confirmed gets the
+    // same confirmation as changing an existing enquiry's status. A new enquiry has no quotation
+    // yet; the inline draft, if enabled, is created unapproved, so it reads as the second case.
+    if (!isEdit && values.status === 'ORDER_CONFIRMED' && !orderConfirmAcknowledged.current) {
+      const warning = orderConfirmedWarning(addQuotationNow ? ['DRAFT'] : []);
+      if (warning) {
+        setPendingOrderConfirmWarning(warning);
         return;
       }
-      quotationItemsInput = validItems.map((item, index) => ({
-        itemName: item.itemName.trim(),
-        quantity: Number(item.quantity),
-        rate: Number(item.rate),
-        sortOrder: index,
-      }));
     }
 
     try {
@@ -1164,14 +1110,15 @@ export default function EnquiryFormPage() {
         const quotation = await createQuotationMutation.mutateAsync({
           source: 'ENQUIRY',
           enquiryId: created.id,
-          cgstPercent: quotationCgstNum,
-          sgstPercent: quotationSgstNum,
+          cgstPercent: quotationTotals.cgstPercent,
+          sgstPercent: quotationTotals.sgstPercent,
           items: quotationItemsInput,
         });
         showToast(
           `Enquiry ${created.enquiryNumber} created — quotation ${quotation.quotationNumber} created and the enquiry moved to Quotation to Share.`,
         );
-        navigate(`/quotations/${quotation.id}`);
+        // flow.md §2.3: saving a quotation raised from an enquiry lands on the Enquiry List.
+        navigate('/enquiries', { state: { highlightId: created.id } });
       } catch (quotationError) {
         // The enquiry is already safely saved — surface the quotation failure on its own rather
         // than losing that, and land on the enquiry detail page where Create Quotation can be
@@ -1396,9 +1343,12 @@ export default function EnquiryFormPage() {
           render={({ field }) => (
             <DatePickerField
               label="Event Date"
+              required
               margin="none"
               value={field.value ? dayjs(field.value) : null}
               onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+              error={Boolean(errors.eventDate)}
+              helperText={errors.eventDate?.message}
             />
           )}
         />
@@ -1529,17 +1479,14 @@ export default function EnquiryFormPage() {
             : {
                 enabled: addQuotationNow,
                 onToggle: setAddQuotationNow,
+                onCancel: cancelQuotationDraft,
                 items: quotationItems,
-                onItemChange: updateQuotationItem,
-                onRemoveItem: removeQuotationItem,
+                onItemsChange: setQuotationItems,
                 cgstPercent: quotationCgst,
                 sgstPercent: quotationSgst,
                 onCgstChange: setQuotationCgst,
                 onSgstChange: setQuotationSgst,
-                subtotal: quotationSubtotal,
-                cgstAmount: quotationCgstAmount,
-                sgstAmount: quotationSgstAmount,
-                total: quotationGrandTotal,
+                totals: quotationTotals,
                 error: quotationItemsError,
               }
         }
@@ -1547,7 +1494,7 @@ export default function EnquiryFormPage() {
 
       <FormSection
         title="Final Budget"
-        subtitle="Auto-filled from the approved quotation — editable if it needs adjusting."
+        subtitle="What this enquiry becomes worth — carried straight into the order when it is confirmed."
         icon={<PaymentsIcon />}
       >
         <TextField
@@ -1555,18 +1502,37 @@ export default function EnquiryFormPage() {
           type="number"
           fullWidth
           placeholder="0"
+          helperText="Auto-filled from the approved quotation. Whatever stands here becomes the order's budget."
           slotProps={{
             input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
             htmlInput: { min: 0 },
           }}
           {...register('finalBudgetAmount')}
         />
+        <TextField
+          label="Advance Amount"
+          type="number"
+          fullWidth
+          placeholder="0"
+          helperText="Already collected — recorded as the order's opening advance receipt (Cash) on confirmation."
+          slotProps={{
+            input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
+            htmlInput: { min: 0 },
+          }}
+          {...register('advanceAmount')}
+        />
       </FormSection>
 
       <EnquiryStatusSection
+        control={control}
         enquiry={isEdit ? (existingEnquiry ?? null) : null}
         createStatus={watch('status')}
-        onCreateStatusChange={(status) => setValue('status', status, { shouldDirty: true })}
+        onCreateStatusChange={(status) => {
+          // Picking a different status retracts an earlier acknowledgement, so coming back to
+          // Order Confirmed asks again rather than saving silently.
+          orderConfirmAcknowledged.current = false;
+          setValue('status', status, { shouldDirty: true });
+        }}
       />
 
       <Box>
@@ -1574,6 +1540,22 @@ export default function EnquiryFormPage() {
           {isEdit ? existingEnquiry?.enquiryNumber : 'A new enquiry number will be generated on save.'}
         </Typography>
       </Box>
+
+      {/* flow.md §3: confirmation only — confirming proceeds with the save as chosen. */}
+      <ConfirmDialog
+        open={pendingOrderConfirmWarning !== null}
+        title="Move to Order Confirmed?"
+        message={pendingOrderConfirmWarning ?? ''}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        loading={saving || isSubmitting}
+        onConfirm={() => {
+          orderConfirmAcknowledged.current = true;
+          setPendingOrderConfirmWarning(null);
+          void onSubmit();
+        }}
+        onClose={() => setPendingOrderConfirmWarning(null)}
+      />
     </FormPage>
   );
 }

@@ -13,37 +13,23 @@ export const PAYMENT_STATUS_CHOICES = [
 ] as const;
 
 /**
- * §Edit Payment. `collectedSoFar` is a closure param rather than a field: both cross-field rules
- * are measured against it, and it mirrors the backend's own guards
- * (server/src/modules/payment-tracker/service.ts) so the user sees the same message before the
- * round-trip, not instead of it.
+ * §Edit Payment. Budget is view-only in this form (there is no field to change it), so the only
+ * cross-field rule left is the collected amount against the balance still owed. `remaining` is a
+ * closure param rather than a field, computed by the caller from the order's own stored budget and
+ * collected-so-far — it mirrors the backend's own guard (server/src/modules/payment-tracker/service.ts)
+ * so the user sees the same message before the round-trip, not instead of it.
  */
-export function updatePaymentTrackerSchema(collectedSoFar: number) {
+export function updatePaymentTrackerSchema(remaining: number) {
   return z
     .object({
-      budgetAmount: z
-        .string()
-        .min(1, 'Budget is required.')
-        .refine((value) => Number(value) > 0, 'Budget must be greater than zero.'),
       // The amount being collected right now. Blank means "no collection in this save".
       collectedAmount: z.string().optional().or(z.literal('')),
       paymentMethod: z.enum(PAYMENT_METHOD_VALUES),
       paymentDate: z.string().optional().or(z.literal('')),
-      referenceNumber: z.string().optional().or(z.literal('')),
       paymentStatus: z.enum(PAYMENT_STATUS_CHOICES),
       remarks: z.string().max(2000, 'Remarks cannot exceed 2000 characters.').optional().or(z.literal('')),
     })
     .superRefine((values, ctx) => {
-      const budget = Number(values.budgetAmount);
-
-      if (budget < collectedSoFar) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['budgetAmount'],
-          message: `Budget cannot be less than the ${collectedSoFar} already collected.`,
-        });
-      }
-
       if (!values.collectedAmount) return;
 
       const amount = Number(values.collectedAmount);
@@ -56,9 +42,6 @@ export function updatePaymentTrackerSchema(collectedSoFar: number) {
         return;
       }
 
-      // Headroom is measured against the budget currently typed in the form, so raising the budget
-      // and collecting against the new room works in one save — exactly as the server allows.
-      const remaining = budget - collectedSoFar;
       if (amount > remaining) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

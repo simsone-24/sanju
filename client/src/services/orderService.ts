@@ -20,8 +20,12 @@ export async function list(params: ListOrdersParams): Promise<ListOrdersResult> 
   return { records: response.data.data, meta: response.data.meta! };
 }
 
-export async function getStats(): Promise<OrderStats> {
-  const response = await apiClient.get<ApiSuccessResponse<OrderStats>>('/orders/stats');
+// Excludes page/limit/status — the cards' own counts narrow along with every other active
+// filter, but each card defines its own status rather than reading it back off the list.
+export type OrderStatsParams = Omit<ListOrdersParams, 'page' | 'limit' | 'status'>;
+
+export async function getStats(params: OrderStatsParams): Promise<OrderStats> {
+  const response = await apiClient.get<ApiSuccessResponse<OrderStats>>('/orders/stats', { params });
   return response.data.data;
 }
 

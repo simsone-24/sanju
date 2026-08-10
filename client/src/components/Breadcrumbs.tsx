@@ -14,12 +14,15 @@ export interface BreadcrumbItem {
 // destination is then the same however the page was reached, and it can't dead-end when the page
 // was opened from a pasted URL or a new tab. A trail with no parent — the Dashboard, the root of
 // every trail — renders no button.
-export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+export function Breadcrumbs({ items, className = '' }: { items: BreadcrumbItem[]; className?: string }) {
   const navigate = useNavigate();
   const parent = items.length > 1 ? items[items.length - 2] : undefined;
 
   return (
-    <nav aria-label="Breadcrumb" className="tw-mb-2.5 tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+    <nav
+      aria-label="Breadcrumb"
+      className={`tw-mb-2.5 tw-flex tw-flex-wrap tw-items-center tw-gap-2 ${className}`}
+    >
       {parent?.to && (
         <>
           <button

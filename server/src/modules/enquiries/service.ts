@@ -11,7 +11,13 @@ import { AuthenticatedUser } from '../auth/types';
 import { ModuleName } from '../permissions/catalog';
 import { requirePermission } from '../permissions/service';
 import * as enquiriesRepository from './repository';
-import { CreateEnquiryInput, CreateFollowUpInput, ListEnquiriesParams, UpdateEnquiryInput } from './types';
+import {
+  CreateEnquiryInput,
+  CreateFollowUpInput,
+  EnquiryStatsParams,
+  ListEnquiriesParams,
+  UpdateEnquiryInput,
+} from './types';
 
 // Shape returned to the API: the linked customer and the prospect_* columns are normalised into a
 // single `customer` object (id is null while the enquiry is still an unconfirmed prospect).
@@ -66,8 +72,8 @@ export async function list(params: ListEnquiriesParams) {
   };
 }
 
-export async function getStats(companyId: string) {
-  return enquiriesRepository.getEnquiryStats(companyId);
+export async function getStats(params: EnquiryStatsParams) {
+  return enquiriesRepository.getEnquiryStats(params);
 }
 
 export async function getById(companyId: string, id: string) {
@@ -207,6 +213,8 @@ export async function create(companyId: string, actorId: string, input: CreateEn
         mahal: input.mahal,
         venue: input.venue,
         estimatedBudget: input.estimatedBudget,
+        finalBudgetAmount: input.finalBudgetAmount,
+        advanceAmount: input.advanceAmount,
         notes: input.notes,
         appointmentDate: input.appointmentDate,
         appointmentTime: input.appointmentTime,
@@ -214,6 +222,7 @@ export async function create(companyId: string, actorId: string, input: CreateEn
         appointmentNotes: input.appointmentNotes,
         appointmentStatus: input.appointmentStatus,
         assignedUserId: input.assignedUserId,
+        followUpDate: input.followUpDate,
         status: initialStatus,
       },
       tx,
@@ -294,6 +303,13 @@ export async function update(actor: AuthenticatedUser, id: string, input: Update
     performedById: actor.id,
   });
 
+  // The enquiry's money is the order's money: correcting the Final Budget or Advance after the
+  // enquiry was already confirmed has to reach the order and its Payment Tracker, not just sit on
+  // the enquiry. No-ops when there is no order yet.
+  if (input.finalBudgetAmount !== undefined || input.advanceAmount !== undefined) {
+    await ordersService.syncOrderFromEnquiry(companyId, actor.id, id);
+  }
+
   return mapEnquiryDetail(enquiry);
 }
 
@@ -365,6 +381,49 @@ async function confirmProspectCustomer(
     );
 
     return enquiriesRepository.updateEnquiry(id, { customerId, status: targetStatus }, tx);
+  });
+}
+
+// "md files/Enquiry/enq.md" §8 — the enquiry's complete history, including the activity of the
+// quotations and order that descend from it (see repository.getEnquiryTimeline).
+export async function getTimeline(companyId: string, id: string) {
+  const existingEnquiry = await enquiriesRepository.findEnquiryById(companyId, id);
+  if (!existingEnquiry) throw new AppError(404, 'Enquiry not found.');
+
+  return enquiriesRepository.getEnquiryTimeline(companyId, id);
+}
+
+/**
+ * Deletes an enquiry and everything raised from it — its quotations, the order it became, and that
+ * order's payments, invoice, payment tracker, task plan and documents (repository
+ * softDeleteEnquiryCascade). Soft delete throughout, so the records stay auditable and the activity
+ * log continues to resolve.
+ *
+ * There is deliberately no "still referenced" guard: a delete here is understood to take the whole
+ * chain with it. The cascade is what makes that safe — nothing is left pointing at a hidden parent.
+ */
+export async function remove(actor: AuthenticatedUser, id: string): Promise<void> {
+  const existingEnquiry = await enquiriesRepository.findEnquiryById(actor.companyId, id);
+  if (!existingEnquiry) throw new AppError(404, 'Enquiry not found.');
+
+  const { orderCount, quotationCount } = await enquiriesRepository.softDeleteEnquiryCascade(actor.companyId, id);
+
+  // The counts go in the log line: after the fact, "which order did this take with it" is exactly
+  // what someone auditing the deletion needs, and the deleted rows no longer surface anywhere else.
+  const cascaded = [
+    quotationCount > 0 ? `${quotationCount} quotation(s)` : null,
+    orderCount > 0 ? `${orderCount} order(s)` : null,
+  ].filter((part): part is string => part !== null);
+
+  await logActivity({
+    companyId: actor.companyId,
+    module: 'ENQUIRIES',
+    referenceId: id,
+    action: 'DELETE',
+    description: `Enquiry "${existingEnquiry.enquiryNumber}" deleted${
+      cascaded.length ? `, along with ${cascaded.join(' and ')}` : ''
+    }.`,
+    performedById: actor.id,
   });
 }
 

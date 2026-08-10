@@ -43,7 +43,8 @@ export interface InvoiceResult {
   order: {
     id: string;
     orderNumber: string;
-    eventDate: Date;
+    /** Null until an event date is set on an order confirmed before one was known. */
+    eventDate: Date | null;
     venue: string | null;
     eventName: string;
   };
@@ -53,7 +54,8 @@ export interface InvoiceResult {
     email: string | null;
     address: string | null;
   };
-  quotationNumber: string;
+  /** Null when the order was raised from an enquiry confirmed without any quotation. */
+  quotationNumber: string | null;
   items: InvoiceLineItem[];
   subtotal: number;
   discount: number;

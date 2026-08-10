@@ -8,6 +8,7 @@ export interface CalendarEvent {
   id: string;
   orderNumber: string;
   customerName: string;
+  eventName: string;
   eventDate: Date;
   venue: string | null;
   status: OrderStatus;

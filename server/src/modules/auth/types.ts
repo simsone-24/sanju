@@ -36,6 +36,9 @@ export interface AuthenticatedProfile {
   company: {
     id: string;
     companyName: string;
+    /** Relative upload path, or null when no logo has been uploaded. Branding is shown to every
+        signed-in user, so it travels on the profile rather than the SETTINGS-gated company API. */
+    logo: string | null;
   };
   // Read-only for the frontend's own conditional rendering (hide buttons a group can't use).
   // The backend remains the sole enforcer via the authorize() middleware regardless of what

@@ -1,15 +1,14 @@
 import type { QuotationStatus } from '../../types/quotation';
 
-// Mirrors EDITABLE_QUOTATION_STATUSES in server/src/modules/quotations/service.ts. APPROVED is
-// editable because extra work is routinely agreed late in the event and the quotation's items are
-// the only itemisation an order has. REVISED (superseded by a newer version) and REJECTED (the
-// enquiry was lost) stay locked — editing either rewrites a dead document rather than the live one.
-const EDITABLE_QUOTATION_STATUSES: ReadonlySet<QuotationStatus> = new Set<QuotationStatus>([
-  'DRAFT',
-  'SENT',
-  'APPROVED',
-]);
-
-export function isQuotationEditable(status: QuotationStatus): boolean {
-  return EDITABLE_QUOTATION_STATUSES.has(status);
+/**
+ * A quotation is editable at every stage — "md files/Enquiry/enq.md" §6 ("No locking after quotation
+ * creation", "No locking after quotation confirmation") and §7, which forbids "Cannot edit quotation
+ * after sending" and "Cannot edit quotation after discussion" as rules.
+ *
+ * The status set this used to hold mirrored EDITABLE_QUOTATION_STATUSES in
+ * server/src/modules/quotations/service.ts, which was removed with it. Kept as a function so the
+ * call sites stay put if a future rule needs one.
+ */
+export function isQuotationEditable(_status: QuotationStatus): boolean {
+  return true;
 }

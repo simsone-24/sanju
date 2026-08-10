@@ -24,6 +24,10 @@ const manualCustomerSchema = z.object({
 export const createQuotationSchema = z
   .object({
     source: z.nativeEnum(QuotationSource),
+    // The status the quotation is saved in, chosen on the form. REVISED is excluded: it means "an
+    //edited version has superseded this one" and is set by create() when a new revision is raised,
+    // so it can never describe a document at the moment it is written.
+    status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED']).optional(),
     enquiryId: z.string().uuid().optional(),
     customerId: z.string().uuid().optional(),
     orderId: z.string().uuid().optional(),
@@ -56,6 +60,9 @@ export const createQuotationSchema = z
 
 export const updateQuotationSchema = z
   .object({
+    // Editing a saved quotation may also move its status; REVISED is offered here (unlike on
+    // create) because an existing document can legitimately be marked superseded by hand.
+    status: z.nativeEnum(QuotationStatus).optional(),
     quotationDate: z.coerce.date().optional(),
     discount: z.coerce.number().min(0).optional(),
     cgstPercent: z.coerce.number().min(0).max(100).optional(),

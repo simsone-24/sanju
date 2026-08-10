@@ -1,14 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import HistoryIcon from '@mui/icons-material/History';
-import { Alert, Box, Divider, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { DatePickerField } from '../../components/DatePickerField';
-import { FormDrawer } from '../../components/FormDrawer';
+import { FormDialog } from '../../components/FormDialog';
 import { resolveStatusConfig } from '../../components/statusConfig';
+import { ViewField } from '../../components/ViewField';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
@@ -27,7 +28,7 @@ import { PaymentHistoryDialog } from './PaymentHistoryDialog';
 
 const PAYMENT_METHODS = ['CASH', 'UPI', 'BANK', 'CARD', 'CHEQUE'] as const;
 
-interface PaymentTrackerEditDrawerProps {
+interface PaymentTrackerEditDialogProps {
   open: boolean;
   record: PaymentTrackerRecord | null;
   onClose: () => void;
@@ -42,13 +43,14 @@ function currentStatusChoice(record: PaymentTrackerRecord | null): StatusChoice 
 }
 
 /**
- * §Edit Payment — budget, a collection to record, the payment status and remarks, saved together.
+ * §Edit Payment — a centered popup (FormDialog) to record a collection against an order.
  *
- * The Collected box takes the amount received NOW, not a replacement total: the running total sits
- * beneath it, so what the field means is unambiguous, and every entry becomes its own receipt in
- * the payment history the icon opens.
+ * Budget is set once at order creation and isn't editable here (there is no field for it anywhere
+ * in the app) — Customer/Budget/Collected/Pending sit up top as a plain read-only summary, and
+ * everything below is the actual form: the amount coming in now, how it was paid, and the
+ * resulting status/notes.
  */
-export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrackerEditDrawerProps) {
+export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrackerEditDialogProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrack
 
   const collectedSoFar = Number(record?.paidAmount ?? 0);
   const storedBudget = Number(record?.totalAmount ?? 0);
+  const pendingAmount = Number(record?.pendingAmount ?? storedBudget - collectedSoFar);
 
   const {
     control,
@@ -65,40 +68,35 @@ export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrack
     watch,
     formState: { errors },
   } = useForm<UpdatePaymentTrackerFormValues>({
-    resolver: zodResolver(updatePaymentTrackerSchema(collectedSoFar)),
+    resolver: zodResolver(updatePaymentTrackerSchema(pendingAmount)),
     defaultValues: {
-      budgetAmount: '',
       collectedAmount: '',
       paymentMethod: 'CASH',
       paymentDate: '',
-      referenceNumber: '',
       paymentStatus: 'AUTO',
       remarks: '',
     },
   });
 
-  // The drawer is mounted once and reused for whichever row is being edited, so the form is
+  // The dialog is mounted once and reused for whichever row is being edited, so the form is
   // refilled whenever that row changes rather than on mount.
   useEffect(() => {
     if (!record) return;
     setServerError(null);
     reset({
-      budgetAmount: String(storedBudget),
       collectedAmount: '',
       paymentMethod: 'CASH',
       paymentDate: '',
-      referenceNumber: '',
       paymentStatus: currentStatusChoice(record),
       remarks: record.paymentTracker?.remarks ?? '',
     });
-  }, [record, reset, storedBudget]);
+  }, [record, reset]);
 
   // §Auto Calculation "Balance = Budget - Collected", shown live against what is currently typed
   // rather than only after saving.
-  const watchedBudget = Number(watch('budgetAmount') || 0);
   const watchedCollected = Number(watch('collectedAmount') || 0);
   const projectedCollected = collectedSoFar + (Number.isFinite(watchedCollected) ? watchedCollected : 0);
-  const projectedBalance = (Number.isFinite(watchedBudget) ? watchedBudget : 0) - projectedCollected;
+  const projectedPending = pendingAmount - (Number.isFinite(watchedCollected) ? watchedCollected : 0);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdatePaymentTrackerInput) => paymentTrackerService.update(record!.id, input),
@@ -118,20 +116,17 @@ export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrack
     if (!record) return;
     setServerError(null);
 
-    const nextBudget = Number(values.budgetAmount);
     const statusChoice = values.paymentStatus;
     const previousStatusChoice = currentStatusChoice(record);
     const nextRemarks = values.remarks ?? '';
 
     const input: UpdatePaymentTrackerInput = {
-      ...(nextBudget !== storedBudget ? { budgetAmount: nextBudget } : {}),
       ...(values.collectedAmount
         ? {
             collected: {
               amount: Number(values.collectedAmount),
               paymentMethod: values.paymentMethod,
               paymentDate: values.paymentDate || undefined,
-              referenceNumber: values.referenceNumber || undefined,
             },
           }
         : {}),
@@ -158,14 +153,14 @@ export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrack
 
   return (
     <>
-      <FormDrawer
+      <FormDialog
         open={open}
         title="Edit Payment"
-        subtitle={record ? `${record.orderNumber} · ${record.customer.customerName}` : undefined}
+        subtitle={record ? record.orderNumber : undefined}
         onClose={onClose}
         onSave={onSubmit}
         saving={updateMutation.isPending}
-        width={520}
+        maxWidth={480}
       >
         {serverError && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -173,117 +168,102 @@ export function PaymentTrackerEditDrawer({ open, record, onClose }: PaymentTrack
           </Alert>
         )}
 
-        <TextField
-          label="Budget Amount"
-          type="number"
-          fullWidth
-          margin="normal"
-          error={Boolean(errors.budgetAmount)}
-          helperText={errors.budgetAmount?.message}
-          {...register('budgetAmount')}
-        />
+        <Stack spacing={2.5}>
+          {/* View only — Customer, Budget, Collected, Pending. Nothing here is editable; the History
+              icon opens the receipts behind the Collected figure. */}
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: '12px',
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'action.hover',
+            }}
+          >
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {record?.customer.customerName ?? '—'}
+              </Typography>
+              <Tooltip title="Payment history">
+                <span>
+                  <IconButton size="small" onClick={() => setHistoryOpen(true)} disabled={!record}>
+                    <HistoryIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
 
-        <Divider sx={{ my: 2.5 }}>
-          <Typography variant="caption" color="text.secondary">
-            RECORD A COLLECTION
-          </Typography>
-        </Divider>
-
-        <TextField
-          label="Collected Amount"
-          type="number"
-          fullWidth
-          placeholder="Amount received now"
-          error={Boolean(errors.collectedAmount)}
-          helperText={errors.collectedAmount?.message ?? 'Leave blank if no money is being collected in this save.'}
-          {...register('collectedAmount')}
-        />
-
-        {/* The running total sits directly under the input so the box is unmistakably "amount
-            received now" rather than "new total", with the receipts one click away. */}
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1, mb: 0.5 }}
-        >
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              Total Collected
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {formatCurrency(collectedSoFar)}
-              {watchedCollected > 0 && (
-                <Box component="span" sx={{ color: 'success.main', fontWeight: 600 }}>
-                  {' '}
-                  → {formatCurrency(projectedCollected)}
-                </Box>
-              )}
-            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+              <ViewField label="Budget Amount" value={formatCurrency(storedBudget)} />
+              <ViewField label="Collected" value={formatCurrency(collectedSoFar)} />
+              <ViewField label="Pending" value={formatCurrency(pendingAmount)} tone={pendingAmount > 0 ? 'warning' : undefined} />
+            </Box>
           </Box>
-          <Tooltip title="Payment history">
-            <span>
-              <IconButton size="small" onClick={() => setHistoryOpen(true)} disabled={!record}>
-                <HistoryIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
 
-        <Typography variant="caption" color={projectedBalance < 0 ? 'error.main' : 'text.secondary'}>
-          Balance after saving: {formatCurrency(projectedBalance)}
-        </Typography>
+          <TextField
+            label="Collected Amount"
+            type="number"
+            fullWidth
+            placeholder="Amount received now"
+            error={Boolean(errors.collectedAmount)}
+            helperText={
+              errors.collectedAmount?.message ??
+              (watchedCollected > 0
+                ? `Collected becomes ${formatCurrency(projectedCollected)} · Pending becomes ${formatCurrency(projectedPending)}`
+                : 'Leave blank if nothing is being collected now.')
+            }
+            {...register('collectedAmount')}
+          />
 
-        <TextField select label="Payment Method" fullWidth margin="normal" {...register('paymentMethod')}>
-          {PAYMENT_METHODS.map((method) => (
-            <MenuItem key={method} value={method}>
-              {method}
-            </MenuItem>
-          ))}
-        </TextField>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <TextField select label="Payment Method" fullWidth {...register('paymentMethod')}>
+              {PAYMENT_METHODS.map((method) => (
+                <MenuItem key={method} value={method}>
+                  {method}
+                </MenuItem>
+              ))}
+            </TextField>
 
-        <Controller
-          name="paymentDate"
-          control={control}
-          render={({ field }) => (
-            <DatePickerField
-              label="Payment Date"
-              value={field.value ? dayjs(field.value) : null}
-              onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
-              maxDate={dayjs()}
+            <Controller
+              name="paymentDate"
+              control={control}
+              render={({ field }) => (
+                <DatePickerField
+                  label="Payment Date"
+                  margin="none"
+                  value={field.value ? dayjs(field.value) : null}
+                  onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+                  maxDate={dayjs()}
+                />
+              )}
             />
-          )}
-        />
+          </Box>
 
-        <TextField label="Reference Number" fullWidth margin="normal" {...register('referenceNumber')} />
+          <TextField
+            select
+            label="Payment Status"
+            fullWidth
+            helperText="Automatic follows the payments. Choosing a status pins it until you switch back."
+            {...register('paymentStatus')}
+          >
+            {PAYMENT_STATUS_CHOICES.map((choice) => (
+              <MenuItem key={choice} value={choice}>
+                {choice === 'AUTO' ? 'Automatic (from payments)' : resolveStatusConfig('paymentTracker', choice).label}
+              </MenuItem>
+            ))}
+          </TextField>
 
-        <Divider sx={{ my: 2.5 }} />
-
-        <TextField
-          select
-          label="Payment Status"
-          fullWidth
-          margin="normal"
-          helperText="Automatic follows the payments. Choosing a status pins it until you switch back."
-          {...register('paymentStatus')}
-        >
-          {PAYMENT_STATUS_CHOICES.map((choice) => (
-            <MenuItem key={choice} value={choice}>
-              {choice === 'AUTO' ? 'Automatic (from payments)' : resolveStatusConfig('paymentTracker', choice).label}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          label="Remarks / Notes"
-          fullWidth
-          margin="normal"
-          multiline
-          rows={3}
-          error={Boolean(errors.remarks)}
-          helperText={errors.remarks?.message}
-          {...register('remarks')}
-        />
-      </FormDrawer>
+          <TextField
+            label="Notes"
+            fullWidth
+            multiline
+            rows={2}
+            error={Boolean(errors.remarks)}
+            helperText={errors.remarks?.message}
+            {...register('remarks')}
+          />
+        </Stack>
+      </FormDialog>
 
       <PaymentHistoryDialog open={historyOpen} record={record} onClose={() => setHistoryOpen(false)} />
     </>

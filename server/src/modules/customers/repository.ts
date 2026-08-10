@@ -69,13 +69,13 @@ export async function getOrderStatsForCustomers(customerIds: string[], asOf: Dat
         customerId: { in: customerIds },
         deletedAt: null,
         eventDate: { lte: asOf },
-        status: { not: OrderStatus.CANCELLED },
+        status: { not: OrderStatus.REJECTED },
       },
       _max: { eventDate: true },
     }),
     prisma.order.groupBy({
       by: ['customerId'],
-      where: { customerId: { in: customerIds }, deletedAt: null, status: { not: OrderStatus.CANCELLED } },
+      where: { customerId: { in: customerIds }, deletedAt: null, status: { not: OrderStatus.REJECTED } },
       _sum: { pendingAmount: true },
     }),
   ]);

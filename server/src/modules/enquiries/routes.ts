@@ -14,6 +14,7 @@ router.use(authenticate);
 router.get('/', authorize(ModuleName.ENQUIRIES, 'canView'), enquiriesController.list);
 router.get('/stats', authorize(ModuleName.ENQUIRIES, 'canView'), enquiriesController.getStats);
 router.get('/:id', authorize(ModuleName.ENQUIRIES, 'canView'), enquiriesController.getById);
+router.get('/:id/timeline', authorize(ModuleName.ENQUIRIES, 'canView'), enquiriesController.getTimeline);
 // An enquiry created straight at ORDER_CONFIRMED converts on the spot (service.ts create), so it
 // needs Convert to Order just as the status change below does.
 router.post(
@@ -50,6 +51,10 @@ router.patch(
   validate(changeEnquiryStatusSchema),
   enquiriesController.changeStatus,
 );
+// Deleting an enquiry cascades: its quotations, its order, and that order's payments, invoice,
+// payment tracker, task plan and documents all go with it (service.ts remove). Guarded by the
+// module's own Delete permission, which no group holds until an admin grants it.
+router.delete('/:id', authorize(ModuleName.ENQUIRIES, 'canDelete'), enquiriesController.remove);
 router.post(
   '/:id/follow-ups',
   authorize(ModuleName.ENQUIRIES, 'canCreate'),

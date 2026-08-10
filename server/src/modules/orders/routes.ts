@@ -47,10 +47,10 @@ router.put(
 // permission that names it, and everything else stays on Edit.
 router.patch(
   '/:id/status',
-  authorizeWhen((req) => req.body?.status === OrderStatus.CANCELLED, ModuleName.ORDERS, 'canCancel'),
-  authorizeWhen((req) => req.body?.status === OrderStatus.COMPLETED, ModuleName.ORDERS, 'canCompleteEvent'),
+  authorizeWhen((req) => req.body?.status === OrderStatus.REJECTED, ModuleName.ORDERS, 'canCancel'),
+  authorizeWhen((req) => req.body?.status === OrderStatus.ORDER_CLOSED, ModuleName.ORDERS, 'canCompleteEvent'),
   authorizeWhen(
-    (req) => req.body?.status !== OrderStatus.CANCELLED && req.body?.status !== OrderStatus.COMPLETED,
+    (req) => req.body?.status !== OrderStatus.REJECTED && req.body?.status !== OrderStatus.ORDER_CLOSED,
     ModuleName.ORDERS,
     'canEdit',
   ),

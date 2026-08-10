@@ -397,7 +397,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
 
           <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', rowGap: 1.5 }}>
             <OverviewTile label="Live Groups" value={liveGroups.length} tone="#2563EB" />
-            <OverviewTile label="Completed" value={completedTasks} tone="#22C55E" />
+            <OverviewTile label="Completed" value={completedTasks} tone="#10B981" />
             <OverviewTile label="Pending" value={totalTasks - completedTasks} tone="#F59E0B" />
             {draftGroups > 0 && <OverviewTile label="Drafts" value={draftGroups} tone="#94A3B8" />}
           </Stack>

@@ -79,12 +79,13 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     label: 'Enquiries',
     description: 'Customer enquiries, appointments and follow-ups',
     // Enforced by: modules/enquiries/routes.ts (canAssign on the assignment field of PUT /:id,
-    // canChangeStatus on PATCH /:id/status) and modules/orders/routes.ts (canConvertToOrder on the
-    // conversion endpoints).
+    // canChangeStatus on PATCH /:id/status, canDelete on DELETE /:id) and modules/orders/routes.ts
+    // (canConvertToOrder on the conversion endpoints).
     actions: [
       VIEW,
       CREATE,
       EDIT,
+      DELETE,
       { key: 'canAssign', label: 'Assign' },
       { key: 'canChangeStatus', label: 'Change Status' },
       { key: 'canConvertToOrder', label: 'Convert to Order' },

@@ -16,6 +16,8 @@ export interface TimelineEntry {
   description?: string | null;
   performedAt: string;
   performedBy?: { fullName: string } | null;
+  /** Dot colour, for timelines that span more than one record (see the enquiry timeline). */
+  color?: 'primary' | 'success' | 'warning' | 'info' | 'error' | 'grey';
 }
 
 interface TimelineProps {
@@ -41,7 +43,7 @@ export function AppTimeline({ entries, emptyMessage = 'No activity yet.' }: Time
             {dayjs(entry.performedAt).format('DD MMM YYYY, h:mm A')}
           </TimelineOppositeContent>
           <TimelineSeparator>
-            <TimelineDot color="primary" />
+            <TimelineDot color={entry.color ?? 'primary'} />
             {index < entries.length - 1 && <TimelineConnector />}
           </TimelineSeparator>
           <TimelineContent>

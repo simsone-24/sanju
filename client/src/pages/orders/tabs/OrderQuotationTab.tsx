@@ -40,7 +40,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 // The quotation stays editable from here: extra work is routinely agreed late in the event, and
 // since an order has no item list of its own the quotation's items are the only place to record it.
 // Saving re-syncs this order's total and balance — see quotations/service.ts update(), whose
-// EDITABLE_QUOTATION_STATUSES and CLOSED/CANCELLED order guard the button below mirrors.
+// EDITABLE_QUOTATION_STATUSES and ORDER_CLOSED/REJECTED order guard the button below mirrors.
 export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -48,29 +48,70 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
   const canEditQuotation = usePermission('QUOTATIONS', 'canEdit');
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const orderIsTerminal = order.status === 'CLOSED' || order.status === 'CANCELLED';
+  // An enquiry confirmed without a quotation still becomes an order — there is simply no document
+  // to show here, and the order's total came from the enquiry's budget instead.
+  const quotation = order.quotation;
+  if (!quotation) {
+    return (
+      <Paper variant="outlined" sx={{ p: 3, borderRadius: '16px', maxWidth: 560 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.5 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(100, 116, 139, 0.12)',
+              color: 'text.secondary',
+            }}
+          >
+            <ReceiptLongIcon fontSize="small" />
+          </Box>
+          <Typography variant="h4">No Quotation</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">
+          This order was raised from an enquiry confirmed without a quotation, so its total comes from the
+          enquiry's budget. Raise a quotation on the enquiry if the customer needs a priced document.
+        </Typography>
+        <Button
+          size="small"
+          sx={{ mt: 2 }}
+          onClick={() => navigate(`/enquiries/${order.enquiry.id}`)}
+        >
+          Open enquiry {order.enquiry.enquiryNumber}
+        </Button>
+      </Paper>
+    );
+  }
+
+  const orderIsTerminal = order.status === 'ORDER_CLOSED' || order.status === 'REJECTED';
   // Split from the permission check so a view-only role isn't told the document is locked when it
   // is only their access that is limited.
-  const editableByRule = isQuotationEditable(order.quotation.status) && !orderIsTerminal;
+  const editableByRule = isQuotationEditable(quotation.status) && !orderIsTerminal;
   const showEdit = canEditQuotation && editableByRule;
 
   let caption: string;
   if (orderIsTerminal) {
-    caption = `Locked because this order is ${order.status === 'CLOSED' ? 'closed' : 'cancelled'}.`;
+    caption = `Locked because this order is ${order.status === 'ORDER_CLOSED' ? 'closed' : 'rejected'}.`;
   } else if (!editableByRule) {
-    caption = `Locked because the quotation is ${order.quotation.status.toLowerCase()}.`;
+    caption = `Locked because the quotation is ${quotation.status.toLowerCase()}.`;
   } else if (showEdit) {
     caption = 'Editing this quotation updates the order total and balance.';
   } else {
     caption = 'You have view-only access to Quotations.';
   }
 
+  // Read out here rather than inside the handlers: the null check above doesn't narrow `quotation`
+  // for closures, and these are the only fields the actions need.
+  const quotationId = quotation.id;
+  const quotationNumber = quotation.quotationNumber;
+  const pdfFileName = `${quotation.quotationNumber}-v${quotation.version}.pdf`;
+
   async function handleDownload() {
     try {
-      await quotationService.downloadPdf(
-        order.quotation.id,
-        `${order.quotation.quotationNumber}-v${order.quotation.version}.pdf`,
-      );
+      await quotationService.downloadPdf(quotationId, pdfFileName);
     } catch {
       showToast('Unable to download the quotation PDF.', 'error');
     }
@@ -78,7 +119,7 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
 
   async function handlePrint() {
     try {
-      await quotationService.openPdf(order.quotation.id);
+      await quotationService.openPdf(quotationId);
     } catch {
       showToast('Unable to open the quotation PDF.', 'error');
     }
@@ -90,7 +131,7 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
       showToast('This customer has no mobile number on record.', 'error');
       return;
     }
-    const message = `Hello ${order.customer.customerName}, please find your quotation ${order.quotation.quotationNumber}. Regards.`;
+    const message = `Hello ${order.customer.customerName}, please find your quotation ${quotationNumber}. Regards.`;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
   }
 
@@ -123,16 +164,16 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
         <Stack spacing={1.5}>
           <DetailRow
             label="Quotation No"
-            value={`${order.quotation.quotationNumber} (v${order.quotation.version})`}
+            value={`${quotation.quotationNumber} (v${quotation.version})`}
           />
-          <DetailRow label="Status" value={<StatusBadge type="quotation" status={order.quotation.status} />} />
-          <DetailRow label="Created" value={formatDate(order.quotation.quotationDate)} />
-          <DetailRow label="Discount" value={formatCurrency(order.quotation.discount)} />
+          <DetailRow label="Status" value={<StatusBadge type="quotation" status={quotation.status} />} />
+          <DetailRow label="Created" value={formatDate(quotation.quotationDate)} />
+          <DetailRow label="Discount" value={formatCurrency(quotation.discount)} />
           <DetailRow
             label="Total"
             value={
               <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                {formatCurrency(order.quotation.totalAmount)}
+                {formatCurrency(quotation.totalAmount)}
               </Typography>
             }
           />
@@ -147,7 +188,7 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
               variant="outlined"
               size="small"
               startIcon={<EditIcon />}
-              onClick={() => navigate(`/quotations/${order.quotation.id}/edit`)}
+              onClick={() => navigate(`/quotations/${quotation.id}/edit`)}
             >
               Edit Quotation
             </Button>
@@ -175,7 +216,7 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
       </Paper>
 
       <QuotationPreviewDialog
-        quotationId={previewOpen ? order.quotation.id : null}
+        quotationId={previewOpen ? quotation.id : null}
         onClose={() => setPreviewOpen(false)}
       />
     </>

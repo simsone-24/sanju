@@ -1,40 +1,44 @@
 import AddIcon from '@mui/icons-material/Add';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import DateRangeIcon from '@mui/icons-material/DateRange';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import SendIcon from '@mui/icons-material/Send';
 import TodayIcon from '@mui/icons-material/Today';
 import TuneIcon from '@mui/icons-material/Tune';
 import UpdateIcon from '@mui/icons-material/Update';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
+import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { LastUpdated } from '../../components/LastUpdated';
-import { PageHeader } from '../../components/PageHeader';
+import { QuickFilterPill } from '../../components/QuickFilterPill';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Button } from '../../components/ui/Button';
-import { CARD_SURFACE } from '../../components/ui/Card';
 import { IconButton } from '../../components/ui/IconButton';
 import { SelectField } from '../../components/ui/Select';
 import { usePermission } from '../../hooks/usePermission';
 import * as enquiryService from '../../services/enquiryService';
 import * as eventTypeService from '../../services/eventTypeService';
 import * as userService from '../../services/userService';
-import type { AppointmentStatus, EnquiryListItem, EnquiryStatus } from '../../types/enquiry';
+import type { ApiErrorResponse } from '../../types/api';
+import type { AppointmentStatus, EnquiryListItem, EnquiryStatus, EnquiryStatusGroup } from '../../types/enquiry';
+import { avatarHue, avatarInitials } from '../../utils/avatar';
 import { eventProximity, formatDate } from '../../utils/format';
 
 const ENQUIRY_STATUS_OPTIONS: EnquiryStatus[] = [
@@ -52,11 +56,11 @@ const APPOINTMENT_STATUS_OPTIONS: AppointmentStatus[] = ['PENDING', 'IN_PROGRESS
 // in statusConfig.ts, as literal hex values since DataTable's rowAccentColor callback returns a
 // bare CSS color rather than a class.
 const ENQUIRY_ROW_ACCENT: Record<EnquiryStatus, string> = {
-  PENDING: '#06B6D4',
+  PENDING: '#64748B',
   APPOINTMENT_FIXED: '#8B5CF6',
   QUOTATION_TO_SHARE: '#F59E0B',
   QUOTATION_SHARED: '#3B82F6',
-  ORDER_CONFIRMED: '#22C55E',
+  ORDER_CONFIRMED: '#10B981',
   ORDER_LOST: '#EF4444',
 };
 
@@ -75,10 +79,12 @@ const QUICK_FILTERS: { key: QuickFilter; label: string; icon: ReactNode }[] = [
 
 const QUICK_FILTER_KEYS = new Set<string>(QUICK_FILTERS.map((filter) => filter.key));
 
+const STATUS_GROUP_KEYS = new Set<string>(['ACTIVE', 'CONFIRMED', 'PENDING', 'APPOINTMENT_PENDING']);
+
 // Filter controls grow to share whatever width the search bar leaves, rather than sitting at a
 // fixed size and stranding empty space at the row's right edge. The basis is the width they settle
 // at once the row is full enough to wrap.
-const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[170px]';
+const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[150px]';
 
 // `to: null` means open-ended (Upcoming = everything from today onwards).
 function quickFilterRange(key: QuickFilter): { from: Dayjs; to: Dayjs | null } {
@@ -107,44 +113,29 @@ function formatParamDate(value: Dayjs | null): string | null {
   return value ? value.format('YYYY-MM-DD') : null;
 }
 
+// Deterministic initials avatar for people shown without a profile picture — the same name always
+// yields the same initials and hue (utils/avatar.ts), so a row's customer or assignee is
+// recognisable at a glance while scanning the list.
+function InitialsAvatar({ name, seed, size = 'md' }: { name: string; seed: string; size?: 'sm' | 'md' }) {
+  const hue = avatarHue(seed);
+  return (
+    <span
+      aria-hidden
+      className={[
+        'tw-flex tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-font-bold',
+        size === 'sm' ? 'tw-h-6 tw-w-6 tw-text-[0.5625rem]' : 'tw-h-7 tw-w-7 tw-text-[0.625rem]',
+      ].join(' ')}
+      style={{ color: hue, backgroundColor: `color-mix(in srgb, ${hue} 16%, transparent)` }}
+    >
+      {avatarInitials(name)}
+    </span>
+  );
+}
+
 interface ActiveFilterChip {
   key: string;
   label: string;
   onClear: () => void;
-}
-
-// Rounded rectangles rather than fully-round pills, sized to sit comfortably against the
-// toolbar's inputs ("md files/Enquiry/UIen.md" §Quick Filters — rounded pills, hover effect).
-function QuickFilterPill({
-  label,
-  active,
-  icon,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  icon?: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={[
-        'tw-inline-flex tw-h-8 tw-cursor-pointer tw-items-center tw-gap-1.5 tw-rounded-control tw-border tw-px-2.5',
-        'tw-font-sans tw-text-xs tw-font-semibold',
-        'tw-transition-all tw-duration-200 hover:-tw-translate-y-px',
-        'focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-brand/40',
-        active
-          ? 'tw-border-transparent tw-bg-brand tw-text-white'
-          : 'tw-border-hairline tw-bg-white tw-text-ink hover:tw-border-slate-300 dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark dark:hover:tw-border-slate-500',
-      ].join(' ')}
-    >
-      {icon}
-      {label}
-    </button>
-  );
 }
 
 export default function EnquiryListPage() {
@@ -153,6 +144,8 @@ export default function EnquiryListPage() {
   const canCreate = usePermission('ENQUIRIES', 'canCreate');
   const canExport = usePermission('ENQUIRIES', 'canExport');
   const canEdit = usePermission('ENQUIRIES', 'canEdit');
+  const canDelete = usePermission('ENQUIRIES', 'canDelete');
+  const queryClient = useQueryClient();
 
   // Every filter lives in the query string rather than component state, so a refresh, a bookmark,
   // or a shared link all reproduce the same view ("md files/Enquiry/UIen.md" §UX Improvements —
@@ -164,6 +157,11 @@ export default function EnquiryListPage() {
   const appointmentStatus = (searchParams.get('apptStatus') ?? '') as AppointmentStatus | '';
   const assignedUserId = searchParams.get('user') ?? '';
   const eventTypeId = searchParams.get('eventType') ?? '';
+  // Dashboard cards are single-select: `view` holds at most one group, and clicking a different
+  // card replaces it rather than adding to it — only the most recently clicked card's filter
+  // should ever be reflected in the URL.
+  const viewParam = searchParams.get('view');
+  const statusGroups = viewParam && STATUS_GROUP_KEYS.has(viewParam) ? [viewParam as EnquiryStatusGroup] : [];
   const quickParam = searchParams.get('quick');
   const quickFilter = quickParam && QUICK_FILTER_KEYS.has(quickParam) ? (quickParam as QuickFilter) : null;
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
@@ -190,6 +188,8 @@ export default function EnquiryListPage() {
   const hasDateFilter = Boolean(quickFilter || eventDateFrom || eventDateTo);
 
   const [advancedOpen, setAdvancedOpen] = useState(dateFilterCount > 0);
+  const [deletingEnquiry, setDeletingEnquiry] = useState<EnquiryListItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | undefined>(
     () => (location.state as { highlightId?: string } | null)?.highlightId,
   );
@@ -217,9 +217,38 @@ export default function EnquiryListPage() {
     );
   }
 
+  // Narrows along with every active filter except `view` — each card defines its own status
+  // group, so folding the currently-selected card's group back into its own count would be
+  // circular, and would silently zero out the other three cards whenever one was active.
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['enquiries', 'stats'],
-    queryFn: () => enquiryService.getStats(),
+    queryKey: [
+      'enquiries',
+      'stats',
+      {
+        search,
+        status,
+        appointmentStatus,
+        eventTypeId,
+        assignedUserId,
+        eventDateFrom: eventDateFrom?.format('YYYY-MM-DD'),
+        eventDateTo: eventDateTo?.format('YYYY-MM-DD'),
+        appointmentDateFrom: appointmentDateFrom?.format('YYYY-MM-DD'),
+        appointmentDateTo: appointmentDateTo?.format('YYYY-MM-DD'),
+      },
+    ],
+    queryFn: () =>
+      enquiryService.getStats({
+        search: search || undefined,
+        status: status || undefined,
+        appointmentStatus: appointmentStatus || undefined,
+        eventTypeId: eventTypeId || undefined,
+        assignedUserId: assignedUserId || undefined,
+        eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
+        eventDateTo: eventDateTo ? eventDateTo.format('YYYY-MM-DD') : undefined,
+        appointmentDateFrom: appointmentDateFrom ? appointmentDateFrom.format('YYYY-MM-DD') : undefined,
+        appointmentDateTo: appointmentDateTo ? appointmentDateTo.format('YYYY-MM-DD') : undefined,
+      }),
+    placeholderData: keepPreviousData,
   });
 
   const { data: eventTypeOptions } = useQuery({
@@ -241,6 +270,7 @@ export default function EnquiryListPage() {
         search,
         status,
         appointmentStatus,
+        statusGroups,
         eventTypeId,
         assignedUserId,
         eventDateFrom: eventDateFrom?.format('YYYY-MM-DD'),
@@ -256,6 +286,7 @@ export default function EnquiryListPage() {
         search: search || undefined,
         status: status || undefined,
         appointmentStatus: appointmentStatus || undefined,
+        statusGroup: statusGroups.length ? statusGroups.join(',') : undefined,
         eventTypeId: eventTypeId || undefined,
         assignedUserId: assignedUserId || undefined,
         eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
@@ -266,16 +297,35 @@ export default function EnquiryListPage() {
     placeholderData: keepPreviousData,
   });
 
+  // Deleting an enquiry takes its quotations and its order with it, so the caches those modules
+  // read from are invalidated alongside the enquiry list and its dashboard counts.
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => enquiryService.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-trackers'] });
+      setDeletingEnquiry(null);
+      setDeleteError(null);
+    },
+    onError: (error) => {
+      setDeleteError(
+        isAxiosError<ApiErrorResponse>(error) && error.response
+          ? error.response.data.message
+          : 'Unable to delete this enquiry. Please try again.',
+      );
+    },
+  });
+
   function resetFilters() {
     setSearchParams(new URLSearchParams(), { replace: true });
   }
 
-  function toggleAppointmentStatusCard(value: AppointmentStatus) {
-    patchParams({ apptStatus: appointmentStatus === value ? null : value });
-  }
-
-  function toggleEnquiryStatusCard(value: EnquiryStatus) {
-    patchParams({ status: status === value ? null : value });
+  // Replaces whichever dashboard card was active with this one — only the last-clicked card's
+  // filter is ever kept in the URL; clicking the already-active card clears it.
+  function toggleStatusGroupCard(value: EnquiryStatusGroup) {
+    patchParams({ view: statusGroups.includes(value) ? null : value });
   }
 
   function applyQuickFilter(key: QuickFilter | null) {
@@ -302,6 +352,24 @@ export default function EnquiryListPage() {
       label: `Status: ${resolveStatusConfig('enquiry', status).label}`,
       onClear: () => patchParams({ status: null }),
     });
+  }
+  if (statusGroups.length > 0) {
+    const statusGroupLabel: Record<EnquiryStatusGroup, string> = {
+      ACTIVE: 'Total Enquiries (excl. Order Lost)',
+      CONFIRMED: 'Confirmed Enquiries',
+      PENDING: 'Pending Enquiries',
+      APPOINTMENT_PENDING: 'Appointment Pending',
+    };
+    for (const group of statusGroups) {
+      activeFilters.push({
+        key: `view-${group}`,
+        label: statusGroupLabel[group],
+        onClear: () => {
+          const next = statusGroups.filter((g) => g !== group);
+          patchParams({ view: next.length ? next.join(',') : null });
+        },
+      });
+    }
   }
   if (assignedUserId) {
     const assignedUser = userOptions?.find((option) => option.id === assignedUserId);
@@ -373,12 +441,15 @@ export default function EnquiryListPage() {
       header: 'Customer',
       sortable: true,
       align: 'center' as const,
-      width: 135,
+      width: 150,
       render: (row) => (
-        <div className="tw-min-w-0">
-          <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.customer.customerName || '—'}</div>
-          <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-            {row.customer.mobile || 'No mobile'}
+        <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-2">
+          <InitialsAvatar name={row.customer.customerName || '?'} seed={row.customer.customerName || row.customer.mobile} />
+          <div className="tw-min-w-0">
+            <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.customer.customerName || '—'}</div>
+            <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              {row.customer.mobile || 'No mobile'}
+            </div>
           </div>
         </div>
       ),
@@ -456,7 +527,10 @@ export default function EnquiryListPage() {
       width: 125,
       render: (row) =>
         row.assignedUser ? (
-          <div className="tw-truncate">{row.assignedUser.fullName}</div>
+          <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-1.5">
+            <InitialsAvatar name={row.assignedUser.fullName} seed={row.assignedUser.fullName} size="sm" />
+            <span className="tw-truncate">{row.assignedUser.fullName}</span>
+          </div>
         ) : (
           <span className="tw-text-ink-muted dark:tw-text-ink-dark-muted">Unassigned</span>
         ),
@@ -466,33 +540,61 @@ export default function EnquiryListPage() {
       key: 'appointmentStatus',
       header: 'Appt. Status',
       align: 'center' as const,
-      width: 105,
-      render: (row) => <StatusBadge type="appointment" status={row.appointmentStatus} size="sm" />,
+      width: 115,
+      render: (row) => <StatusBadge type="appointment" status={row.appointmentStatus} size="md" />,
       exportValue: (row) => row.appointmentStatus,
     },
     {
       key: 'status',
       header: 'Enquiry Status',
       align: 'center' as const,
-      width: 150,
-      render: (row) => <StatusBadge type="enquiry" status={row.status} size="sm" />,
+      width: 155,
+      render: (row) => <StatusBadge type="enquiry" status={row.status} size="md" />,
       exportValue: (row) => row.status,
     },
     {
       key: 'actions',
       header: 'Actions',
       align: 'center' as const,
-      width: 95,
-      // View and Edit only. Edit is hidden rather than disabled for a viewer — a control that can
-      // never do anything is noise in a column this narrow.
+      width: 110,
+      // View, Edit and Delete, each one click. Edit and Delete are hidden without their permission,
+      // so a viewer sees View alone. Clicks stop propagation so they don't also fire the row's own
+      // onClick and navigate away underneath the dialog.
       render: (row) => (
         <div className="tw-flex tw-justify-center tw-gap-0.5">
-          <IconButton title="View enquiry" size="sm" onClick={() => navigate(`/enquiries/${row.id}`)}>
+          <IconButton
+            title="View enquiry"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate(`/enquiries/${row.id}`);
+            }}
+          >
             <VisibilityIcon fontSize="small" />
           </IconButton>
           {canEdit && (
-            <IconButton title="Edit enquiry" size="sm" onClick={() => navigate(`/enquiries/${row.id}/edit`)}>
+            <IconButton
+              title="Edit enquiry"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/enquiries/${row.id}/edit`);
+              }}
+            >
               <EditIcon fontSize="small" />
+            </IconButton>
+          )}
+          {canDelete && (
+            <IconButton
+              title="Delete enquiry"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeleteError(null);
+                setDeletingEnquiry(row);
+              }}
+            >
+              <DeleteIcon fontSize="small" className="tw-text-danger" />
             </IconButton>
           )}
         </div>
@@ -504,243 +606,277 @@ export default function EnquiryListPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Enquiries"
-        subtitle="Manage all customer enquiries and appointments."
-        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Enquiries' }]}
-        titleAdornment={
-          totalRecords === undefined ? undefined : (
-            <span className="tw-inline-flex tw-items-center tw-rounded-full tw-bg-slate-100 tw-px-2.5 tw-py-0.5 tw-text-[0.6875rem] tw-font-semibold tw-text-ink-muted dark:tw-bg-slate-700 dark:tw-text-ink-dark-muted">
-              {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
-            </span>
-          )
-        }
-        actions={
-          <>
+      {/* Compact page header — breadcrumb trail, title with its record-count pill, and the
+          actions on one tight band so the filters and table below get the screen room. */}
+      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-3 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
+        <div
+          aria-hidden
+          className="tw-pointer-events-none tw-absolute -tw-right-20 -tw-top-24 tw-h-60 tw-w-60 tw-rounded-full tw-bg-gradient-to-br tw-from-brand/15 tw-to-cyan-400/10 tw-blur-2xl"
+        />
+
+        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Enquiries' }]} className="tw-mb-1.5" />
+
+        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-2">
+          <div className="tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
+            <h1 className="tw-m-0 tw-text-2xl tw-font-bold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
+              Enquiries
+            </h1>
+            {totalRecords !== undefined && (
+              <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
+                {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+              </span>
+            )}
+          </div>
+
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2.5">
             <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />
             {canCreate && (
-              <Button variant="primary" startIcon={<AddIcon fontSize="small" />} onClick={() => navigate('/enquiries/new')}>
+              <Button
+                variant="primary"
+                size="md"
+                className="tw-h-10 tw-px-5 tw-shadow-md"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={() => navigate('/enquiries/new')}
+              >
                 New Enquiry
               </Button>
             )}
-          </>
-        }
-      />
+          </div>
+        </div>
 
-      {/* Dashboard summary metrics as StatCard tiles, matching the Orders index. Each is also a
-          one-click filter ("md files/Enquiry/indexUI.md" §Card Behaviour: click applies the filter,
-          click again clears it). */}
+        <hr className="tw-mt-3 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
+
+        {/* Filter toolbar, integrated into the page header so it reads as one chrome band with
+            the title rather than a separate card eating vertical space above the table. */}
+        <div className="tw-mt-3 tw-flex tw-flex-col tw-gap-2.5">
+          {/* Row 1: quick-range pills on the left, the Advanced Filters reveal on the right. */}
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+            <span className="tw-mr-0.5 tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              Quick Filters
+            </span>
+            <QuickFilterPill label="All" active={!hasDateFilter} onClick={() => applyQuickFilter(null)} />
+            {QUICK_FILTERS.map((filter) => (
+              <QuickFilterPill
+                key={filter.key}
+                label={filter.label}
+                active={quickFilter === filter.key}
+                icon={filter.icon}
+                onClick={() => applyQuickFilter(filter.key)}
+              />
+            ))}
+
+            {/* Filters apply as they're changed (UIen.md §UX Improvements — "Search updates results
+                instantly (debounced)"), so the row needs no Apply button; clearing is handled by the
+                active-filter chips below. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tw-ml-auto"
+              onClick={() => setAdvancedOpen((previous) => !previous)}
+              startIcon={<TuneIcon fontSize="small" />}
+              endIcon={
+                <ExpandMoreIcon
+                  fontSize="small"
+                  className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
+                />
+              }
+            >
+              Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
+            </Button>
+          </div>
+
+          {/* Row 2: search plus the four dropdowns, all compact (sm) so the bar stays one short
+              line. Each dropdown keeps its label block above the box; everything bottom-aligns so
+              the input boxes themselves sit on one line. */}
+          <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
+            <div className="tw-flex-[2] tw-basis-[220px]">
+              <SearchBar
+                fullWidth
+                size="sm"
+                value={search}
+                onChange={(value) => patchParams({ q: value || null })}
+                onSubmit={() => void refetch()}
+                placeholder="Search enquiry no, customer, mobile, event..."
+              />
+            </div>
+
+            <SelectField
+              size="sm"
+              className={FILTER_FIELD_WIDTH}
+              label="Appointment Status"
+              emptyLabel="All"
+              value={appointmentStatus}
+              onChange={(value) => patchParams({ apptStatus: value || null })}
+              options={APPOINTMENT_STATUS_OPTIONS.map((option) => ({
+                value: option,
+                label: resolveStatusConfig('appointment', option).label,
+              }))}
+            />
+
+            <SelectField
+              size="sm"
+              className={FILTER_FIELD_WIDTH}
+              label="Enquiry Status"
+              emptyLabel="All"
+              value={status}
+              onChange={(value) => patchParams({ status: value || null })}
+              options={ENQUIRY_STATUS_OPTIONS.map((option) => ({
+                value: option,
+                label: resolveStatusConfig('enquiry', option).label,
+              }))}
+            />
+
+            <SelectField
+              size="sm"
+              className={FILTER_FIELD_WIDTH}
+              label="Assigned User"
+              emptyLabel="All"
+              value={assignedUserId}
+              onChange={(value) => patchParams({ user: value || null })}
+              options={(userOptions ?? []).map((option) => ({ value: option.id, label: option.fullName }))}
+            />
+
+            <SelectField
+              size="sm"
+              className={FILTER_FIELD_WIDTH}
+              label="Event Type"
+              emptyLabel="All"
+              value={eventTypeId}
+              onChange={(value) => patchParams({ eventType: value || null })}
+              options={(eventTypeOptions ?? []).map((option) => ({ value: option.id, label: option.eventName }))}
+            />
+          </div>
+
+          {/* Advanced row: date-range filters, collapsed by default. The 0fr→1fr grid track animates
+              the reveal without needing a measured pixel height. Collapsed it still has zero height
+              but is still a flex child, so the column's gap would leave a dead band behind it — the
+              negative margin cancels exactly that one gap while the panel is shut. */}
+          <div
+            className={`tw-grid tw-transition-all tw-duration-200 ${
+              advancedOpen ? 'tw-grid-rows-[1fr] tw-opacity-100' : '-tw-mt-2.5 tw-grid-rows-[0fr] tw-opacity-0'
+            }`}
+          >
+            <div className="tw-overflow-hidden">
+              {/* The two ranges stay visually paired, but each pair now spreads across the width the
+                  row actually has instead of stopping at a fixed 155px and leaving the rest blank. */}
+              <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-3 tw-pt-0.5">
+                <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Appointment From"
+                      margin="none"
+                      value={appointmentDateFrom}
+                      onChange={(value) => patchParams({ apptFrom: formatParamDate(value) })}
+                    />
+                  </div>
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Appointment To"
+                      margin="none"
+                      value={appointmentDateTo}
+                      onChange={(value) => patchParams({ apptTo: formatParamDate(value) })}
+                      minDate={appointmentDateFrom ?? undefined}
+                    />
+                  </div>
+                </div>
+
+                <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Event From"
+                      margin="none"
+                      value={eventDateFrom}
+                      onChange={(value) =>
+                        patchParams({ eventFrom: formatParamDate(value), eventTo: formatParamDate(eventDateTo), quick: null })
+                      }
+                    />
+                  </div>
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Event To"
+                      margin="none"
+                      value={eventDateTo}
+                      onChange={(value) =>
+                        patchParams({ eventFrom: formatParamDate(eventDateFrom), eventTo: formatParamDate(value), quick: null })
+                      }
+                      minDate={eventDateFrom ?? undefined}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {activeFilters.length > 0 && (
+            <>
+              <hr className="tw-my-0 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
+              <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+                <span className="tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                  Active filters
+                </span>
+                {activeFilters.map((filter) => (
+                  <span
+                    key={filter.key}
+                    className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-brand/15 tw-bg-brand/[0.06] tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-font-medium tw-text-ink dark:tw-border-brand-light/20 dark:tw-bg-brand-light/10 dark:tw-text-ink-dark"
+                  >
+                    {filter.label}
+                    <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </span>
+                ))}
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  Clear all
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Pipeline summary tiles — each is also a one-click filter: click to apply the group, click
+          again to clear it. The subtext states what each count means so the cards read at a glance. */}
       <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-4">
         <StatCard
-          label="Pending Appointments"
-          value={stats?.pendingAppointments ?? 0}
-          icon={<PendingActionsIcon />}
-          tone="amber"
-          loading={statsLoading}
-          onClick={() => toggleAppointmentStatusCard('PENDING')}
-          selected={appointmentStatus === 'PENDING'}
-        />
-        <StatCard
-          label="In Progress"
-          value={stats?.inProgressAppointments ?? 0}
-          icon={<HourglassTopIcon />}
-          tone="orange"
-          loading={statsLoading}
-          onClick={() => toggleAppointmentStatusCard('IN_PROGRESS')}
-          selected={appointmentStatus === 'IN_PROGRESS'}
-        />
-        <StatCard
-          label="Quotation To Share"
-          value={stats?.quotationToShare ?? 0}
-          icon={<RequestQuoteIcon />}
-          tone="yellow"
-          loading={statsLoading}
-          onClick={() => toggleEnquiryStatusCard('QUOTATION_TO_SHARE')}
-          selected={status === 'QUOTATION_TO_SHARE'}
-        />
-        <StatCard
-          label="Quotation Shared"
-          value={stats?.quotationShared ?? 0}
-          icon={<SendIcon />}
+          label="Total Enquiries"
+          value={stats?.totalEnquiries ?? 0}
+          icon={<ListAltIcon />}
           tone="blue"
+          subtext="Active pipeline, excluding lost"
           loading={statsLoading}
-          onClick={() => toggleEnquiryStatusCard('QUOTATION_SHARED')}
-          selected={status === 'QUOTATION_SHARED'}
+          onClick={() => toggleStatusGroupCard('ACTIVE')}
+          selected={statusGroups.includes('ACTIVE')}
         />
-      </div>
-
-      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-2.5 tw-px-3 tw-py-2.5`}>
-        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
-          <QuickFilterPill label="All" active={!hasDateFilter} onClick={() => applyQuickFilter(null)} />
-          {QUICK_FILTERS.map((filter) => (
-            <QuickFilterPill
-              key={filter.key}
-              label={filter.label}
-              active={quickFilter === filter.key}
-              icon={filter.icon}
-              onClick={() => applyQuickFilter(filter.key)}
-            />
-          ))}
-        </div>
-
-        {/* Primary row: always visible. Search takes the remaining width. The dropdowns carry a
-            label block above the box, so everything bottom-aligns and the input boxes themselves
-            stay on one line. Advanced Filters closes the row on the right. */}
-        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
-          <div className="tw-flex-[2] tw-basis-[240px]">
-            <SearchBar
-              fullWidth
-              value={search}
-              onChange={(value) => patchParams({ q: value || null })}
-              onSubmit={() => void refetch()}
-              placeholder="Search enquiry no, customer, mobile, event..."
-            />
-          </div>
-
-          <SelectField
-            className={FILTER_FIELD_WIDTH}
-            label="Appointment Status"
-            emptyLabel="All"
-            value={appointmentStatus}
-            onChange={(value) => patchParams({ apptStatus: value || null })}
-            options={APPOINTMENT_STATUS_OPTIONS.map((option) => ({
-              value: option,
-              label: resolveStatusConfig('appointment', option).label,
-            }))}
-          />
-
-          <SelectField
-            className={FILTER_FIELD_WIDTH}
-            label="Enquiry Status"
-            emptyLabel="All"
-            value={status}
-            onChange={(value) => patchParams({ status: value || null })}
-            options={ENQUIRY_STATUS_OPTIONS.map((option) => ({
-              value: option,
-              label: resolveStatusConfig('enquiry', option).label,
-            }))}
-          />
-
-          <SelectField
-            className={FILTER_FIELD_WIDTH}
-            label="Assigned User"
-            emptyLabel="All"
-            value={assignedUserId}
-            onChange={(value) => patchParams({ user: value || null })}
-            options={(userOptions ?? []).map((option) => ({ value: option.id, label: option.fullName }))}
-          />
-
-          <SelectField
-            className={FILTER_FIELD_WIDTH}
-            label="Event Type"
-            emptyLabel="All"
-            value={eventTypeId}
-            onChange={(value) => patchParams({ eventType: value || null })}
-            options={(eventTypeOptions ?? []).map((option) => ({ value: option.id, label: option.eventName }))}
-          />
-
-          {/* Filters apply as they're changed (UIen.md §UX Improvements — "Search updates results
-              instantly (debounced)"), so the row needs no Apply button; clearing is handled by the
-              active-filter chips below. That leaves the row's right edge for the date-range reveal. */}
-          <Button
-            variant="ghost"
-            onClick={() => setAdvancedOpen((previous) => !previous)}
-            startIcon={<TuneIcon fontSize="small" />}
-            endIcon={
-              <ExpandMoreIcon
-                fontSize="small"
-                className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
-              />
-            }
-          >
-            Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
-          </Button>
-        </div>
-
-        {/* Advanced row: date-range filters, collapsed by default. The 0fr→1fr grid track animates
-            the reveal without needing a measured pixel height. Collapsed it still has zero height
-            but is still a flex child, so the column's gap would leave a dead band behind it — the
-            negative margin cancels exactly that one gap while the panel is shut. */}
-        <div
-          className={`tw-grid tw-transition-all tw-duration-200 ${
-            advancedOpen ? 'tw-grid-rows-[1fr] tw-opacity-100' : '-tw-mt-2.5 tw-grid-rows-[0fr] tw-opacity-0'
-          }`}
-        >
-          <div className="tw-overflow-hidden">
-            {/* The two ranges stay visually paired, but each pair now spreads across the width the
-                row actually has instead of stopping at a fixed 155px and leaving the rest blank. */}
-            <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5 tw-pt-0.5">
-              <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Appointment From"
-                    margin="none"
-                    value={appointmentDateFrom}
-                    onChange={(value) => patchParams({ apptFrom: formatParamDate(value) })}
-                  />
-                </div>
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Appointment To"
-                    margin="none"
-                    value={appointmentDateTo}
-                    onChange={(value) => patchParams({ apptTo: formatParamDate(value) })}
-                    minDate={appointmentDateFrom ?? undefined}
-                  />
-                </div>
-              </div>
-
-              <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Event From"
-                    margin="none"
-                    value={eventDateFrom}
-                    onChange={(value) =>
-                      patchParams({ eventFrom: formatParamDate(value), eventTo: formatParamDate(eventDateTo), quick: null })
-                    }
-                  />
-                </div>
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Event To"
-                    margin="none"
-                    value={eventDateTo}
-                    onChange={(value) =>
-                      patchParams({ eventFrom: formatParamDate(eventDateFrom), eventTo: formatParamDate(value), quick: null })
-                    }
-                    minDate={eventDateFrom ?? undefined}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {activeFilters.length > 0 && (
-          <>
-            <hr className="tw-my-0 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
-            <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
-              <span className="tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                Active filters
-              </span>
-              {activeFilters.map((filter) => (
-                <span
-                  key={filter.key}
-                  className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-hairline tw-bg-white tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-text-ink dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark"
-                >
-                  {filter.label}
-                  <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
-                    <CloseIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </span>
-              ))}
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Clear all
-              </Button>
-            </div>
-          </>
-        )}
+        <StatCard
+          label="Confirmed Enquiries"
+          value={stats?.confirmedEnquiries ?? 0}
+          icon={<CheckCircleIcon />}
+          tone="green"
+          subtext="Converted to orders"
+          loading={statsLoading}
+          onClick={() => toggleStatusGroupCard('CONFIRMED')}
+          selected={statusGroups.includes('CONFIRMED')}
+        />
+        <StatCard
+          label="Pending Enquiries"
+          value={stats?.pendingEnquiries ?? 0}
+          icon={<HourglassTopIcon />}
+          tone="amber"
+          subtext="Awaiting confirmation"
+          loading={statsLoading}
+          onClick={() => toggleStatusGroupCard('PENDING')}
+          selected={statusGroups.includes('PENDING')}
+        />
+        <StatCard
+          label="Appointment Pending"
+          value={stats?.appointmentPending ?? 0}
+          icon={<PendingActionsIcon />}
+          tone="violet"
+          subtext="Awaiting appointment"
+          loading={statsLoading}
+          onClick={() => toggleStatusGroupCard('APPOINTMENT_PENDING')}
+          selected={statusGroups.includes('APPOINTMENT_PENDING')}
+        />
       </div>
 
       <DataTable
@@ -752,14 +888,15 @@ export default function EnquiryListPage() {
         page={page}
         limit={limit}
         fixedLayout
-        dense
         stickyHeader
-        maxHeight="calc(100vh - 260px)"
+        headerTone="tint"
+        maxHeight="calc(100vh - 230px)"
         onRefresh={() => void refetch()}
         refreshing={isFetching}
         rowAccentColor={(row) => ENQUIRY_ROW_ACCENT[row.status]}
         onPageChange={(nextPage) => patchParams({ page: String(nextPage) })}
         onLimitChange={(newLimit) => patchParams({ limit: String(newLimit) })}
+        onRowClick={(row) => navigate(`/enquiries/${row.id}`)}
         emptyState={{
           icon: <ListAltIcon sx={{ fontSize: 36 }} />,
           title: activeFilters.length > 0 ? 'No enquiries match these filters' : 'Your Enquiry List is Waiting',
@@ -789,6 +926,30 @@ export default function EnquiryListPage() {
         </p>
       )}
 
+      {/* Spells out the cascade before it happens — an enquiry that became an order takes far more
+          with it than the row the user clicked, and that has to be visible at the point of no return. */}
+      <ConfirmDialog
+        open={Boolean(deletingEnquiry)}
+        title="Delete Enquiry?"
+        message={
+          <>
+            Delete enquiry &quot;{deletingEnquiry?.enquiryNumber}&quot; for{' '}
+            {deletingEnquiry?.customer.customerName || 'this customer'}? Its quotations and any order
+            raised from it — including that order&apos;s payments, invoice, payment tracker, task plan
+            and documents — are deleted as well.
+            {deleteError && <span className="tw-mt-2 tw-block tw-text-danger">{deleteError}</span>}
+          </>
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger
+        loading={deleteMutation.isPending}
+        onConfirm={() => deletingEnquiry && deleteMutation.mutate(deletingEnquiry.id)}
+        onClose={() => {
+          setDeletingEnquiry(null);
+          setDeleteError(null);
+        }}
+      />
     </div>
   );
 }

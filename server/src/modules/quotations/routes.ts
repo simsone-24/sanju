@@ -1,6 +1,7 @@
+import { QuotationStatus } from '@prisma/client';
 import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate';
-import { authorize } from '../../middleware/authorize';
+import { authorize, authorizeWhen } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 import { createPhotoUploader } from '../../middleware/upload';
 import { ModuleName } from '../permissions/catalog';
@@ -23,15 +24,28 @@ router.get('/:id', authorize(ModuleName.QUOTATIONS, 'canView'), quotationsContro
 router.get('/:id/timeline', authorize(ModuleName.QUOTATIONS, 'canView'), quotationsController.getTimeline);
 // PDF download is gated on canPrint (matches the documented "Print/Download PDF" permission).
 router.get('/:id/pdf', authorize(ModuleName.QUOTATIONS, 'canPrint'), quotationsController.downloadPdf);
+// The form carries a Status field, so saving straight into APPROVED does everything the dedicated
+// approve route below does — and therefore has to answer to the same canApprove permission. Without
+// this a role holding only canCreate/canEdit could approve by picking it from the dropdown.
 router.post(
   '/',
   authorize(ModuleName.QUOTATIONS, 'canCreate'),
+  authorizeWhen(
+    (req) => req.body?.status === QuotationStatus.APPROVED,
+    ModuleName.QUOTATIONS,
+    'canApprove',
+  ),
   validate(createQuotationSchema),
   quotationsController.create,
 );
 router.put(
   '/:id',
   authorize(ModuleName.QUOTATIONS, 'canEdit'),
+  authorizeWhen(
+    (req) => req.body?.status === QuotationStatus.APPROVED,
+    ModuleName.QUOTATIONS,
+    'canApprove',
+  ),
   validate(updateQuotationSchema),
   quotationsController.update,
 );

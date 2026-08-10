@@ -6,7 +6,7 @@ import type { CalendarColor } from '../../types/calendar';
 // the backend already computed (server/src/modules/calendar/service.ts's STATUS_COLOR), it does
 // not re-derive color from order status itself.
 export const CALENDAR_COLORS: Record<CalendarColor, { label: string; hex: string }> = {
-  GREEN: { label: 'Completed', hex: '#22C55E' },
+  GREEN: { label: 'Completed', hex: '#10B981' },
   BLUE: { label: 'Upcoming', hex: '#2563EB' },
   ORANGE: { label: 'Planning', hex: '#F59E0B' },
   RED: { label: 'Payment Pending', hex: '#EF4444' },

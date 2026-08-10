@@ -15,6 +15,8 @@ export interface AuthenticatedProfile {
   company: {
     id: string;
     companyName: string;
+    /** Relative upload path — resolve through getPublicAssetUrl before using as an <img> src. */
+    logo: string | null;
   };
   permissions: EffectivePermission[];
 }

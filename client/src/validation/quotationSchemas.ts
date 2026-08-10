@@ -14,9 +14,15 @@ const quotationItemSchema = z.object({
 export const QUOTATION_FORM_SOURCES = ['ENQUIRY', 'CUSTOMER', 'MANUAL'] as const;
 export type QuotationFormSource = (typeof QUOTATION_FORM_SOURCES)[number];
 
+// The statuses the form's Status field offers. REVISED is only available when editing: it means an
+// edited version has superseded this one, which cannot be true of a document being created.
+export const QUOTATION_CREATE_STATUSES = ['DRAFT', 'SENT', 'APPROVED', 'REJECTED'] as const;
+export const QUOTATION_EDIT_STATUSES = [...QUOTATION_CREATE_STATUSES, 'REVISED'] as const;
+
 export const quotationFormSchema = z
   .object({
     source: z.enum(QUOTATION_FORM_SOURCES),
+    status: z.enum(QUOTATION_EDIT_STATUSES),
     enquiryId: z.string().optional().or(z.literal('')),
     customerId: z.string().optional().or(z.literal('')),
     // MANUAL-source snapshot: a customer contacted by phone/WhatsApp for whom no Customer record

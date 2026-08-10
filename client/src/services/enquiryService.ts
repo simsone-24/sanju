@@ -7,6 +7,7 @@ import type {
   EnquiryListItem,
   EnquiryStats,
   EnquiryStatus,
+  EnquiryTimelineEntry,
   ListEnquiriesParams,
   UpdateEnquiryInput,
 } from '../types/enquiry';
@@ -21,13 +22,23 @@ export async function list(params: ListEnquiriesParams): Promise<ListEnquiriesRe
   return { records: response.data.data, meta: response.data.meta! };
 }
 
-export async function getStats(): Promise<EnquiryStats> {
-  const response = await apiClient.get<ApiSuccessResponse<EnquiryStats>>('/enquiries/stats');
+// Excludes page/limit/statusGroup — the cards' own counts narrow along with every other active
+// filter, but each card defines its own status group rather than reading `view` from the URL.
+export type EnquiryStatsParams = Omit<ListEnquiriesParams, 'page' | 'limit' | 'statusGroup'>;
+
+export async function getStats(params: EnquiryStatsParams): Promise<EnquiryStats> {
+  const response = await apiClient.get<ApiSuccessResponse<EnquiryStats>>('/enquiries/stats', { params });
   return response.data.data;
 }
 
 export async function getById(id: string): Promise<EnquiryDetail> {
   const response = await apiClient.get<ApiSuccessResponse<EnquiryDetail>>(`/enquiries/${id}`);
+  return response.data.data;
+}
+
+// The enquiry's complete history, including the activity of its quotations and resulting order.
+export async function getTimeline(id: string): Promise<EnquiryTimelineEntry[]> {
+  const response = await apiClient.get<ApiSuccessResponse<EnquiryTimelineEntry[]>>(`/enquiries/${id}/timeline`);
   return response.data.data;
 }
 
@@ -47,6 +58,12 @@ export async function changeStatus(id: string, status: EnquiryStatus, remarks?: 
     remarks,
   });
   return response.data.data;
+}
+
+// Cascades on the server: the enquiry's quotations, its order, and that order's payments, invoice,
+// payment tracker, task plan and documents are soft-deleted along with it.
+export async function remove(id: string): Promise<void> {
+  await apiClient.delete<ApiSuccessResponse<null>>(`/enquiries/${id}`);
 }
 
 export async function addFollowUp(

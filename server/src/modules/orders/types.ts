@@ -19,23 +19,16 @@ export interface ChangeOrderStatusInput {
   remarks?: string;
 }
 
-// "md files/order/filter.md" groups the 10-status workflow into 4 dashboard buckets. Kept here
-// (not in the UI) so the cards, their click-through filter, and the counts all read from one map.
-export const ORDER_STATUS_GROUPS = {
-  PLANNING: ['CONFIRMED', 'ADVANCE_PENDING', 'ADVANCE_RECEIVED', 'PLANNING', 'READY'],
-  WORK_STARTED: ['IN_PROGRESS'],
-  COMPLETED: ['COMPLETED', 'BALANCE_PENDING', 'CLOSED'],
-  CANCELLED: ['CANCELLED'],
-} as const satisfies Record<string, readonly OrderStatus[]>;
-
-export type OrderStatusGroup = keyof typeof ORDER_STATUS_GROUPS;
-
+// Orders list dashboard cards: an overall total, four fixed event-date windows (independent of
+// whatever eventDate range the list is currently filtered to — "today" always means today), and
+// the Order Closed lifecycle stage.
 export interface OrderStatsResult {
   total: number;
-  planning: number;
-  workStarted: number;
-  completed: number;
-  cancelled: number;
+  todayEvents: number;
+  tomorrowEvents: number;
+  thisWeekEvents: number;
+  thisMonthEvents: number;
+  closed: number;
 }
 
 export interface ListOrdersParams {
@@ -44,9 +37,11 @@ export interface ListOrdersParams {
   limit: number;
   search?: string;
   status?: OrderStatus;
-  /** Dashboard-card filter — widens to every status in the group (see ORDER_STATUS_GROUPS). */
-  statusGroup?: OrderStatusGroup;
   customerId?: string;
   eventDateFrom?: Date;
   eventDateTo?: Date;
 }
+
+// The dashboard cards' own counts narrow along with every other active list filter — everything
+// list accepts except pagination and status, since each card defines its own status.
+export type OrderStatsParams = Omit<ListOrdersParams, 'page' | 'limit' | 'status'>;

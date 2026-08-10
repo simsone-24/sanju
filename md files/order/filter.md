@@ -44,6 +44,12 @@ Total | Planning | Work Started | Completed | Cancelled
  120       35            48            30          7
 -------------------------------------------------------
 
+### Filter Interaction
+
+Each card's count narrows along with every other active filter — search, Customer, and the
+event-date range. Only the status condition that defines the card itself stays fixed, so
+selecting a card never zeroes out the other cards.
+
 ---
 
 # Filters

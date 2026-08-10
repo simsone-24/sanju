@@ -1,13 +1,12 @@
-import CancelIcon from '@mui/icons-material/Cancel';
-import ChecklistIcon from '@mui/icons-material/Checklist';
-import DescriptionIcon from '@mui/icons-material/Description';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
+import EditIcon from '@mui/icons-material/Edit';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
-import HistoryIcon from '@mui/icons-material/History';
+import EventIcon from '@mui/icons-material/Event';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import PlayCircleIcon from '@mui/icons-material/PlayCircle';
+import TodayIcon from '@mui/icons-material/Today';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Autocomplete,
@@ -15,8 +14,6 @@ import {
   Button,
   Chip,
   IconButton,
-  ListItemIcon,
-  ListItemText,
   ListSubheader,
   Menu,
   MenuItem,
@@ -32,12 +29,16 @@ import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
-import { derivePaymentStatus, resolveStatusConfig, type PaymentStatus } from '../../components/statusConfig';
+import {
+  resolveOrderPaymentBadge,
+  resolveStatusConfig,
+  type StatusBadgeType,
+} from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
 import * as customerService from '../../services/customerService';
@@ -45,43 +46,39 @@ import * as orderService from '../../services/orderService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
 import type { CustomerOption } from '../../types/masters';
-import type { OrderListItem, OrderStatus, OrderStatusGroup } from '../../types/order';
+import type { OrderListItem, OrderStatus } from '../../types/order';
 // Rows are ordered by event date (soonest first, server-side), so the date cell carries the
 // scanning weight: weekday for planning, plus how near the event is (eventProximity).
 import { eventProximity, formatCurrency, formatDate } from '../../utils/format';
 import { allowedOrderTransitions } from './orderStatusTransitions';
 
-// Event/work lifecycle only — payment standing is a separate derived column, so the three
-// payment-shaped statuses aren't offered as filters here.
-const STATUS_OPTIONS: OrderStatus[] = [
-  'CONFIRMED',
-  'PLANNING',
-  'READY',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'CLOSED',
-  'CANCELLED',
-];
+// Event/work lifecycle only — payment standing is a separate derived column.
+const STATUS_OPTIONS: OrderStatus[] = ['YET_TO_START', 'IN_PROGRESS', 'ORDER_CLOSED', 'REJECTED'];
 
-const PAYMENT_STATUS_OPTIONS: PaymentStatus[] = ['PENDING', 'PARTIAL', 'PAID', 'OVERDUE'];
+// The same scale the Payment column now shows (resolveOrderPaymentBadge): the tracker's four
+// stored states, plus Overdue, which only the derived side can say. Kept as {type, status} pairs so
+// each option renders and matches through exactly the same config the badge uses.
+const PAYMENT_FILTER_OPTIONS: { type: StatusBadgeType; status: string }[] = [
+  { type: 'paymentTracker', status: 'PENDING' },
+  { type: 'paymentTracker', status: 'ADVANCE_PAID' },
+  { type: 'paymentTracker', status: 'PARTIAL_PAYMENT' },
+  { type: 'paymentTracker', status: 'FULLY_PAID' },
+  { type: 'payment', status: 'OVERDUE' },
+];
 
 // Row-left accent per order status, mirroring statusConfig.ts's semantic grouping as literal
 // values (DataTable's rowAccentColor callback runs outside a theme-aware sx function).
 const ORDER_ROW_ACCENT: Record<OrderStatus, string> = {
-  CONFIRMED: '#3B82F6',
-  ADVANCE_PENDING: '#F59E0B',
-  ADVANCE_RECEIVED: '#3B82F6',
-  PLANNING: '#3B82F6',
-  READY: '#3B82F6',
+  YET_TO_START: '#3B82F6',
   IN_PROGRESS: '#F59E0B',
-  COMPLETED: '#22C55E',
-  BALANCE_PENDING: '#F59E0B',
-  CLOSED: '#22C55E',
-  CANCELLED: '#EF4444',
+  ORDER_CLOSED: '#10B981',
+  REJECTED: '#EF4444',
 };
 
 // "md files/order/filter.md" §Date Filter — one-at-a-time quick ranges over the event date.
-type QuickRange = 'TODAY' | 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH';
+// TOMORROW has no pill of its own below (only the Tomorrow Events dashboard card drives it) —
+// everything else here is also offered as a pill.
+type QuickRange = 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH';
 
 const QUICK_RANGES: { key: QuickRange; label: string }[] = [
   { key: 'TODAY', label: 'Today' },
@@ -91,11 +88,26 @@ const QUICK_RANGES: { key: QuickRange; label: string }[] = [
   { key: 'NEXT_MONTH', label: 'Next Month' },
 ];
 
+// Every QuickRange's label, including TOMORROW which has no pill of its own — used wherever a
+// label is needed regardless of whether the value came from a pill or a dashboard card.
+const QUICK_RANGE_LABELS: Record<QuickRange, string> = {
+  TODAY: 'Today',
+  TOMORROW: 'Tomorrow',
+  THIS_WEEK: 'This Week',
+  NEXT_WEEK: 'Next Week',
+  THIS_MONTH: 'This Month',
+  NEXT_MONTH: 'Next Month',
+};
+
 function quickRangeDates(key: QuickRange): { from: Dayjs; to: Dayjs } {
   const today = dayjs();
   switch (key) {
     case 'TODAY':
       return { from: today, to: today };
+    case 'TOMORROW': {
+      const tomorrow = today.add(1, 'day');
+      return { from: tomorrow, to: tomorrow };
+    }
     case 'THIS_WEEK':
       return { from: today.startOf('week'), to: today.endOf('week') };
     case 'NEXT_WEEK':
@@ -122,18 +134,17 @@ export default function OrderListPage() {
     canCompleteEvent: usePermission('ORDERS', 'canCompleteEvent'),
   };
   const canViewPayments = usePermission('PAYMENTS', 'canView');
-  const canViewPlanning = usePermission('PLANNING', 'canView');
 
-  const [menuState, setMenuState] = useState<{ anchor: HTMLElement; row: OrderListItem } | null>(null);
   const [statusMenu, setStatusMenu] = useState<{ anchor: HTMLElement; row: OrderListItem } | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<OrderStatus | ''>('');
-  const [statusGroup, setStatusGroup] = useState<OrderStatusGroup | ''>('');
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('');
+  // One of PAYMENT_FILTER_OPTIONS' status values, or '' for all — it spans two status scales, so
+  // it is held as the raw value both configs are keyed by.
+  const [paymentStatus, setPaymentStatus] = useState<string>('');
   const [quickRange, setQuickRange] = useState<QuickRange | null>(null);
   const [month, setMonth] = useState<Dayjs | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ row: OrderListItem; target: OrderStatus } | null>(null);
@@ -147,10 +158,29 @@ export default function OrderListPage() {
       ? { from: month.startOf('month'), to: month.endOf('month') }
       : null;
 
+  // Narrows along with every active filter except `status` — each card defines its own status,
+  // so folding the currently-selected card's status back into its own count would be circular
+  // and would silently zero out the other cards whenever one was active.
   const { data: stats } = useQuery({
-    queryKey: ['orders', 'stats'],
-    queryFn: () => orderService.getStats(),
+    queryKey: [
+      'orders',
+      'stats',
+      {
+        search,
+        customerId: customer?.id,
+        from: range?.from.format('YYYY-MM-DD'),
+        to: range?.to.format('YYYY-MM-DD'),
+      },
+    ],
+    queryFn: () =>
+      orderService.getStats({
+        search: search || undefined,
+        customerId: customer?.id,
+        eventDateFrom: range ? range.from.format('YYYY-MM-DD') : undefined,
+        eventDateTo: range ? range.to.format('YYYY-MM-DD') : undefined,
+      }),
     enabled: canView,
+    placeholderData: keepPreviousData,
   });
 
   const { data: customerOptions } = useQuery({
@@ -167,7 +197,6 @@ export default function OrderListPage() {
         limit,
         search,
         status,
-        statusGroup,
         customerId: customer?.id,
         from: range?.from.format('YYYY-MM-DD'),
         to: range?.to.format('YYYY-MM-DD'),
@@ -179,7 +208,6 @@ export default function OrderListPage() {
         limit,
         search: search || undefined,
         status: status || undefined,
-        statusGroup: statusGroup || undefined,
         customerId: customer?.id,
         eventDateFrom: range ? range.from.format('YYYY-MM-DD') : undefined,
         eventDateTo: range ? range.to.format('YYYY-MM-DD') : undefined,
@@ -204,9 +232,9 @@ export default function OrderListPage() {
       await statusMutation.mutateAsync({
         id: pendingStatus.row.id,
         status: pendingStatus.target,
-        // The server requires a reason when cancelling; inline editing has no free-text field, so
+        // The server requires a reason when rejecting; inline editing has no free-text field, so
         // a fixed one is sent and the detail page remains the place to record a fuller reason.
-        cancellationReason: pendingStatus.target === 'CANCELLED' ? 'Cancelled from the Orders list.' : undefined,
+        cancellationReason: pendingStatus.target === 'REJECTED' ? 'Rejected from the Orders list.' : undefined,
       });
       setPendingStatus(null);
     } catch (error) {
@@ -218,7 +246,6 @@ export default function OrderListPage() {
   function resetFilters() {
     setSearch('');
     setStatus('');
-    setStatusGroup('');
     setPaymentStatus('');
     setCustomer(null);
     setCustomerQuery('');
@@ -227,17 +254,63 @@ export default function OrderListPage() {
     setPage(1);
   }
 
-  // Payment status is derived per row rather than stored, so it can't be a server-side `where`
-  // clause — it's filtered on the current page after fetching.
+  // Payment standing mixes a stored status with a derived Overdue, so it can't be a server-side
+  // `where` clause — it's filtered on the current page after fetching, against the same badge the
+  // Payment column renders.
   const rows = (data?.records ?? []).filter(
-    (row) =>
-      !paymentStatus || derivePaymentStatus(row.totalAmount, row.paidAmount, row.eventDate) === paymentStatus,
+    (row) => !paymentStatus || resolveOrderPaymentBadge(row).status === paymentStatus,
   );
 
-  function toggleGroup(group: OrderStatusGroup) {
-    setStatusGroup((current) => (current === group ? '' : group));
-    setStatus('');
+  function toggleStatus(value: OrderStatus) {
+    setStatus((current) => (current === value ? '' : value));
     setPage(1);
+  }
+
+  // Same toggle-off behaviour as the quick-range pills' own onClick (clicking the active one clears
+  // it back to "All Dates"), reused by the event-date dashboard cards.
+  function toggleQuickRange(value: QuickRange) {
+    setQuickRange((current) => (current === value ? null : value));
+    setMonth(null);
+    setPage(1);
+  }
+
+  const activeFilters: { key: string; label: string; onClear: () => void }[] = [];
+  if (search) {
+    activeFilters.push({ key: 'search', label: `Search: "${search}"`, onClear: () => setSearch('') });
+  }
+  if (customer) {
+    activeFilters.push({
+      key: 'customer',
+      label: `Customer: ${customer.customerName}`,
+      onClear: () => {
+        setCustomer(null);
+        setCustomerQuery('');
+      },
+    });
+  }
+  if (quickRange) {
+    activeFilters.push({
+      key: 'quickRange',
+      label: QUICK_RANGE_LABELS[quickRange],
+      onClear: () => setQuickRange(null),
+    });
+  } else if (month) {
+    activeFilters.push({ key: 'month', label: `Month: ${month.format('MMM YYYY')}`, onClear: () => setMonth(null) });
+  }
+  if (status) {
+    activeFilters.push({
+      key: 'status',
+      label: `Status: ${resolveStatusConfig('order', status).label}`,
+      onClear: () => setStatus(''),
+    });
+  }
+  if (paymentStatus) {
+    const option = PAYMENT_FILTER_OPTIONS.find((item) => item.status === paymentStatus);
+    activeFilters.push({
+      key: 'payment',
+      label: `Payment: ${option ? resolveStatusConfig(option.type, option.status).label : paymentStatus}`,
+      onClear: () => setPaymentStatus(''),
+    });
   }
 
   const columns: DataTableColumn<OrderListItem>[] = [
@@ -245,6 +318,7 @@ export default function OrderListPage() {
       key: 'orderNumber',
       header: 'Order No',
       sortable: true,
+      align: 'center',
       width: 150,
       render: (row) => (
         <Typography variant="body2" noWrap sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -256,19 +330,31 @@ export default function OrderListPage() {
     {
       key: 'customer',
       header: 'Customer',
+      align: 'center',
       render: (row) => row.customer.customerName,
       exportValue: (row) => row.customer.customerName,
     },
     {
       key: 'event',
       header: 'Event',
+      align: 'center',
       render: (row) => row.enquiry?.eventName || row.enquiry?.eventType.eventName || '—',
       exportValue: (row) => row.enquiry?.eventName || row.enquiry?.eventType.eventName || '',
     },
     {
       key: 'eventDate',
       header: 'Event Date',
+      align: 'center',
       render: (row) => {
+        // An order confirmed before its event date was known: there is no day of the week or
+        // countdown to show, only the fact that the date is still owed.
+        if (!row.eventDate) {
+          return (
+            <Typography variant="body2" noWrap color="text.secondary">
+              Not scheduled
+            </Typography>
+          );
+        }
         const proximity = eventProximity(row.eventDate);
         return (
           <Box>
@@ -292,6 +378,7 @@ export default function OrderListPage() {
     {
       key: 'venue',
       header: 'Venue',
+      align: 'center',
       // Hidden by default to keep the 11-column table inside the viewport — re-enable any time
       // from the column picker in the table toolbar.
       hideByDefault: true,
@@ -301,7 +388,7 @@ export default function OrderListPage() {
     {
       key: 'totalAmount',
       header: 'Total',
-      align: 'right',
+      align: 'center',
       width: 110,
       render: (row) => formatCurrency(row.totalAmount),
       exportValue: (row) => row.totalAmount,
@@ -309,7 +396,7 @@ export default function OrderListPage() {
     {
       key: 'paidAmount',
       header: 'Paid',
-      align: 'right',
+      align: 'center',
       width: 100,
       render: (row) => formatCurrency(row.paidAmount),
       exportValue: (row) => row.paidAmount,
@@ -317,7 +404,7 @@ export default function OrderListPage() {
     {
       key: 'pendingAmount',
       header: 'Balance',
-      align: 'right',
+      align: 'center',
       width: 110,
       render: (row) => formatCurrency(row.pendingAmount),
       exportValue: (row) => row.pendingAmount,
@@ -326,12 +413,12 @@ export default function OrderListPage() {
       key: 'paymentStatus',
       header: 'Payment',
       align: 'center',
-      // Derived from the order's own amounts, never stored
-      // (docs/10_IMPLEMENTATION_DECISIONS.md §6). Read-only here: payments are recorded through
-      // the Payments tab, and this badge just reflects the resulting balance.
+      // The Payment Tracker's own status, so an order showing "Advance Paid" there does not read
+      // "Partial" here (resolveOrderPaymentBadge). Read-only: payments are recorded through the
+      // Payments tab and the tracker, and this badge just reflects where that left the order.
       render: (row) => (
         <Box>
-          <StatusBadge type="payment" status={derivePaymentStatus(row.totalAmount, row.paidAmount, row.eventDate)} size="sm" />
+          <StatusBadge {...resolveOrderPaymentBadge(row)} size="sm" />
           {Number(row.pendingAmount) > 0 && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
               {formatCurrency(row.pendingAmount)} due
@@ -339,20 +426,22 @@ export default function OrderListPage() {
           )}
         </Box>
       ),
-      exportValue: (row) => derivePaymentStatus(row.totalAmount, row.paidAmount, row.eventDate),
+      exportValue: (row) => {
+        const badge = resolveOrderPaymentBadge(row);
+        return resolveStatusConfig(badge.type, badge.status).label;
+      },
     },
     {
       key: 'status',
-      header: 'Event Status',
+      header: 'Order Status',
       align: 'center',
       width: 150,
       // Inline status editing ("md files/order/filter.md" §Inline Status Editing). Tracks the
-      // EVENT/work lifecycle only — payment standing is the separate derived column above. The
-      // badge itself is the trigger, so an editable cell reads exactly like a read-only one
-      // (no form control breaking the row rhythm) and only reveals the menu affordance. The menu
-      // offers only the moves the backend accepts from this row's current status
-      // (ORDER_STATUS_TRANSITIONS), so the documented workflow stays intact rather than being
-      // bypassed; the server's "can't close with a balance" guard surfaces in the confirm dialog.
+      // EVENT/work lifecycle only — payment standing is the separate derived column above, tracked
+      // in the Payment Tracker module rather than gating this. The badge itself is the trigger, so
+      // an editable cell reads exactly like a read-only one (no form control breaking the row
+      // rhythm) and only reveals the menu affordance. The menu offers every other status
+      // (allowedOrderTransitions), filtered only by permission — not by the order's current status.
       render: (row) => {
         const nextOptions = allowedOrderTransitions(row.status, statusPermissions);
         if (nextOptions.length === 0) return <StatusBadge type="order" status={row.status} size="sm" />;
@@ -394,9 +483,9 @@ export default function OrderListPage() {
     {
       key: 'actions',
       header: 'Actions',
-      align: 'right',
+      align: 'center',
       render: (row) => (
-        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
           <Tooltip title="View order">
             <IconButton
               size="small"
@@ -408,6 +497,19 @@ export default function OrderListPage() {
               <VisibilityIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {canEdit && (
+            <Tooltip title="Edit order">
+              <IconButton
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(`/orders/${row.id}`);
+                }}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {canViewPayments && (
             <Tooltip title="Payments">
               <IconButton
@@ -421,30 +523,6 @@ export default function OrderListPage() {
               </IconButton>
             </Tooltip>
           )}
-          {canViewPlanning && (
-            <Tooltip title="Task plan">
-              <IconButton
-                size="small"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  navigate(`/orders/${row.id}?tab=task-plan`);
-                }}
-              >
-                <ChecklistIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title="More">
-            <IconButton
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                setMenuState({ anchor: event.currentTarget, row });
-              }}
-            >
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
         </Stack>
       ),
     },
@@ -452,56 +530,90 @@ export default function OrderListPage() {
 
   return (
     <Box>
-      <PageHeader
-        title="Orders"
-        subtitle="Track confirmed events from planning through to completion."
-        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Orders' }]}
-      />
+      {/* Premium hero header — a soft brand wash and a decorative ring make the page open like a
+          dashboard, and the record-count pill keeps the running total right beside the title. */}
+      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-4 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
+        <div
+          aria-hidden
+          className="tw-pointer-events-none tw-absolute -tw-right-20 -tw-top-24 tw-h-60 tw-w-60 tw-rounded-full tw-bg-gradient-to-br tw-from-brand/15 tw-to-cyan-400/10 tw-blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="tw-pointer-events-none tw-absolute -tw-bottom-24 tw-right-48 tw-h-44 tw-w-44 tw-rounded-[2rem] tw-border tw-border-brand/10"
+        />
 
-      <div className="tw-mb-6 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-5">
+        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Orders' }]} />
+
+        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-3">
+          <div className="tw-min-w-0">
+            <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
+              <h1 className="tw-m-0 tw-text-[1.75rem] tw-font-extrabold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
+                Orders
+              </h1>
+              {data?.meta?.totalRecords !== undefined && (
+                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
+                  {data.meta.totalRecords} {data.meta.totalRecords === 1 ? 'record' : 'records'}
+                </span>
+              )}
+            </div>
+            <p className="tw-m-0 tw-mt-1.5 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              Track confirmed events from planning through to completion.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="tw-mb-6 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-3 xl:tw-grid-cols-6">
         <StatCard
           label="Total Orders"
           value={stats?.total ?? 0}
           icon={<Inventory2Icon />}
           tone="blue"
           onClick={() => {
-            setStatusGroup('');
             setStatus('');
             setPage(1);
           }}
-          selected={statusGroup === '' && status === ''}
+          selected={status === ''}
         />
         <StatCard
-          label="Planning"
-          value={stats?.planning ?? 0}
-          icon={<ChecklistIcon />}
+          label="Today Events"
+          value={stats?.todayEvents ?? 0}
+          icon={<TodayIcon />}
           tone="cyan"
-          onClick={() => toggleGroup('PLANNING')}
-          selected={statusGroup === 'PLANNING'}
+          onClick={() => toggleQuickRange('TODAY')}
+          selected={quickRange === 'TODAY'}
         />
         <StatCard
-          label="Work Started"
-          value={stats?.workStarted ?? 0}
-          icon={<PlayCircleIcon />}
+          label="Tomorrow Events"
+          value={stats?.tomorrowEvents ?? 0}
+          icon={<EventIcon />}
           tone="amber"
-          onClick={() => toggleGroup('WORK_STARTED')}
-          selected={statusGroup === 'WORK_STARTED'}
+          onClick={() => toggleQuickRange('TOMORROW')}
+          selected={quickRange === 'TOMORROW'}
         />
         <StatCard
-          label="Completed"
-          value={stats?.completed ?? 0}
+          label="This Week Events"
+          value={stats?.thisWeekEvents ?? 0}
+          icon={<CalendarViewWeekIcon />}
+          tone="violet"
+          onClick={() => toggleQuickRange('THIS_WEEK')}
+          selected={quickRange === 'THIS_WEEK'}
+        />
+        <StatCard
+          label="This Month Events"
+          value={stats?.thisMonthEvents ?? 0}
+          icon={<CalendarMonthIcon />}
+          tone="slate"
+          onClick={() => toggleQuickRange('THIS_MONTH')}
+          selected={quickRange === 'THIS_MONTH'}
+        />
+        <StatCard
+          label="Order Closed"
+          value={stats?.closed ?? 0}
           icon={<EventAvailableIcon />}
           tone="green"
-          onClick={() => toggleGroup('COMPLETED')}
-          selected={statusGroup === 'COMPLETED'}
-        />
-        <StatCard
-          label="Cancelled"
-          value={stats?.cancelled ?? 0}
-          icon={<CancelIcon />}
-          tone="slate"
-          onClick={() => toggleGroup('CANCELLED')}
-          selected={statusGroup === 'CANCELLED'}
+          onClick={() => toggleStatus('ORDER_CLOSED')}
+          selected={status === 'ORDER_CLOSED'}
         />
       </div>
 
@@ -544,8 +656,11 @@ export default function OrderListPage() {
             ))}
           </Stack>
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 2 }}>
-            <Box sx={{ flexGrow: 1, minWidth: 220 }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', flexWrap: 'wrap', rowGap: 2 }}>
+            {/* SearchBar (36px, Tailwind) sits next to MUI's 40px "small" fields below — the fixed
+                height plus a centered inner flex keeps its input vertically centered against
+                theirs instead of sitting a few pixels off when the row bottom-aligns. */}
+            <Box sx={{ flexGrow: 1, minWidth: 220, height: 40, display: 'flex', alignItems: 'center' }}>
               <SearchBar
                 fullWidth
                 value={search}
@@ -594,11 +709,10 @@ export default function OrderListPage() {
                 select
                 fullWidth
                 size="small"
-                label="Event Status"
+                label="Order Status"
                 value={status}
                 onChange={(event) => {
                   setStatus(event.target.value as OrderStatus | '');
-                  setStatusGroup('');
                   setPage(1);
                 }}
               >
@@ -618,21 +732,44 @@ export default function OrderListPage() {
                 size="small"
                 label="Payment"
                 value={paymentStatus}
-                onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus | '')}
+                onChange={(event) => {
+                  setPaymentStatus(event.target.value);
+                  setPage(1);
+                }}
               >
                 <MenuItem value="">All Payments</MenuItem>
-                {PAYMENT_STATUS_OPTIONS.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {resolveStatusConfig('payment', option).label}
+                {PAYMENT_FILTER_OPTIONS.map((option) => (
+                  <MenuItem key={option.status} value={option.status}>
+                    {resolveStatusConfig(option.type, option.status).label}
                   </MenuItem>
                 ))}
               </TextField>
             </Box>
 
-            <Button variant="outlined" size="small" sx={{ height: 40 }} onClick={resetFilters}>
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ height: 40 }}
+              disabled={activeFilters.length === 0}
+              onClick={resetFilters}
+            >
               Reset
             </Button>
           </Stack>
+
+          {activeFilters.length > 0 && (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                Active filters
+              </Typography>
+              {activeFilters.map((filter) => (
+                <Chip key={filter.key} label={filter.label} size="small" onDelete={filter.onClear} />
+              ))}
+              <Button size="small" onClick={resetFilters}>
+                Clear all
+              </Button>
+            </Stack>
+          )}
         </Stack>
       </Paper>
 
@@ -664,42 +801,6 @@ export default function OrderListPage() {
       ) : (
         <Typography color="text.secondary">You do not have access to view orders.</Typography>
       )}
-
-      <Menu anchorEl={menuState?.anchor} open={Boolean(menuState)} onClose={() => setMenuState(null)}>
-        <MenuItem
-          onClick={() => {
-            if (menuState) navigate(`/orders/${menuState.row.id}?tab=quotation`);
-            setMenuState(null);
-          }}
-        >
-          <ListItemIcon>
-            <DescriptionIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Quotation</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuState) navigate(`/orders/${menuState.row.id}?tab=documents`);
-            setMenuState(null);
-          }}
-        >
-          <ListItemIcon>
-            <DescriptionIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Documents</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuState) navigate(`/orders/${menuState.row.id}?tab=timeline`);
-            setMenuState(null);
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Timeline</ListItemText>
-        </MenuItem>
-      </Menu>
 
       <Menu
         anchorEl={statusMenu?.anchor}
@@ -735,7 +836,7 @@ export default function OrderListPage() {
               }`
             : ''
         }
-        danger={pendingStatus?.target === 'CANCELLED'}
+        danger={pendingStatus?.target === 'REJECTED'}
         loading={statusMutation.isPending}
         onConfirm={handleConfirmStatus}
         onClose={() => {

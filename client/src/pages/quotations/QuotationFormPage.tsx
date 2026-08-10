@@ -13,6 +13,7 @@ import {
   Box,
   Button,
   IconButton,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -33,6 +34,9 @@ import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FormPage } from '../../components/FormPage';
 import { FormSection } from '../../components/FormSection';
+import { resolveStatusConfig } from '../../components/statusConfig';
+import { SCROLL_ANCHORS } from '../../constants/scrollAnchors';
+import { usePermission } from '../../hooks/usePermission';
 import QuotationPreview from './QuotationPreview';
 import * as customerService from '../../services/customerService';
 import * as enquiryService from '../../services/enquiryService';
@@ -48,6 +52,8 @@ import type {
 } from '../../types/quotation';
 import { formatCurrency, formatDate, getPublicAssetUrl } from '../../utils/format';
 import {
+  QUOTATION_CREATE_STATUSES,
+  QUOTATION_EDIT_STATUSES,
   QUOTATION_FORM_SOURCES,
   quotationFormSchema,
   type QuotationFormSource,
@@ -85,6 +91,9 @@ export default function QuotationFormPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  // Mirrors the API guard on the create/update routes: APPROVED is the one status that answers to
+  // the Approve permission rather than to Create/Edit.
+  const canApprove = usePermission('QUOTATIONS', 'canApprove');
 
   // This page is opened from several places (Quotations list, Enquiry form, Order tab, ...), so
   // "back" means wherever the user actually came from rather than a single hardcoded route.
@@ -133,6 +142,7 @@ export default function QuotationFormPage() {
     resolver: zodResolver(quotationFormSchema),
     defaultValues: {
       source: prefillCustomerId ? 'CUSTOMER' : 'ENQUIRY',
+      status: 'DRAFT',
       enquiryId: '',
       customerId: '',
       manualName: '',
@@ -151,6 +161,10 @@ export default function QuotationFormPage() {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   const source = watch('source');
+  const status = watch('status');
+  // REVISED describes a quotation superseded by a newer revision, so it is only meaningful on one
+  // that already exists.
+  const statusOptions = isEdit ? QUOTATION_EDIT_STATUSES : QUOTATION_CREATE_STATUSES;
 
   // Search Enquiry dropdown — loads recent enquiries and filters by number / customer / mobile.
   const { data: enquiryResults } = useQuery({
@@ -209,6 +223,7 @@ export default function QuotationFormPage() {
         existingQuotation.source === 'CUSTOMER' || existingQuotation.source === 'MANUAL'
           ? existingQuotation.source
           : 'ENQUIRY',
+      status: existingQuotation.status,
       enquiryId: existingQuotation.link.enquiry?.id ?? '',
       customerId: existingQuotation.link.customer?.id ?? '',
       manualName: existingQuotation.recipient.name ?? '',
@@ -316,7 +331,15 @@ export default function QuotationFormPage() {
 
   const createMutation = useMutation({
     mutationFn: (input: CreateQuotationInput) => quotationService.create(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotations'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      // Saving straight into Approved confirms the enquiry and raises the order server-side, so the
+      // same lists the update path refreshes are refreshed here too.
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['enquiry'] });
+      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-tracker'] });
+    },
   });
 
   const updateMutation = useMutation({
@@ -439,6 +462,9 @@ export default function QuotationFormPage() {
     try {
       if (isEdit) {
         await updateMutation.mutateAsync({
+          // Only sent when it actually moved — an unchanged status would make the API log a
+          // redundant status change on the quotation's timeline for every ordinary edit.
+          status: values.status !== existingQuotation?.status ? values.status : undefined,
           quotationDate: values.quotationDate || undefined,
           cgstPercent,
           sgstPercent,
@@ -449,6 +475,9 @@ export default function QuotationFormPage() {
       } else {
         const created = await createMutation.mutateAsync({
           source: values.source,
+          // REVISED is not offered on create (see QUOTATION_CREATE_STATUSES), so the value here is
+          // always one the API accepts on a new quotation.
+          status: values.status === 'REVISED' ? undefined : values.status,
           enquiryId: values.source === 'ENQUIRY' ? values.enquiryId : undefined,
           customerId: values.source === 'CUSTOMER' ? values.customerId : undefined,
           manualCustomer,
@@ -856,6 +885,42 @@ export default function QuotationFormPage() {
           slotProps={{ inputLabel: { shrink: true } }}
           {...register('quotationDate')}
         />
+
+        <Controller
+          name="status"
+          control={control}
+          render={({ field: statusField }) => (
+            <TextField
+              {...statusField}
+              select
+              label="Status"
+              fullWidth
+              helperText={
+                canApprove
+                  ? 'The status this quotation is saved in.'
+                  : 'Approving a quotation needs the Approve permission.'
+              }
+            >
+              {statusOptions.map((option) => (
+                <MenuItem key={option} value={option} disabled={option === 'APPROVED' && !canApprove}>
+                  {resolveStatusConfig('quotation', option).label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+
+        {/* Approving an enquiry-sourced quotation is the confirmation step of the workflow, not a
+            label: the API runs the same action the Confirm button does. Said up front so nobody
+            reaches it by accident from a dropdown. */}
+        {status === 'APPROVED' && existingQuotation?.status !== 'APPROVED' && source === 'ENQUIRY' && (
+          <Box sx={{ gridColumn: '1 / -1' }}>
+            <Alert severity="warning">
+              Saving as Approved confirms the enquiry and raises the order and its payment tracker
+              entry, exactly as the Confirm Quotation action does.
+            </Alert>
+          </Box>
+        )}
       </FormSection>
 
       {/* A manual quotation's customer lives on the quotation itself, so it stays correctable after
@@ -891,7 +956,8 @@ export default function QuotationFormPage() {
         </FormSection>
       )}
 
-      <FormSection title="Items">
+      {/* Anchor for links that open this form ready to add items (see SCROLL_ANCHORS). */}
+      <FormSection title="Items" id={SCROLL_ANCHORS.quotationItems}>
         <Box sx={{ gridColumn: '1 / -1' }}>
           <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Table size="small" stickyHeader>

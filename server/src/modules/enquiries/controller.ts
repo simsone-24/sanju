@@ -32,6 +32,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       search: query.search,
       status: query.status,
       appointmentStatus: query.appointmentStatus,
+      statusGroup: query.statusGroup,
       eventTypeId: query.eventTypeId,
       assignedUserId: query.assignedUserId,
       customerId: query.customerId,
@@ -50,7 +51,20 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function getStats(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const stats = await enquiriesService.getStats(actor.companyId);
+    const query = parseQuery(listEnquiriesQuerySchema, req.query);
+    const stats = await enquiriesService.getStats({
+      companyId: actor.companyId,
+      search: query.search,
+      status: query.status,
+      appointmentStatus: query.appointmentStatus,
+      eventTypeId: query.eventTypeId,
+      assignedUserId: query.assignedUserId,
+      customerId: query.customerId,
+      eventDateFrom: query.eventDateFrom,
+      eventDateTo: query.eventDateTo,
+      appointmentDateFrom: query.appointmentDateFrom,
+      appointmentDateTo: query.appointmentDateTo,
+    });
     sendSuccess(res, stats, 'Enquiry stats retrieved successfully.');
   } catch (error) {
     next(error);
@@ -62,6 +76,16 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
     const actor = requireUser(req);
     const enquiry = await enquiriesService.getById(actor.companyId, req.params.id);
     sendSuccess(res, enquiry, 'Enquiry retrieved successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const timeline = await enquiriesService.getTimeline(actor.companyId, req.params.id);
+    sendSuccess(res, timeline, 'Enquiry timeline retrieved successfully.');
   } catch (error) {
     next(error);
   }
@@ -110,6 +134,16 @@ export async function changeStatus(
       req.body.remarks,
     );
     sendSuccess(res, enquiry, 'Enquiry status updated successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await enquiriesService.remove(actor, req.params.id);
+    sendSuccess(res, null, 'Enquiry deleted successfully.');
   } catch (error) {
     next(error);
   }

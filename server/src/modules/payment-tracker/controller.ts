@@ -39,7 +39,17 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function stats(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const result = await paymentTrackerService.stats(actor.companyId);
+    const query = parseQuery(listPaymentTrackerQuerySchema, req.query);
+    const result = await paymentTrackerService.stats({
+      companyId: actor.companyId,
+      search: query.search,
+      customerId: query.customerId,
+      paymentStatus: query.paymentStatus,
+      statusGroup: query.statusGroup,
+      orderStatus: query.orderStatus,
+      eventDateFrom: query.eventDateFrom,
+      eventDateTo: query.eventDateTo,
+    });
     sendSuccess(res, result, 'Payment tracker statistics retrieved successfully.');
   } catch (error) {
     next(error);

@@ -15,14 +15,14 @@ function titleCase(value: string): string {
 }
 
 // Simplified 6-status enquiry lifecycle. Colour grouping follows 06_UI_UX_GUIDELINES.md §12:
-// early stage (info/blue), appointment (purple), quotation-in-progress (warning/orange),
+// awaiting action (warning/amber), appointment (purple), quotation-in-progress (warning/orange),
 // order won (success/green), order lost (error/red).
 //
 // Appointment Fixed uses a literal violet rather than a palette key: the theme has no purple token
 // (its `secondary` is grey), and "md files/Enquiry/indexUI.md" §UI Color Suggestions specifies
 // #8B5CF6 — the same hue the enquiry list already draws its row accent stripe in.
 const ENQUIRY_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
-  PENDING: { label: 'Pending', color: 'info' },
+  PENDING: { label: 'Pending', color: 'warning' },
   APPOINTMENT_FIXED: { label: 'Appointment Fixed', color: '#8B5CF6' },
   QUOTATION_TO_SHARE: { label: 'Quotation to Share', color: 'warning' },
   QUOTATION_SHARED: { label: 'Quotation Shared', color: 'warning' },
@@ -30,28 +30,24 @@ const ENQUIRY_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
   ORDER_LOST: { label: 'Order Lost', color: 'error' },
 };
 
+// Phrasing matches the Quotation section on the Enquiry Form (EnquiryFormPage's
+// quotationStatusLabel) — "has this been shared with, and accepted by, the customer" rather than
+// the raw quotation lifecycle terms, so the same status reads identically in both modules.
 const QUOTATION_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
-  DRAFT: { label: 'Draft', color: 'default' },
-  SENT: { label: 'Sent', color: 'info' },
-  APPROVED: { label: 'Approved', color: 'success' },
-  REJECTED: { label: 'Rejected', color: 'error' },
+  DRAFT: { label: 'Quotation Not Shared', color: 'default' },
+  SENT: { label: 'Quotation Shared', color: 'info' },
+  APPROVED: { label: 'Quotation Confirmed', color: 'success' },
+  REJECTED: { label: 'Quotation Rejected', color: 'error' },
   REVISED: { label: 'Revised', color: 'warning' },
 };
 
-// Mirrors server/src/modules/calendar/service.ts's STATUS_COLOR exactly (Blue/Orange/Red/
-// Green/Grey semantic grouping), translated to MUI Chip colors, so an order's badge color
-// always matches the color it's shown with on the Calendar.
+// Mirrors server/src/modules/calendar/service.ts's STATUS_COLOR exactly (Blue/Orange/Green/Grey),
+// translated to MUI Chip colors, so an order's badge color always matches the Calendar.
 const ORDER_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
-  CONFIRMED: { label: 'Confirmed', color: 'info' },
-  ADVANCE_PENDING: { label: 'Advance Pending', color: 'info' },
-  ADVANCE_RECEIVED: { label: 'Advance Received', color: 'info' },
-  PLANNING: { label: 'Planning', color: 'warning' },
-  READY: { label: 'Ready', color: 'warning' },
+  YET_TO_START: { label: 'Yet to Start', color: 'info' },
   IN_PROGRESS: { label: 'In Progress', color: 'warning' },
-  COMPLETED: { label: 'Completed', color: 'success' },
-  CLOSED: { label: 'Closed', color: 'success' },
-  BALANCE_PENDING: { label: 'Balance Pending', color: 'error' },
-  CANCELLED: { label: 'Cancelled', color: 'default' },
+  ORDER_CLOSED: { label: 'Order Closed', color: 'success' },
+  REJECTED: { label: 'Rejected', color: 'default' },
 };
 
 const TASK_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
@@ -120,11 +116,12 @@ export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 
 // Derives an order's payment standing from its own amounts (docs §6). `eventDate` promotes an
 // unsettled balance to OVERDUE once the event has already happened — money still owed on a
-// delivered event is a different problem from money not yet due.
+// delivered event is a different problem from money not yet due. An order with no event date set
+// yet can never be overdue: nothing has been delivered to be late on.
 export function derivePaymentStatus(
   totalAmount: string | number,
   paidAmount: string | number,
-  eventDate?: string,
+  eventDate?: string | null,
 ): PaymentStatus {
   const total = Number(totalAmount);
   const paid = Number(paidAmount);
@@ -133,6 +130,31 @@ export function derivePaymentStatus(
   const eventPassed = eventDate ? new Date(eventDate).getTime() < Date.now() : false;
   if (eventPassed) return 'OVERDUE';
   return paid > 0 ? 'PARTIAL' : 'PENDING';
+}
+
+/**
+ * The payment badge an order shows in the Orders module.
+ *
+ * The Payment Tracker's stored status leads, so an order that has only received its advance reads
+ * "Advance Paid" in the Orders list exactly as it does in the tracker — the amounts alone cannot
+ * tell an advance apart from a part payment, which is why the derived scale used to say "Partial"
+ * for both.
+ *
+ * OVERDUE still wins when the event has already happened with money outstanding: that is a
+ * different problem from how much has been collected, and the tracker's four states cannot say it.
+ * Falls back to the derived status for an order with no tracker row.
+ */
+export function resolveOrderPaymentBadge(order: {
+  totalAmount: string | number;
+  paidAmount: string | number;
+  pendingAmount: string | number;
+  eventDate?: string | null;
+  paymentTracker: { paymentStatus: string } | null;
+}): { type: StatusBadgeType; status: string } {
+  const derived = derivePaymentStatus(order.totalAmount, order.paidAmount, order.eventDate);
+  if (derived === 'OVERDUE' && Number(order.pendingAmount) > 0) return { type: 'payment', status: 'OVERDUE' };
+  if (order.paymentTracker) return { type: 'paymentTracker', status: order.paymentTracker.paymentStatus };
+  return { type: 'payment', status: derived };
 }
 
 export type StatusBadgeType = keyof typeof STATUS_CONFIG_BY_TYPE;

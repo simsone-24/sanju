@@ -77,6 +77,8 @@ interface DataTableProps<T> {
   stickyHeader?: boolean;
   /** Height cap for the scroll area. Only meaningful together with `stickyHeader`. */
   maxHeight?: number | string;
+  /** Header band colour: a barely-there `soft` brand tint (default), or a stronger `tint` band. */
+  headerTone?: DataTableHeaderTone;
   /** Renders a refresh button in the toolbar (md files/design.md §Page Header — Search/Filters/Export/Refresh). */
   onRefresh?: () => void;
   /** Spins the refresh button while a background refetch is in flight. */
@@ -106,6 +108,41 @@ const ALIGN_FLEX = {
   center: 'tw-justify-center',
   right: 'tw-justify-end',
 } as const;
+
+interface HeaderTone {
+  /** Band background, bottom rule, and the label colour that reads on it. */
+  cell: string;
+  /** Hover/focus colour for a sortable column's button. */
+  sortInteractive: string;
+  sortIcon: string;
+}
+
+export type DataTableHeaderTone = 'soft' | 'tint';
+
+// Header band presets. Every background here must be an OPAQUE colour rather than a translucent
+// alpha: a sticky header sits over the rows, and anything see-through lets them show through it as
+// they scroll under.
+const HEADER_TONES: Record<DataTableHeaderTone, HeaderTone> = {
+  // Brand at ~6% over the card background, baked flat.
+  soft: {
+    cell: [
+      'tw-border-brand/15 tw-bg-[#F2F6FE] tw-text-ink-muted',
+      'dark:tw-border-brand-light/25 dark:tw-bg-[#213451] dark:tw-text-ink-dark-muted',
+    ].join(' '),
+    sortInteractive: 'hover:tw-text-brand focus-visible:tw-text-brand dark:hover:tw-text-brand-light',
+    sortIcon: 'tw-text-brand',
+  },
+  // A soft blue band — visible against the white card, but pale enough that the rows underneath
+  // stay the focus. Labels are slate rather than blue so the band reads calm rather than loud.
+  tint: {
+    cell: [
+      'tw-border-brand/20 tw-bg-[#E8EFFC] tw-text-slate-600',
+      'dark:tw-border-brand-light/25 dark:tw-bg-[#27364F] dark:tw-text-slate-300',
+    ].join(' '),
+    sortInteractive: 'hover:tw-text-brand-dark focus-visible:tw-text-brand-dark dark:hover:tw-text-white',
+    sortIcon: 'tw-text-brand-dark dark:tw-text-slate-200',
+  },
+};
 
 function cellValue<T>(column: DataTableColumn<T>, row: T): string {
   if (column.exportValue) return column.exportValue(row);
@@ -155,6 +192,7 @@ export function DataTable<T>({
   fixedLayout = false,
   stickyHeader = false,
   maxHeight,
+  headerTone = 'soft',
   onRefresh,
   refreshing = false,
   rowAccentColor,
@@ -217,7 +255,8 @@ export function DataTable<T>({
     return `Showing ${first} to ${last} of ${meta.totalRecords} result${meta.totalRecords === 1 ? '' : 's'}`;
   })();
 
-  const cellPadding = dense ? 'tw-px-2 tw-py-2.5' : 'tw-px-3 tw-py-2.5';
+  const cellPadding = dense ? 'tw-px-2 tw-py-2.5' : 'tw-px-3 tw-py-3.5';
+  const headerStyle = HEADER_TONES[headerTone];
   const totalPages = Math.max(1, meta?.totalPages ?? 1);
 
   const content = (
@@ -225,11 +264,14 @@ export function DataTable<T>({
       {/* Top bar: how much of the result set is on screen, how much to show at a time, and the
           table-level tools. Page size sits with the range label it changes, rather than at the far
           end of the table where the user would have to scroll past every row to reach it. */}
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-hairline tw-px-3 tw-py-1.5 dark:tw-border-hairline-dark">
-        <span className="tw-text-xs tw-font-medium tw-text-ink-muted dark:tw-text-ink-dark-muted">{rangeLabel}</span>
-        <div className="tw-flex tw-items-center tw-gap-1">
+      <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-hairline tw-px-4 tw-py-2 dark:tw-border-hairline-dark">
+        <span className="tw-inline-flex tw-items-center tw-gap-2 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-ink-muted dark:tw-text-ink-dark-muted">
+          {rangeLabel && <span aria-hidden className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-brand/60" />}
+          {rangeLabel}
+        </span>
+        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
           {meta && (
-            <div className="tw-mr-1 tw-flex tw-items-center tw-gap-2">
+            <div className="tw-flex tw-items-center tw-gap-2">
               <span className="tw-text-xs tw-font-medium tw-text-ink-muted dark:tw-text-ink-dark-muted">
                 Rows per page:
               </span>
@@ -242,29 +284,31 @@ export function DataTable<T>({
               />
             </div>
           )}
-          {onRefresh && (
-            <IconButton title="Refresh" size="sm" onClick={onRefresh}>
-              <RefreshIcon
-                fontSize="small"
-                style={{ animation: refreshing ? 'data-table-spin 900ms linear infinite' : undefined }}
-              />
+          <div className="tw-flex tw-items-center tw-gap-0.5 tw-rounded-full tw-border tw-border-hairline tw-bg-surface-muted tw-p-0.5 dark:tw-border-hairline-dark dark:tw-bg-surface-dark-muted">
+            {onRefresh && (
+              <IconButton title="Refresh" size="sm" onClick={onRefresh}>
+                <RefreshIcon
+                  fontSize="small"
+                  style={{ animation: refreshing ? 'data-table-spin 900ms linear infinite' : undefined }}
+                />
+              </IconButton>
+            )}
+            {canExport && (
+              <IconButton title="Export CSV (current page)" size="sm" onClick={exportCsv}>
+                <FileDownloadIcon fontSize="small" />
+              </IconButton>
+            )}
+            <IconButton
+              title="Columns"
+              size="sm"
+              onClick={(event) => {
+                const trigger = event.currentTarget;
+                setColumnMenuAnchor((current) => (current ? null : trigger));
+              }}
+            >
+              <ViewColumnIcon fontSize="small" />
             </IconButton>
-          )}
-          {canExport && (
-            <IconButton title="Export CSV (current page)" size="sm" onClick={exportCsv}>
-              <FileDownloadIcon fontSize="small" />
-            </IconButton>
-          )}
-          <IconButton
-            title="Columns"
-            size="sm"
-            onClick={(event) => {
-              const trigger = event.currentTarget;
-              setColumnMenuAnchor((current) => (current ? null : trigger));
-            }}
-          >
-            <ViewColumnIcon fontSize="small" />
-          </IconButton>
+          </div>
           <Menu
             anchorEl={columnMenuAnchor}
             open={Boolean(columnMenuAnchor)}
@@ -318,12 +362,11 @@ export function DataTable<T>({
                     className={[
                       cellPadding,
                       ALIGN_TEXT[align],
-                      'tw-border-b tw-border-hairline dark:tw-border-hairline-dark',
-                      // Opaque tint, not white: it separates the header band from the rows, and a
-                      // sticky header must be opaque or the rows show through as they scroll under.
-                      'tw-bg-surface-muted dark:tw-bg-surface-dark-muted',
-                      'tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em]',
-                      'tw-text-ink-muted dark:tw-text-ink-dark-muted',
+                      // Band colour, its matching bottom rule, and the label colour that reads on
+                      // it — see HEADER_TONES.
+                      'tw-border-b',
+                      headerStyle.cell,
+                      'tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.05em]',
                       // Sticks to the scroll container above; the z-index keeps it over the rows.
                       stickyHeader ? 'tw-sticky tw-top-0 tw-z-10' : '',
                     ].join(' ')}
@@ -333,22 +376,25 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => toggleSort(column.key)}
                         className={[
-                          'tw-inline-flex tw-w-full tw-items-center tw-gap-1 tw-border-0 tw-bg-transparent tw-p-0',
-                          'tw-cursor-pointer tw-font-sans tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em]',
-                          'tw-text-inherit tw-transition-colors hover:tw-text-ink dark:hover:tw-text-ink-dark',
-                          'focus-visible:tw-outline-none focus-visible:tw-text-brand',
+                          'tw-group tw-inline-flex tw-w-full tw-items-center tw-gap-1 tw-border-0 tw-bg-transparent tw-p-0',
+                          'tw-cursor-pointer tw-font-sans tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.05em]',
+                          'tw-text-inherit tw-transition-colors focus-visible:tw-outline-none',
+                          headerStyle.sortInteractive,
                           ALIGN_FLEX[align],
                         ].join(' ')}
                       >
                         {column.header}
                         {active ? (
                           sort.direction === 'asc' ? (
-                            <ArrowUpwardIcon sx={{ fontSize: 14 }} className="tw-text-brand" />
+                            <ArrowUpwardIcon sx={{ fontSize: 14 }} className={headerStyle.sortIcon} />
                           ) : (
-                            <ArrowDownwardIcon sx={{ fontSize: 14 }} className="tw-text-brand" />
+                            <ArrowDownwardIcon sx={{ fontSize: 14 }} className={headerStyle.sortIcon} />
                           )
                         ) : (
-                          <UnfoldMoreIcon sx={{ fontSize: 14 }} className="tw-opacity-50" />
+                          <UnfoldMoreIcon
+                            sx={{ fontSize: 14 }}
+                            className="tw-opacity-0 tw-transition-opacity tw-duration-150 tw-group-hover:tw-opacity-60"
+                          />
                         )}
                       </button>
                     ) : (
@@ -469,7 +515,7 @@ export function DataTable<T>({
                     'tw-font-sans tw-text-sm tw-font-semibold tw-transition-colors tw-duration-150',
                     'focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-brand/40',
                     item === page
-                      ? 'tw-bg-brand tw-text-white'
+                      ? 'tw-bg-brand tw-text-white tw-shadow-sm'
                       : 'tw-bg-transparent tw-text-ink-muted hover:tw-bg-slate-100 dark:tw-text-ink-dark-muted dark:hover:tw-bg-slate-700',
                   ].join(' ')}
                 >

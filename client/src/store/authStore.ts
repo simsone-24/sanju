@@ -7,6 +7,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   setSession: (tokens: AuthTokens, user: AuthenticatedProfile) => void;
+  setUser: (user: AuthenticatedProfile) => void;
   setTokens: (tokens: AuthTokens) => void;
   clearSession: () => void;
 }
@@ -15,7 +16,7 @@ interface AuthState {
 // stored before that payload's shape changed (roles with per-module booleans -> user groups with
 // { module, actions[] }) is unreadable to the current code. Bump this whenever AuthenticatedProfile
 // changes shape; migrate() then drops the stale session and the user signs in again.
-const AUTH_STORE_VERSION = 1;
+const AUTH_STORE_VERSION = 2;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -25,6 +26,9 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       setSession: (tokens, user) =>
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, user }),
+      // Refreshes the profile in place, keeping the current tokens — used when data embedded in
+      // the profile (company branding) changes during a session.
+      setUser: (user) => set({ user }),
       setTokens: (tokens) => set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       clearSession: () => set({ user: null, accessToken: null, refreshToken: null }),
     }),

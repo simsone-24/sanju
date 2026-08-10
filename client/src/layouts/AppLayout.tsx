@@ -15,6 +15,8 @@ import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import MenuIcon from '@mui/icons-material/Menu';
+import { useMediaQuery } from '@mui/material';
 import {
   Avatar,
   Box,
@@ -33,10 +35,13 @@ import {
 } from '@mui/material';
 import { useColorScheme } from '@mui/material/styles';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { usePreservedScroll } from '../hooks/usePreservedScroll';
+import { useScrollToAnchor } from '../hooks/useScrollToAnchor';
 import { useAuth, useLogout } from '../hooks/useAuth';
 import { hasPermission, type ModuleName } from '../hooks/usePermission';
 import { useAuthStore } from '../store/authStore';
+import { getPublicAssetUrl } from '../utils/format';
 
 const DRAWER_WIDTH_EXPANDED = 260;
 const DRAWER_WIDTH_COLLAPSED = 72;
@@ -59,6 +64,45 @@ const SIDEBAR_DECORATIONS = [
   { top: '78%', left: '18%', size: 90, opacity: 0.04 },
 ];
 
+const BRAND_SUBTITLE = 'Management Portal';
+
+interface BrandMarkProps {
+  size: number;
+  logo: string | null | undefined;
+  companyName: string;
+}
+
+// The uploaded logo is an arbitrary image sitting on a dark navy surface, so it gets a light
+// tile and is contained rather than cropped. Companies with no logo yet keep the gradient mark.
+function BrandMark({ size, logo, companyName }: BrandMarkProps) {
+  return (
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        borderRadius: 2,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        background: logo ? '#FFFFFF' : 'linear-gradient(135deg, #14B8A6, #059669)',
+      }}
+    >
+      {logo ? (
+        <Box
+          component="img"
+          src={getPublicAssetUrl(logo)}
+          alt={`${companyName} logo`}
+          sx={{ width: '100%', height: '100%', objectFit: 'contain', p: 0.25 }}
+        />
+      ) : (
+        <BoltIcon sx={{ color: '#FFFFFF', fontSize: Math.round(size * 0.58) }} />
+      )}
+    </Box>
+  );
+}
+
 interface NavItem {
   label: string;
   path: string;
@@ -73,7 +117,10 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    items: [{ label: 'Dashboard', path: '/', icon: <DashboardIcon />, module: 'DASHBOARD' }],
+    items: [
+      { label: 'Dashboard', path: '/', icon: <DashboardIcon />, module: 'DASHBOARD' },
+      { label: 'Calendar', path: '/calendar', icon: <CalendarMonthIcon />, module: 'CALENDAR' },
+    ],
   },
   {
     title: 'OPERATIONS',
@@ -82,7 +129,6 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Quotations', path: '/quotations', icon: <RequestQuoteIcon />, module: 'QUOTATIONS' },
       { label: 'Orders', path: '/orders', icon: <Inventory2Icon />, module: 'ORDERS' },
       { label: 'Payment Tracker', path: '/payment-tracker', icon: <PaymentsIcon />, module: 'PAYMENTS' },
-      { label: 'Calendar', path: '/calendar', icon: <CalendarMonthIcon />, module: 'CALENDAR' },
     ],
   },
   {
@@ -107,8 +153,18 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(true);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { mode, systemMode, setMode } = useColorScheme();
+  const isMobile = useMediaQuery('(max-width: 900px)');
+
+  // This pane, not the window, is what scrolls — so keeping a position across navigation is its
+  // job rather than the router's.
+  const mainRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  usePreservedScroll(mainRef, contentRef);
+  // A link may instead name the section the incoming page should open on (state.scrollTo).
+  useScrollToAnchor(mainRef);
 
   const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
   const isDarkMode = (mode === 'system' ? systemMode : mode) === 'dark';
@@ -134,28 +190,72 @@ export default function AppLayout() {
   })).filter((section) => section.items.length > 0);
 
   const userInitial = user?.fullName?.trim().charAt(0).toUpperCase() ?? '?';
+  const companyName = user?.company?.companyName ?? '';
+  const companyLogo = user?.company?.logo;
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    if (isMobile) {
+      setMobileDrawerOpen(false);
+    }
+  };
 
   return (
     // The two class names are print hooks only (index.css @media print): the shell's 100vh flex
     // layout and the main pane's own scrollport both have to be neutralised so a printed page
     // starts at the paper's origin and is not clipped to one screen height.
-    <Box className="app-shell" sx={{ display: 'flex', height: '100vh' }}>
+    <Box className="app-shell" sx={{ display: 'flex', height: '100vh', flexDirection: isMobile ? 'column' : 'row' }}>
+      {/* Mobile Header */}
+      {isMobile && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            py: 1.5,
+            backgroundColor: SIDEBAR_BG,
+            borderBottom: `1px solid ${SIDEBAR_BORDER}`,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <BrandMark size={32} logo={companyLogo} companyName={companyName} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 700, color: SIDEBAR_TEXT, fontSize: '0.9rem' }} noWrap>
+                {companyName}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton
+            onClick={() => setMobileDrawerOpen(!mobileDrawerOpen)}
+            sx={{ color: SIDEBAR_TEXT }}
+          >
+            <MenuIcon />
+          </IconButton>
+        </Box>
+      )}
+
       <Drawer
-        variant="permanent"
+        variant={isMobile ? 'temporary' : 'permanent'}
+        open={isMobile ? mobileDrawerOpen : true}
+        onClose={() => setMobileDrawerOpen(false)}
         sx={{
-          width: drawerWidth,
+          width: isMobile ? DRAWER_WIDTH_EXPANDED : drawerWidth,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
-            width: drawerWidth,
+            width: isMobile ? DRAWER_WIDTH_EXPANDED : drawerWidth,
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
-            position: 'relative',
+            position: isMobile ? 'fixed' : 'relative',
             overflow: 'hidden',
             backgroundColor: SIDEBAR_BG,
             backgroundImage: 'radial-gradient(ellipse 600px 300px at top, rgba(59,130,246,0.15), transparent 70%)',
             borderRight: 'none',
             transition: 'width 0.3s ease',
+            top: isMobile ? 56 : 0,
+            height: isMobile ? 'calc(100vh - 56px)' : '100vh',
+            zIndex: isMobile ? 1000 : 'auto',
           },
         }}
       >
@@ -179,46 +279,66 @@ export default function AppLayout() {
         ))}
 
         {/* Header */}
-        <Box sx={{ position: 'relative', p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        {!isMobile && (
+          // Collapsed, the rail is only 72px wide — the mark and the toggle cannot sit side by
+          // side without the toggle being clipped, so they stack instead.
           <Box
             sx={{
-              width: 38,
-              height: 38,
-              flexShrink: 0,
-              borderRadius: 2,
+              position: 'relative',
+              px: collapsed ? 1 : 2,
+              py: 2,
               display: 'flex',
+              flexDirection: collapsed ? 'column' : 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              background: 'linear-gradient(135deg, #14B8A6, #059669)',
+              gap: 1.5,
             }}
           >
-            <BoltIcon sx={{ color: '#FFFFFF', fontSize: 22 }} />
+            <BrandMark size={38} logo={companyLogo} companyName={companyName} />
+            {!collapsed && (
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, color: SIDEBAR_TEXT, fontSize: '1rem', lineHeight: 1.2 }} noWrap>
+                  {companyName}
+                </Typography>
+                <Typography sx={{ color: SIDEBAR_TEXT_MUTED, fontSize: '0.7rem' }} noWrap>
+                  {BRAND_SUBTITLE}
+                </Typography>
+              </Box>
+            )}
+            <Tooltip title={collapsed ? 'Expand' : 'Collapse'}>
+              <IconButton
+                size="small"
+                onClick={() => setCollapsed(!collapsed)}
+                sx={{
+                  color: collapsed ? SIDEBAR_TEXT : SIDEBAR_TEXT_MUTED,
+                  flexShrink: 0,
+                  // On the collapsed rail the toggle stands alone, so it needs a visible
+                  // affordance of its own rather than reading as a stray glyph.
+                  backgroundColor: collapsed ? SIDEBAR_HOVER_BG : 'transparent',
+                  border: collapsed ? `1px solid ${SIDEBAR_BORDER}` : 'none',
+                  '&:hover': { backgroundColor: SIDEBAR_HOVER_BG, color: SIDEBAR_TEXT },
+                }}
+              >
+                {collapsed ? <ChevronRightIcon fontSize="small" /> : <CloseIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
           </Box>
-          {!collapsed && (
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 700, color: SIDEBAR_TEXT, fontSize: '1rem', lineHeight: 1.2 }} noWrap>
-                Event ERP
-              </Typography>
-              <Typography sx={{ color: SIDEBAR_TEXT_MUTED, fontSize: '0.7rem' }} noWrap>
-                Management Suite
-              </Typography>
-            </Box>
-          )}
-          <Tooltip title={collapsed ? 'Expand' : 'Collapse'}>
-            <IconButton
-              size="small"
-              onClick={() => setCollapsed(!collapsed)}
-              sx={{ color: SIDEBAR_TEXT_MUTED, flexShrink: 0, '&:hover': { backgroundColor: SIDEBAR_HOVER_BG } }}
-            >
-              {collapsed ? <ChevronRightIcon fontSize="small" /> : <CloseIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
+        )}
 
-        <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />
+        {!isMobile && <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />}
 
-        {/* Navigation */}
-        <Box sx={{ position: 'relative', flex: 1, overflowY: 'auto' }}>
+        {/* Navigation — scroll is functional (so long lists stay reachable) but the scrollbar
+            itself is hidden for a cleaner look. */}
+        <Box
+          sx={{
+            position: 'relative',
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
           {filteredSections.map((section, sectionIndex) => (
             <Box key={sectionIndex}>
               {section.title && !collapsed && (
@@ -245,7 +365,7 @@ export default function AppLayout() {
                     <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right">
                       <ListItemButton
                         selected={active}
-                        onClick={() => navigate(item.path)}
+                        onClick={() => handleNavigate(item.path)}
                         sx={{
                           justifyContent: collapsed ? 'center' : 'flex-start',
                           px: collapsed ? 1.5 : 2,
@@ -286,10 +406,11 @@ export default function AppLayout() {
           ))}
         </Box>
 
-        <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />
+        {!isMobile && <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />}
 
         {/* Footer — the signed-in account and its actions read as one grouped panel rather than
             loose rows, so they sit apart from the navigation above. */}
+        {!isMobile && (
         <Box sx={{ position: 'relative', p: 1.5 }}>
           <Box
             sx={{
@@ -410,16 +531,19 @@ export default function AppLayout() {
             </Collapse>
           </Box>
         </Box>
+        )}
       </Drawer>
 
       {/* Main Content */}
       <Box
         component="main"
+        ref={mainRef}
         className="app-main"
         sx={{
           flexGrow: 1,
           overflowY: 'auto',
           position: 'relative',
+          width: isMobile ? '100%' : 'auto',
         }}
       >
         {/* Faint decorative background pattern, purely atmospheric */}
@@ -427,7 +551,7 @@ export default function AppLayout() {
           sx={{
             position: 'fixed',
             inset: 0,
-            left: `${drawerWidth}px`,
+            left: isMobile ? '0' : `${drawerWidth}px`,
             pointerEvents: 'none',
             overflow: 'hidden',
             zIndex: 0,
@@ -459,7 +583,7 @@ export default function AppLayout() {
           ))}
         </Box>
 
-        <Box sx={{ position: 'relative', zIndex: 1, p: 3 }}>
+        <Box ref={contentRef} sx={{ position: 'relative', zIndex: 1, p: 3 }}>
           <Outlet />
         </Box>
       </Box>

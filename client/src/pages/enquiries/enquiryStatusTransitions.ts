@@ -1,17 +1,9 @@
 import type { EnquiryStatus } from '../../types/enquiry';
 
-// enquiry.md: "'Create Quotation' should only be displayed if a quotation has not yet been
-// created (or according to the business rules)." Mirrors the server guard in
-// quotations/service.ts create(): a quotation cannot be raised once the enquiry is ORDER_CONFIRMED
-// (won) or ORDER_LOST (lost). Every earlier stage still allows a new quotation revision.
-const QUOTATION_BLOCKED_STATUSES: ReadonlySet<EnquiryStatus> = new Set<EnquiryStatus>([
-  'ORDER_CONFIRMED',
-  'ORDER_LOST',
-]);
-
-export function canCreateQuotationForEnquiry(status: EnquiryStatus): boolean {
-  return !QUOTATION_BLOCKED_STATUSES.has(status);
-}
+// A quotation can be raised against an enquiry at any stage — "md files/Enquiry/enq.md" §2/§7:
+// unlimited quotations, and no rule may block creating one after the enquiry has been confirmed or
+// lost. The former status gate here was removed along with its server counterpart in
+// quotations/service.ts resolveSource(); creation is now governed by the QUOTATIONS permission alone.
 
 // The documented Enquiry → Appointment → Quotation → Order path (CLAUDE.md §Business Workflow),
 // as the ordered stages the Enquiry Details progress tracker walks through. ORDER_LOST is

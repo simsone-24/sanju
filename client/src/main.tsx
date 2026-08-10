@@ -1,7 +1,7 @@
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/inter/700.css';
+import '@fontsource/plus-jakarta-sans/400.css';
+import '@fontsource/plus-jakarta-sans/500.css';
+import '@fontsource/plus-jakarta-sans/600.css';
+import '@fontsource/plus-jakarta-sans/700.css';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import InitColorSchemeScript from '@mui/material/InitColorSchemeScript';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -28,6 +28,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, refetchOnWindowFocus: false },
   },
+});
+
+// Browser back/forward can restore a page from bfcache instead of truly remounting it — React
+// Query's cache comes back exactly as it was frozen, so a status changed since (by this user
+// elsewhere, or simply time passing) silently keeps showing until a hard refresh. `pageshow` with
+// `persisted: true` only fires on a bfcache restore, so this doesn't add refetches to normal loads.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) void queryClient.invalidateQueries();
 });
 
 createRoot(document.getElementById('root')!).render(

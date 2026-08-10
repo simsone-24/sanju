@@ -64,6 +64,8 @@ export interface QuotationListItem {
   status: QuotationStatus;
   pdfPath: string | null;
   createdAt: string;
+  /** Last edit or status change — the "Last Updated" column on the enquiry's quotation table. */
+  updatedAt: string;
   recipient: QuotationRecipient;
   event: QuotationEvent | null;
   owner: QuotationOwner | null;
@@ -131,8 +133,13 @@ export interface ManualCustomerInput {
   gst?: string;
 }
 
+/** Statuses a quotation can be saved in from the form. REVISED is machine-set when a newer revision
+ *  supersedes a quotation, so it is never a state a document can be created in. */
+export type CreatableQuotationStatus = Exclude<QuotationStatus, 'REVISED'>;
+
 export interface CreateQuotationInput {
   source: QuotationSource;
+  status?: CreatableQuotationStatus;
   enquiryId?: string;
   customerId?: string;
   orderId?: string;
@@ -146,6 +153,7 @@ export interface CreateQuotationInput {
 }
 
 export interface UpdateQuotationInput {
+  status?: QuotationStatus;
   quotationDate?: string;
   discount?: number;
   cgstPercent?: number;

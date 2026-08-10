@@ -10,6 +10,20 @@ export function formatDate(value: string | null | undefined): string {
   return new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Date plus clock time ("05 Aug 2026, 10:15 AM") — for audit fields where the time of day is part
+// of the record, such as Order Details' Created On and Last Updated.
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 // How near an event is, for list rows that are scanned by date ("Today", "In 4 days", "12d ago").
 // `urgent` marks the ones worth calling out in colour — today, tomorrow, or inside the week.
 export function eventProximity(value: string): { text: string; urgent: boolean } {

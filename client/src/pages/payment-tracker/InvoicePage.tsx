@@ -1,11 +1,26 @@
+import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import * as invoiceService from '../../services/invoiceService';
+import { useToast } from '../../store/ToastContext';
 import type { Invoice } from '../../types/invoice';
-import { formatDate, getPublicAssetUrl } from '../../utils/format';
+import { formatCurrency, formatDate, getPublicAssetUrl } from '../../utils/format';
+
+// wa.me link with the message pre-composed — mirrors quotationActions.ts's buildQuotationWhatsAppLink.
+// The invoice has no separate WhatsApp number of its own, so the customer's mobile is used directly.
+function buildInvoiceWhatsAppLink(invoice: Invoice): string | null {
+  const number = invoice.customer.mobile.replace(/\D/g, '');
+  if (!number) return null;
+  const message =
+    `Hello ${invoice.customer.customerName}, thank you for contacting us. Please find your invoice ` +
+    `${invoice.invoiceNumber} for order ${invoice.order.orderNumber}. Balance due: ${formatCurrency(invoice.balanceDue)}. Regards.`;
+  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+}
 
 // Plain thousands-separated numbers inside the money table — the currency symbol is stated once in
 // the column header, so repeating it on every row only adds noise to a printed document.
@@ -145,14 +160,18 @@ function InvoiceSheet({ invoice }: { invoice: Invoice }) {
                 {order.orderNumber}
               </Box>
             </Typography>
-            <Typography variant="body2">
-              <Box component="span" sx={{ color: 'text.secondary' }}>
-                Quotation:{' '}
-              </Box>
-              <Box component="span" sx={{ fontWeight: 600 }}>
-                {invoice.quotationNumber}
-              </Box>
-            </Typography>
+            {/* Omitted rather than left blank when the order was confirmed without a quotation —
+                matches how the printed PDF drops the row (invoices/pdf.ts). */}
+            {invoice.quotationNumber && (
+              <Typography variant="body2">
+                <Box component="span" sx={{ color: 'text.secondary' }}>
+                  Quotation:{' '}
+                </Box>
+                <Box component="span" sx={{ fontWeight: 600 }}>
+                  {invoice.quotationNumber}
+                </Box>
+              </Typography>
+            )}
             {order.eventName && (
               <Typography variant="body2">
                 <Box component="span" sx={{ color: 'text.secondary' }}>
@@ -163,14 +182,16 @@ function InvoiceSheet({ invoice }: { invoice: Invoice }) {
                 </Box>
               </Typography>
             )}
-            <Typography variant="body2">
-              <Box component="span" sx={{ color: 'text.secondary' }}>
-                Event Date:{' '}
-              </Box>
-              <Box component="span" sx={{ fontWeight: 600 }}>
-                {formatDate(order.eventDate)}
-              </Box>
-            </Typography>
+            {order.eventDate && (
+              <Typography variant="body2">
+                <Box component="span" sx={{ color: 'text.secondary' }}>
+                  Event Date:{' '}
+                </Box>
+                <Box component="span" sx={{ fontWeight: 600 }}>
+                  {formatDate(order.eventDate)}
+                </Box>
+              </Typography>
+            )}
             {order.venue && (
               <Typography variant="body2">
                 <Box component="span" sx={{ color: 'text.secondary' }}>
@@ -401,12 +422,36 @@ function InvoiceSheet({ invoice }: { invoice: Invoice }) {
 
 export default function InvoicePage() {
   const { id } = useParams<{ id: string }>();
+  const { showToast } = useToast();
+  const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['invoice', id],
     queryFn: () => invoiceService.getForOrder(id!),
     enabled: Boolean(id),
   });
+
+  async function handleDownload() {
+    if (!id || !data) return;
+    setDownloading(true);
+    try {
+      await invoiceService.downloadPdf(id, `${data.invoiceNumber}.pdf`);
+    } catch {
+      showToast('Unable to download the invoice PDF.', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function handleWhatsApp() {
+    if (!data) return;
+    const link = buildInvoiceWhatsAppLink(data);
+    if (!link) {
+      showToast('No WhatsApp number is available for this customer.', 'error');
+      return;
+    }
+    window.open(link, '_blank', 'noopener');
+  }
 
   if (isLoading) {
     return (
@@ -449,9 +494,22 @@ export default function InvoicePage() {
           ]}
           actions={
             // Back lives in the breadcrumb trail now, and its parent crumb is this same order.
-            <Button variant="contained" startIcon={<PrintIcon />} onClick={() => window.print()}>
-              Print
-            </Button>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+              <Button variant="outlined" startIcon={<WhatsAppIcon />} onClick={handleWhatsApp}>
+                WhatsApp
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={() => void handleDownload()}
+                disabled={downloading}
+              >
+                {downloading ? 'Downloading…' : 'Download'}
+              </Button>
+              <Button variant="contained" startIcon={<PrintIcon />} onClick={() => window.print()}>
+                Print
+              </Button>
+            </Stack>
           }
         />
       </Box>

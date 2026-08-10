@@ -24,10 +24,15 @@ export const createEnquirySchema = z.object({
   customer: customerInputSchema,
   eventTypeId: z.string().uuid('A valid event type is required.'),
   eventName: z.string().min(1).optional(),
-  eventDate: z.coerce.date().optional(),
+  eventDate: z.coerce.date({ required_error: 'Event date is required.' }),
   mahal: z.string().min(1).optional(),
   venue: z.string().min(1).optional(),
   estimatedBudget: z.coerce.number().min(0).optional(),
+  // Settable at creation, not edit-only: the form shows the Final Budget section on a new enquiry
+  // too, and an enquiry logged straight into Order Confirmed converts immediately — these are the
+  // figures the resulting order's budget and opening advance are built from (orders/service.ts).
+  finalBudgetAmount: z.coerce.number().min(0).optional(),
+  advanceAmount: z.coerce.number().min(0).optional(),
   notes: z.string().min(1).optional(),
   appointmentDate: z.coerce.date().optional(),
   appointmentTime: z.string().min(1).optional(),
@@ -35,6 +40,8 @@ export const createEnquirySchema = z.object({
   appointmentNotes: z.string().min(1).optional(),
   appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
   assignedUserId: z.string().uuid().optional(),
+  // When the customer should next be contacted — the optional Follow-up step of the workflow.
+  followUpDate: z.coerce.date().optional(),
   status: z.nativeEnum(EnquiryStatus).optional(),
 });
 
@@ -47,6 +54,7 @@ export const updateEnquirySchema = z
     venue: z.string().min(1).optional(),
     estimatedBudget: z.coerce.number().min(0).optional(),
     finalBudgetAmount: z.coerce.number().min(0).optional(),
+    advanceAmount: z.coerce.number().min(0).optional(),
     notes: z.string().min(1).optional(),
     appointmentDate: z.coerce.date().optional(),
     appointmentTime: z.string().min(1).optional(),
@@ -54,6 +62,9 @@ export const updateEnquirySchema = z
     appointmentNotes: z.string().min(1).optional(),
     appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
     assignedUserId: z.string().uuid().optional(),
+    // Nullable, unlike on create: clearing the date is how a user says the follow-up is no longer
+    // owed, and an omitted field means "leave as it is".
+    followUpDate: z.coerce.date().nullable().optional(),
     // Prospect (unconfirmed customer) fields — ignored server-side once a Customer is linked.
     customerName: z.string().min(1).optional(),
     mobile: mobileSchema.optional(),
@@ -75,12 +86,22 @@ export const createFollowUpSchema = z.object({
   outcome: z.string().min(1).optional(),
 });
 
+// Dashboard cards are single-select — the client only ever sends one value — but the param stays
+// a (single-item) comma-separated list so the where-clause builder in repository.ts doesn't need
+// two code paths.
+const enquiryStatusGroupSchema = z.enum(['ACTIVE', 'CONFIRMED', 'PENDING', 'APPOINTMENT_PENDING']);
+
 export const listEnquiriesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
   status: z.nativeEnum(EnquiryStatus).optional(),
   appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
+  statusGroup: z
+    .string()
+    .transform((value) => value.split(',').filter(Boolean))
+    .pipe(z.array(enquiryStatusGroupSchema))
+    .optional(),
   eventTypeId: z.string().uuid().optional(),
   assignedUserId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),

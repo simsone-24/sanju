@@ -254,7 +254,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
 
           <Stack direction="row" spacing={1.5}>
             <OverviewTile label="Tasks" value={allTasks.length} tone="#2563EB" />
-            <OverviewTile label="Completed" value={completedCount} tone="#22C55E" />
+            <OverviewTile label="Completed" value={completedCount} tone="#10B981" />
             <OverviewTile label="Pending" value={pendingCount} tone="#F59E0B" />
           </Stack>
 

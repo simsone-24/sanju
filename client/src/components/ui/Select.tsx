@@ -13,7 +13,7 @@ type SelectSize = 'sm' | 'md';
 
 const SIZE: Record<SelectSize, string> = {
   sm: 'tw-h-7 tw-pl-2 tw-pr-7 tw-text-xs',
-  md: 'tw-h-9 tw-pl-3 tw-pr-9 tw-text-[0.8125rem]',
+  md: 'tw-h-10 tw-pl-3 tw-pr-9 tw-text-[0.8125rem]',
 };
 
 interface SelectFieldProps {
@@ -64,7 +64,8 @@ export function SelectField({
             'tw-w-full tw-appearance-none tw-rounded-control tw-font-sans tw-font-medium',
             'tw-border tw-border-hairline dark:tw-border-hairline-dark',
             'tw-bg-white dark:tw-bg-surface-dark',
-            'tw-text-ink dark:tw-text-ink-dark',
+            // Matches SearchBar — filter controls sit a step back from the table data in slate.
+            'tw-text-slate-600 dark:tw-text-ink-dark',
             'tw-transition-colors tw-duration-150',
             'hover:tw-border-slate-300 dark:hover:tw-border-slate-500',
             'focus:tw-border-brand focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-brand/20',

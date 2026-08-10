@@ -124,29 +124,37 @@ export default function UsersTab() {
   });
 
   const columns: DataTableColumn<UserListItem>[] = [
-    { key: 'fullName', header: 'Full Name', sortable: true },
-    { key: 'username', header: 'Username', sortable: true },
+    { key: 'fullName', header: 'Full Name', sortable: true, align: 'center' },
+    { key: 'username', header: 'Username', sortable: true, align: 'center' },
     {
       key: 'userGroup',
       header: 'User Group',
+      align: 'center',
       render: (row) => row.userGroup.groupName,
       exportValue: (row) => row.userGroup.groupName,
     },
-    { key: 'mobile', header: 'Mobile Number', render: (row) => row.mobile || '—' },
-    { key: 'email', header: 'Email', render: (row) => row.email ?? '—', exportValue: (row) => row.email ?? '' },
-    { key: 'city', header: 'City', render: (row) => row.city ?? '—', exportValue: (row) => row.city ?? '' },
+    { key: 'mobile', header: 'Mobile Number', align: 'center', render: (row) => row.mobile || '—' },
+    {
+      key: 'email',
+      header: 'Email',
+      align: 'center',
+      render: (row) => row.email ?? '—',
+      exportValue: (row) => row.email ?? '',
+    },
+    { key: 'city', header: 'City', align: 'center', render: (row) => row.city ?? '—', exportValue: (row) => row.city ?? '' },
     {
       key: 'isActive',
       header: 'Status',
+      align: 'center',
       render: (row) => <StatusBadge type="active" status={row.isActive ? 'ACTIVE' : 'INACTIVE'} size="sm" />,
       exportValue: (row) => (row.isActive ? 'ACTIVE' : 'INACTIVE'),
     },
     {
       key: 'actions',
       header: 'Actions',
-      align: 'right',
+      align: 'center',
       render: (row) => (
-        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
           <Tooltip title="View">
             <IconButton
               size="small"

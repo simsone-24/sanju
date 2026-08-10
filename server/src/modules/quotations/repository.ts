@@ -40,6 +40,9 @@ const quotationBaseSelect = {
   status: true,
   pdfPath: true,
   createdAt: true,
+  // Drives the "Last Updated" column the enquiry's quotation table requires
+  // ("md files/Enquiry/enq.md" §9).
+  updatedAt: true,
   manualCustomerName: true,
   manualPhone: true,
   manualWhatsapp: true,
@@ -70,7 +73,6 @@ const quotationBaseSelect = {
 const quotationDetailSelect = {
   ...quotationBaseSelect,
   remarks: true,
-  updatedAt: true,
   items: {
     orderBy: { sortOrder: 'asc' },
     select: {
@@ -338,7 +340,27 @@ export function findApprovedQuotationForEnquiry(
 ) {
   return client.quotation.findFirst({
     where: { enquiryId, deletedAt: null, status: QuotationStatus.APPROVED, companyId },
+    orderBy: { version: 'desc' },
   });
+}
+
+/**
+ * Combined total of every approved quotation on an enquiry.
+ *
+ * "md files/Enquiry/enq.md" §2 removes the one-approval-per-enquiry limit, so the enquiry's
+ * committed figure is the sum of what has been confirmed rather than a single quotation's total.
+ * Returns 0 when nothing is approved.
+ */
+export async function sumApprovedQuotationTotalForEnquiry(
+  companyId: string,
+  enquiryId: string,
+  client: PrismaClientOrTx = prisma,
+): Promise<number> {
+  const aggregate = await client.quotation.aggregate({
+    where: { enquiryId, deletedAt: null, status: QuotationStatus.APPROVED, companyId },
+    _sum: { totalAmount: true },
+  });
+  return Number(aggregate._sum.totalAmount ?? 0);
 }
 
 interface QuotationItemWithAmount extends QuotationItemInput {

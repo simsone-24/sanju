@@ -133,8 +133,9 @@ export default function EventTypesTab() {
       key: 'eventName',
       header: 'Event Name',
       sortable: true,
+      align: 'center',
       render: (row) => (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
           {row.colorCode && (
             <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: row.colorCode, flexShrink: 0 }} />
           )}
@@ -143,19 +144,20 @@ export default function EventTypesTab() {
       ),
       exportValue: (row) => row.eventName,
     },
-    { key: 'displayOrder', header: 'Display Order', align: 'right', exportValue: (row) => String(row.displayOrder) },
+    { key: 'displayOrder', header: 'Display Order', align: 'center', exportValue: (row) => String(row.displayOrder) },
     {
       key: 'status',
       header: 'Status',
+      align: 'center',
       render: (row) => <StatusBadge type="active" status={row.status} size="sm" />,
       exportValue: (row) => row.status,
     },
     {
       key: 'actions',
       header: 'Actions',
-      align: 'right',
+      align: 'center',
       render: (row) => (
-        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
           {canEdit && (
             <Tooltip title="Edit">
               <IconButton size="small" onClick={() => setEditingItem(row)}>

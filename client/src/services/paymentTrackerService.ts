@@ -19,8 +19,11 @@ export async function list(params: ListPaymentTrackerParams): Promise<ListPaymen
   return { records: response.data.data, meta: response.data.meta! };
 }
 
-export async function getStats(): Promise<PaymentTrackerStats> {
-  const response = await apiClient.get<ApiSuccessResponse<PaymentTrackerStats>>('/payment-tracker/stats');
+// Excludes page/limit — the cards narrow along with every other active filter.
+export type PaymentTrackerStatsParams = Omit<ListPaymentTrackerParams, 'page' | 'limit'>;
+
+export async function getStats(params: PaymentTrackerStatsParams): Promise<PaymentTrackerStats> {
+  const response = await apiClient.get<ApiSuccessResponse<PaymentTrackerStats>>('/payment-tracker/stats', { params });
   return response.data.data;
 }
 

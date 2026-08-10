@@ -8,6 +8,7 @@ const calendarSelect = {
   venue: true,
   status: true,
   customer: { select: { customerName: true } },
+  enquiry: { select: { eventName: true, eventType: { select: { eventName: true } } } },
 } satisfies Prisma.OrderSelect;
 
 // "Only active orders are displayed" (02_BUSINESS_WORKFLOW.md §13) is read here as "not

@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentType, Prisma, SequenceType } from '@prisma/client';
+import { PaymentType, Prisma, SequenceType } from '@prisma/client';
 import * as ordersRepository from '../orders/repository';
 import * as paymentsService from '../payments/service';
 import { prisma } from '../../config/prisma';
@@ -7,18 +7,15 @@ import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as paymentTrackerRepository from './repository';
-import { ListPaymentTrackerParams, UpdatePaymentTrackerInput } from './types';
-
-// Editing the money on an order that is finished or abandoned would rewrite settled history.
-const BUDGET_LOCKED_STATUSES: OrderStatus[] = [OrderStatus.CLOSED, OrderStatus.CANCELLED];
+import { ListPaymentTrackerParams, PaymentTrackerStatsParams, UpdatePaymentTrackerInput } from './types';
 
 export async function list(params: ListPaymentTrackerParams) {
   const { records, totalRecords } = await paymentTrackerRepository.listPaymentTrackers(params);
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export function stats(companyId: string) {
-  return paymentTrackerRepository.getPaymentTrackerStats(companyId);
+export function stats(params: PaymentTrackerStatsParams) {
+  return paymentTrackerRepository.getPaymentTrackerStats(params);
 }
 
 // §Financial Summary lists Advance Amount beside the running total, so it is summed from the
@@ -75,9 +72,6 @@ export async function update(
 
   // ---- validation, all of it, before anything is written ----
   if (budgetChanged) {
-    if (BUDGET_LOCKED_STATUSES.includes(order.status)) {
-      throw new AppError(400, `Cannot change the budget of an order with status ${order.status}.`);
-    }
     if (nextBudget < collectedSoFar) {
       throw new AppError(400, `The budget cannot be less than the ${collectedSoFar} already collected.`, [
         { field: 'budgetAmount', message: `Budget must be at least ${collectedSoFar}.` },

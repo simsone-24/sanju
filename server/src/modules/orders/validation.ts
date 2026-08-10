@@ -22,8 +22,8 @@ export const changeOrderStatusSchema = z
     cancellationReason: z.string().min(1).optional(),
     remarks: z.string().min(1).optional(),
   })
-  .refine((data) => data.status !== OrderStatus.CANCELLED || !!data.cancellationReason, {
-    message: 'Cancellation reason is required when cancelling an order.',
+  .refine((data) => data.status !== OrderStatus.REJECTED || !!data.cancellationReason, {
+    message: 'A reason is required when rejecting an order.',
     path: ['cancellationReason'],
   });
 
@@ -32,7 +32,6 @@ export const listOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
   status: z.nativeEnum(OrderStatus).optional(),
-  statusGroup: z.enum(['PLANNING', 'WORK_STARTED', 'COMPLETED', 'CANCELLED']).optional(),
   customerId: z.string().uuid().optional(),
   eventDateFrom: z.coerce.date().optional(),
   eventDateTo: z.coerce.date().optional(),

@@ -41,10 +41,10 @@ body {
   --status-default: #6b7280;
   --status-primary: #2563eb;
   --status-secondary: #6b7280;
-  --status-success: #22c55e;
+  --status-success: #10b981;
   --status-error: #ef4444;
   --status-warning: #f59e0b;
-  --status-info: #06b6d4;
+  --status-info: #64748b;
 }
 
 .dark {
@@ -54,7 +54,7 @@ body {
   --status-success: #34d399;
   --status-error: #f87171;
   --status-warning: #fbbf24;
-  --status-info: #22d3ee;
+  --status-info: #94a3b8;
 }
 
 /* Success Flow (md files/UI-2.md): briefly flash the row for a newly created/updated record. */

@@ -1,4 +1,4 @@
-import { OrderStatus, Prisma, SequenceType } from '@prisma/client';
+import { Prisma, SequenceType } from '@prisma/client';
 import * as ordersRepository from '../orders/repository';
 import * as paymentTrackerRepository from '../payment-tracker/repository';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
@@ -15,7 +15,6 @@ import { CreatePaymentInput } from './types';
 export interface PayableOrder {
   id: string;
   orderNumber: string;
-  status: OrderStatus;
   totalAmount: Prisma.Decimal | number;
   paidAmount: Prisma.Decimal | number;
   pendingAmount: Prisma.Decimal | number;
@@ -39,10 +38,6 @@ export async function getById(companyId: string, id: string) {
  * the same request) can validate up front and never leave a half-applied edit behind.
  */
 export function assertPaymentAllowed(order: PayableOrder, amount: number): void {
-  if (order.status === OrderStatus.CLOSED || order.status === OrderStatus.CANCELLED) {
-    throw new AppError(400, `Cannot record a payment for an order with status ${order.status}.`);
-  }
-
   const currentPending = Number(order.pendingAmount);
   // 02_BUSINESS_WORKFLOW.md §13 — "Payment cannot exceed total order amount."
   if (amount > currentPending) {

@@ -1,3 +1,7 @@
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { Box, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { AppTabs } from '../../components/AppTabs';
@@ -46,14 +50,19 @@ export default function ReportsPage() {
 
       {canView ? (
         <AppTabs
+          surface
           idPrefix="reports"
           activeIndex={activeIndex}
           onActiveIndexChange={handleTabChange}
           tabs={[
-            { label: 'Revenue', content: <RevenueReportTab /> },
-            { label: 'Outstanding', content: <OutstandingReportTab /> },
-            { label: 'Customers', content: <CustomerReportTab /> },
-            { label: 'Events', content: <EventReportTab /> },
+            { label: 'Revenue', icon: <TrendingUpIcon fontSize="small" />, content: <RevenueReportTab /> },
+            {
+              label: 'Outstanding',
+              icon: <AccountBalanceWalletIcon fontSize="small" />,
+              content: <OutstandingReportTab />,
+            },
+            { label: 'Customers', icon: <PeopleAltOutlinedIcon fontSize="small" />, content: <CustomerReportTab /> },
+            { label: 'Events', icon: <EventNoteIcon fontSize="small" />, content: <EventReportTab /> },
           ]}
         />
       ) : (

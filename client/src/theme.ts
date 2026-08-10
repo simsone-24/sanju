@@ -23,10 +23,10 @@ export const theme = createTheme({
         },
         primary: { main: '#2563EB', dark: '#1D4ED8' },
         secondary: { main: '#6B7280' },
-        success: { main: '#22C55E' },
+        success: { main: '#10B981' },
         warning: { main: '#F59E0B' },
         error: { main: '#EF4444' },
-        info: { main: '#06B6D4' },
+        info: { main: '#64748B' },
         text: {
           primary: '#111827',
           secondary: '#6B7280',
@@ -45,7 +45,7 @@ export const theme = createTheme({
         success: { main: '#34D399' },
         warning: { main: '#FBBF24' },
         error: { main: '#F87171' },
-        info: { main: '#22D3EE' },
+        info: { main: '#94A3B8' },
         text: {
           primary: '#F1F5F9',
           secondary: '#94A3B8',
@@ -55,7 +55,7 @@ export const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: 'Inter, system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', Inter, system-ui, sans-serif",
     h1: { fontSize: 32, fontWeight: 700, lineHeight: 1.5 },
     h2: { fontSize: 28, fontWeight: 700, lineHeight: 1.5 },
     h3: { fontSize: 24, fontWeight: 600, lineHeight: 1.5 },
@@ -107,6 +107,7 @@ export const theme = createTheme({
         paper: ({ theme }) => ({
           backgroundColor: theme.vars.palette.background.paper,
           borderRight: `1px solid ${theme.vars.palette.divider}`,
+          borderRadius: 0,
         }),
       },
     },

@@ -25,6 +25,7 @@ import { Button } from '../../components/ui/Button';
 import { CARD_SURFACE } from '../../components/ui/Card';
 import { IconButton } from '../../components/ui/IconButton';
 import { Menu, MenuItem } from '../../components/ui/Menu';
+import { SCROLL_ANCHORS } from '../../constants/scrollAnchors';
 import { usePermission } from '../../hooks/usePermission';
 import * as enquiryService from '../../services/enquiryService';
 import * as quotationService from '../../services/quotationService';
@@ -140,7 +141,7 @@ export default function QuotationDetailPage() {
         navigate(`/orders/${refreshed.convertedOrder.id}`);
       } else {
         showToast(
-          'The enquiry is confirmed, but no order could be created yet — check that the enquiry has an event date.',
+          'The enquiry is confirmed, but the order could not be created automatically. Try again, or open the enquiry and confirm it has a linked customer.',
           'error',
         );
       }
@@ -232,13 +233,11 @@ export default function QuotationDetailPage() {
   }
 
   const enquiry = quotation.link.enquiry;
-  // The server refuses a new revision once one of the enquiry's quotations is approved — it wants
-  // that one converted to an order instead — so the action is hidden rather than left to fail.
-  const hasApprovedRevision =
-    quotation.status === 'APPROVED' || quotation.revisions.some((revision) => revision.status === 'APPROVED');
-  const showCreateRevision = Boolean(enquiry) && canCreate && !hasApprovedRevision;
-  const showApprove =
-    Boolean(enquiry) && canApprove && !hasApprovedRevision && quotation.status !== 'REJECTED' && quotation.status !== 'REVISED';
+  // No approval-based gating on either action — "md files/Enquiry/enq.md" §2: unlimited revisions,
+  // and no restriction on confirming any quotation. An already-confirmed quotation is the one
+  // exception, since confirming it twice would double-count it in the enquiry's committed total.
+  const showCreateRevision = Boolean(enquiry) && canCreate;
+  const showApprove = Boolean(enquiry) && canApprove && quotation.status !== 'APPROVED';
   const showConvert =
     Boolean(enquiry) &&
     canChangeEnquiryStatus &&
@@ -275,7 +274,7 @@ export default function QuotationDetailPage() {
           startIcon={<CheckCircleIcon fontSize="small" />}
           onClick={() => setPendingAction('approve')}
         >
-          Approve
+          Confirm Quotation
         </Button>
       );
     }
@@ -448,91 +447,13 @@ export default function QuotationDetailPage() {
         </Panel>
       </div>
 
-      {/* The quotation itself: what was quoted, and what it comes to. */}
-      <div className={`${CARD_SURFACE} tw-overflow-hidden`}>
-        <div className="tw-border-b tw-border-hairline tw-px-4 tw-py-3 dark:tw-border-hairline-dark">
-          <h2 className="tw-m-0 tw-text-sm tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-            Quotation
-          </h2>
-        </div>
-
-        <PlainTable
-          rows={quotation.items}
-          getRowId={(item) => item.id}
-          emptyMessage="This quotation has no line items."
-          columns={[
-            {
-              key: 'item',
-              header: 'Item',
-              width: 'auto',
-              render: (item) => item.itemName,
-            },
-            {
-              key: 'qty',
-              header: 'Qty',
-              align: 'right',
-              width: '15%',
-              numeric: true,
-              render: (item) => `${Number(item.quantity).toLocaleString('en-IN')}${item.unit ? ` ${item.unit}` : ''}`,
-            },
-            {
-              key: 'rate',
-              header: 'Rate',
-              align: 'right',
-              width: '20%',
-              numeric: true,
-              muted: true,
-              render: (item) => formatCurrency(item.rate),
-            },
-            {
-              key: 'amount',
-              header: 'Amount',
-              align: 'right',
-              width: '20%',
-              numeric: true,
-              strong: true,
-              render: (item) => formatCurrency(item.amount),
-            },
-          ]}
-        />
-
-        {/* Totals sit right-aligned under the items, the way they read on the printed document. */}
-        <div className="tw-flex tw-justify-end tw-px-4 tw-py-4">
-          <dl className="tw-m-0 tw-w-full tw-max-w-[280px]">
-            <AmountRow label="Subtotal" value={formatCurrency(subtotal)} />
-            {discount > 0 && <AmountRow label="Discount" value={`- ${formatCurrency(discount)}`} />}
-            {cgstPercent > 0 && <AmountRow label={`CGST (${cgstPercent}%)`} value={formatCurrency(cgstAmount)} />}
-            {sgstPercent > 0 && <AmountRow label={`SGST (${sgstPercent}%)`} value={formatCurrency(sgstAmount)} />}
-            {cgstPercent === 0 && sgstPercent === 0 && <AmountRow label="Tax" value={formatCurrency(tax)} />}
-            <div className="tw-mt-2 tw-flex tw-items-baseline tw-justify-between tw-gap-2 tw-border-t tw-border-hairline tw-pt-2 dark:tw-border-hairline-dark">
-              <dt className="tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                Grand Total
-              </dt>
-              <dd className="tw-m-0 tw-text-2xl tw-font-bold tw-tabular-nums tw-text-ink dark:tw-text-ink-dark">
-                {formatCurrency(quotation.totalAmount)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        {/* Notes only appear when there are any — an empty "no notes" block is noise. */}
-        {quotation.remarks && (
-          <div className="tw-border-t tw-border-hairline tw-px-4 tw-py-3 dark:tw-border-hairline-dark">
-            <h3 className="tw-m-0 tw-mb-1 tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              Notes
-            </h3>
-            <p className="tw-m-0 tw-whitespace-pre-line tw-text-sm tw-text-ink dark:tw-text-ink-dark">
-              {quotation.remarks}
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Every version raised against this enquiry, on the page rather than behind a drawer: a row
           opens that version, and the pencil edits it while its status still allows it. Standalone
-          Customer/Manual quotations are never versioned, so they have no list to show. */}
+          Customer/Manual quotations are never versioned, so they have no list to show. Shown
+          before the quotation's own line items so the reader sees which version this is among
+          before reading what it says. */}
       {quotation.revisions.length > 0 && (
-        <div className={`${CARD_SURFACE} tw-mt-4 tw-overflow-hidden`}>
+        <div className={`${CARD_SURFACE} tw-mb-4 tw-overflow-hidden`}>
           <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-hairline tw-px-4 tw-py-3 dark:tw-border-hairline-dark">
             <h2 className="tw-m-0 tw-text-sm tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
               Quotations ({quotation.revisions.length})
@@ -542,7 +463,11 @@ export default function QuotationDetailPage() {
                 size="sm"
                 variant="ghost"
                 startIcon={<RequestQuoteIcon fontSize="small" />}
-                onClick={() => navigate(`/quotations/new?enquiryId=${enquiry!.id}`)}
+                onClick={() =>
+                  navigate(`/quotations/new?enquiryId=${enquiry!.id}`, {
+                    state: { scrollTo: SCROLL_ANCHORS.quotationItems },
+                  })
+                }
               >
                 Create Revision
               </Button>
@@ -639,6 +564,86 @@ export default function QuotationDetailPage() {
           />
         </div>
       )}
+
+      {/* The quotation itself: what was quoted, and what it comes to. */}
+      <div className={`${CARD_SURFACE} tw-overflow-hidden`}>
+        <div className="tw-border-b tw-border-hairline tw-px-4 tw-py-3 dark:tw-border-hairline-dark">
+          <h2 className="tw-m-0 tw-text-sm tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
+            Quotation
+          </h2>
+        </div>
+
+        <PlainTable
+          rows={quotation.items}
+          getRowId={(item) => item.id}
+          emptyMessage="This quotation has no line items."
+          columns={[
+            {
+              key: 'item',
+              header: 'Item',
+              width: 'auto',
+              render: (item) => item.itemName,
+            },
+            {
+              key: 'qty',
+              header: 'Qty',
+              align: 'right',
+              width: '15%',
+              numeric: true,
+              render: (item) => `${Number(item.quantity).toLocaleString('en-IN')}${item.unit ? ` ${item.unit}` : ''}`,
+            },
+            {
+              key: 'rate',
+              header: 'Rate',
+              align: 'right',
+              width: '20%',
+              numeric: true,
+              muted: true,
+              render: (item) => formatCurrency(item.rate),
+            },
+            {
+              key: 'amount',
+              header: 'Amount',
+              align: 'right',
+              width: '20%',
+              numeric: true,
+              strong: true,
+              render: (item) => formatCurrency(item.amount),
+            },
+          ]}
+        />
+
+        {/* Totals sit right-aligned under the items, the way they read on the printed document. */}
+        <div className="tw-flex tw-justify-end tw-px-4 tw-py-4">
+          <dl className="tw-m-0 tw-w-full tw-max-w-[280px]">
+            <AmountRow label="Subtotal" value={formatCurrency(subtotal)} />
+            {discount > 0 && <AmountRow label="Discount" value={`- ${formatCurrency(discount)}`} />}
+            {cgstPercent > 0 && <AmountRow label={`CGST (${cgstPercent}%)`} value={formatCurrency(cgstAmount)} />}
+            {sgstPercent > 0 && <AmountRow label={`SGST (${sgstPercent}%)`} value={formatCurrency(sgstAmount)} />}
+            {cgstPercent === 0 && sgstPercent === 0 && <AmountRow label="Tax" value={formatCurrency(tax)} />}
+            <div className="tw-mt-2 tw-flex tw-items-baseline tw-justify-between tw-gap-2 tw-border-t tw-border-hairline tw-pt-2 dark:tw-border-hairline-dark">
+              <dt className="tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                Grand Total
+              </dt>
+              <dd className="tw-m-0 tw-text-2xl tw-font-bold tw-tabular-nums tw-text-ink dark:tw-text-ink-dark">
+                {formatCurrency(quotation.totalAmount)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* Notes only appear when there are any — an empty "no notes" block is noise. */}
+        {quotation.remarks && (
+          <div className="tw-border-t tw-border-hairline tw-px-4 tw-py-3 dark:tw-border-hairline-dark">
+            <h3 className="tw-m-0 tw-mb-1 tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              Notes
+            </h3>
+            <p className="tw-m-0 tw-whitespace-pre-line tw-text-sm tw-text-ink dark:tw-text-ink-dark">
+              {quotation.remarks}
+            </p>
+          </div>
+        )}
+      </div>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)} align="right">
         <MenuItem
@@ -887,10 +892,10 @@ const CONFIRM_COPY: Record<PendingAction, ConfirmCopyEntry> = {
     danger: true,
   },
   approve: {
-    title: 'Approve Quotation?',
+    title: 'Confirm Quotation?',
     message: (quotation) =>
-      `Approve quotation "${quotation.quotationNumber}" (v${quotation.version})? Only one quotation per enquiry can be approved, and its total becomes the enquiry's final budget.`,
-    confirmLabel: 'Approve',
+      `Confirm quotation "${quotation.quotationNumber}" (v${quotation.version})? This moves the enquiry to Order Confirmed and raises the order. Other quotations stay available as history, and the enquiry's final budget becomes the total of everything confirmed.`,
+    confirmLabel: 'Confirm',
   },
   convert: {
     title: 'Convert To Order?',

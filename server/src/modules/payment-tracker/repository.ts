@@ -1,8 +1,9 @@
-import { OrderStatus, Prisma, PaymentType } from '@prisma/client';
+import { OrderStatus, PaymentTrackerStatus, Prisma, PaymentType } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
 import {
   ListPaymentTrackerParams,
   PAYMENT_TRACKER_STATUS_GROUPS,
+  PaymentTrackerStatsParams,
   derivePaymentTrackerStatus,
 } from './types';
 
@@ -53,14 +54,16 @@ const trackerDetailSelect = {
 export type PaymentTrackerListRow = Prisma.OrderGetPayload<{ select: typeof trackerListSelect }>;
 export type PaymentTrackerDetail = Prisma.OrderGetPayload<{ select: typeof trackerDetailSelect }>;
 
-// Cancelled orders carry no payment obligation, so they stay out of the module entirely —
+// Rejected orders carry no payment obligation, so they stay out of the module entirely —
 // "payment/payment.md" scopes it to confirmed orders. Their tracker rows still exist (see the
 // backfill migration) in case an order is ever reinstated.
 function baseWhere(companyId: string): Prisma.OrderWhereInput {
-  return { companyId, deletedAt: null, status: { not: OrderStatus.CANCELLED } };
+  return { companyId, deletedAt: null, status: { not: OrderStatus.REJECTED } };
 }
 
-function buildListWhere(params: ListPaymentTrackerParams): Prisma.OrderWhereInput {
+// Shared by listPaymentTrackers and getPaymentTrackerStats — every filter the list accepts except
+// pagination, so the two stay in lockstep by construction.
+function buildListWhere(params: PaymentTrackerStatsParams): Prisma.OrderWhereInput {
   return {
     ...baseWhere(params.companyId),
     ...(params.orderStatus ? { status: params.orderStatus } : {}),
@@ -108,32 +111,37 @@ export async function listPaymentTrackers(params: ListPaymentTrackerParams) {
   return { records, totalRecords };
 }
 
-// The seven dashboard cards. Counts come from the stored tracker status so a manual override is
-// reflected in the cards exactly as it is in the list, and the money totals are SQL sums rather
-// than a page of rows added up in JS.
-export async function getPaymentTrackerStats(companyId: string) {
-  const where = baseWhere(companyId);
-  const countIn = (group: keyof typeof PAYMENT_TRACKER_STATUS_GROUPS) =>
-    prisma.order.count({
-      where: { ...where, paymentTracker: { paymentStatus: { in: [...PAYMENT_TRACKER_STATUS_GROUPS[group]] } } },
-    });
+// The three dashboard cards (Total Expected, Collected, Pending) plus the status counts that back
+// their subtext. Narrows along with every other active list filter (search, customer, payment
+// status, order status, event-date range) — the money totals are SQL sums rather than a page of
+// rows added up in JS, and the counts come from the stored tracker status so a manual override is
+// reflected exactly as it is in the list.
+export async function getPaymentTrackerStats(params: PaymentTrackerStatsParams) {
+  const where = buildListWhere(params);
+  // AND'd against `where` rather than spread into it — `where` may already carry its own
+  // `paymentTracker` condition (the paymentStatus/statusGroup filters), and spreading a second
+  // `paymentTracker` key into the same object literal would silently replace it instead of
+  // narrowing further.
+  const withStatus = (status: PaymentTrackerStatus): Prisma.OrderWhereInput => ({
+    AND: [where, { paymentTracker: { paymentStatus: status } }],
+  });
 
-  const [totalOrders, pendingPayments, partialPayments, fullyPaidOrders, totals] = await Promise.all([
+  const [totalOrders, advanceCount, partialCount, completedCount, totals] = await Promise.all([
     prisma.order.count({ where }),
-    countIn('PENDING'),
-    countIn('PARTIAL'),
-    countIn('PAID'),
+    prisma.order.count({ where: withStatus(PaymentTrackerStatus.ADVANCE_PAID) }),
+    prisma.order.count({ where: withStatus(PaymentTrackerStatus.PARTIAL_PAYMENT) }),
+    prisma.order.count({ where: withStatus(PaymentTrackerStatus.FULLY_PAID) }),
     prisma.order.aggregate({ where, _sum: { totalAmount: true, paidAmount: true, pendingAmount: true } }),
   ]);
 
   return {
     totalOrders,
-    pendingPayments,
-    partialPayments,
-    fullyPaidOrders,
-    totalBudget: Number(totals._sum.totalAmount ?? 0),
+    totalExpectedAmount: Number(totals._sum.totalAmount ?? 0),
+    advanceCount,
+    partialCount,
+    completedCount,
     totalCollected: Number(totals._sum.paidAmount ?? 0),
-    outstandingBalance: Number(totals._sum.pendingAmount ?? 0),
+    pendingAmount: Number(totals._sum.pendingAmount ?? 0),
   };
 }
 

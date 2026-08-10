@@ -20,7 +20,8 @@ export interface PaymentTrackerRecord {
   /** The order's id — the tracker deliberately reuses it rather than exposing an id of its own. */
   id: string;
   orderNumber: string;
-  eventDate: string;
+  /** Null while the order's event date is still unknown — see OrderListItem.eventDate. */
+  eventDate: string | null;
   venue: string | null;
   status: OrderStatus;
   /** Budget — the order's total. */
@@ -58,14 +59,16 @@ export interface PaymentTrackerDetail extends PaymentTrackerRecord {
   advanceAmount: number;
 }
 
+// Three cards: Total Expected Amount (sub: order count), Collected Amount (sub: the count in each
+// still-collecting/settled bucket), Pending Amount.
 export interface PaymentTrackerStats {
   totalOrders: number;
-  pendingPayments: number;
-  partialPayments: number;
-  fullyPaidOrders: number;
-  totalBudget: number;
+  totalExpectedAmount: number;
+  advanceCount: number;
+  partialCount: number;
+  completedCount: number;
   totalCollected: number;
-  outstandingBalance: number;
+  pendingAmount: number;
 }
 
 export interface ListPaymentTrackerParams {

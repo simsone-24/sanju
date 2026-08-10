@@ -1,53 +1,49 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CloseIcon from '@mui/icons-material/Close';
+import DateRangeIcon from '@mui/icons-material/DateRange';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import SavingsIcon from '@mui/icons-material/Savings';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TuneIcon from '@mui/icons-material/Tune';
+import UpdateIcon from '@mui/icons-material/Update';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Autocomplete, Box, Button, Chip, IconButton, MenuItem, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Autocomplete, TextField } from '@mui/material';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
+import { LastUpdated } from '../../components/LastUpdated';
 import { PageHeader } from '../../components/PageHeader';
+import { QuickFilterPill } from '../../components/QuickFilterPill';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
+import { Button } from '../../components/ui/Button';
+import { CARD_SURFACE } from '../../components/ui/Card';
+import { IconButton } from '../../components/ui/IconButton';
+import { SelectField } from '../../components/ui/Select';
 import { usePermission } from '../../hooks/usePermission';
 import * as customerService from '../../services/customerService';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { CustomerOption } from '../../types/masters';
 import type { OrderStatus } from '../../types/order';
-import type {
-  PaymentTrackerRecord,
-  PaymentTrackerStatus,
-  PaymentTrackerStatusGroup,
-} from '../../types/paymentTracker';
+import type { PaymentTrackerRecord, PaymentTrackerStatus } from '../../types/paymentTracker';
 import { eventProximity, formatCurrency, formatDate } from '../../utils/format';
 import { PaymentHistoryDialog } from './PaymentHistoryDialog';
-import { PaymentTrackerEditDrawer } from './PaymentTrackerEditDrawer';
+import { PaymentTrackerEditDialog } from './PaymentTrackerEditDialog';
 
-// Cancelled orders never reach this module (they carry no payment obligation), so they are not
+// Rejected orders never reach this module (they carry no payment obligation), so they are not
 // offered as a filter either.
-const ORDER_STATUS_OPTIONS: OrderStatus[] = [
-  'CONFIRMED',
-  'ADVANCE_PENDING',
-  'ADVANCE_RECEIVED',
-  'PLANNING',
-  'READY',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'BALANCE_PENDING',
-  'CLOSED',
-];
+const ORDER_STATUS_OPTIONS: OrderStatus[] = ['YET_TO_START', 'IN_PROGRESS', 'ORDER_CLOSED'];
 
 const PAYMENT_STATUS_OPTIONS: PaymentTrackerStatus[] = [
   'PENDING',
@@ -62,19 +58,26 @@ const PAYMENT_ROW_ACCENT: Record<PaymentTrackerStatus, string> = {
   PENDING: '#94A3B8',
   ADVANCE_PAID: '#EAB308',
   PARTIAL_PAYMENT: '#F59E0B',
-  FULLY_PAID: '#22C55E',
+  FULLY_PAID: '#10B981',
 };
 
 // "payment/payment.md" §Filters — one-at-a-time quick ranges over the event date, alongside the
-// custom From/To range below them.
+// custom From/To range in Advanced Filters.
 type QuickRange = 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH';
 
-const QUICK_RANGES: { key: QuickRange; label: string }[] = [
-  { key: 'THIS_WEEK', label: 'This Week' },
-  { key: 'NEXT_WEEK', label: 'Next Week' },
-  { key: 'THIS_MONTH', label: 'This Month' },
-  { key: 'NEXT_MONTH', label: 'Next Month' },
+// Each range carries its own icon rather than all four repeating one generic calendar — an icon
+// that's identical across every pill carries no information and just adds visual noise
+// ("md files/Enquiry/UI1.md" §Quick Filters).
+const QUICK_RANGES: { key: QuickRange; label: string; icon: ReactNode }[] = [
+  { key: 'THIS_WEEK', label: 'This Week', icon: <DateRangeIcon fontSize="small" /> },
+  { key: 'NEXT_WEEK', label: 'Next Week', icon: <UpdateIcon fontSize="small" /> },
+  { key: 'THIS_MONTH', label: 'This Month', icon: <CalendarMonthIcon fontSize="small" /> },
+  { key: 'NEXT_MONTH', label: 'Next Month', icon: <ScheduleIcon fontSize="small" /> },
 ];
+
+// Filter controls grow to share whatever width the search bar leaves, rather than sitting at a
+// fixed size and stranding empty space at the row's right edge.
+const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[170px]';
 
 function quickRangeDates(key: QuickRange): { from: Dayjs; to: Dayjs } {
   const today = dayjs();
@@ -94,6 +97,12 @@ function trackerStatus(row: PaymentTrackerRecord): PaymentTrackerStatus {
   return row.paymentTracker?.paymentStatus ?? 'PENDING';
 }
 
+interface ActiveFilterChip {
+  key: string;
+  label: string;
+  onClear: () => void;
+}
+
 export default function PaymentTrackerListPage() {
   const navigate = useNavigate();
   const canView = usePermission('PAYMENTS', 'canView');
@@ -106,16 +115,16 @@ export default function PaymentTrackerListPage() {
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<PaymentTrackerStatus | ''>('');
-  const [statusGroup, setStatusGroup] = useState<PaymentTrackerStatusGroup | ''>('');
   const [orderStatus, setOrderStatus] = useState<OrderStatus | ''>('');
   const [quickRange, setQuickRange] = useState<QuickRange | null>(null);
   const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
   const [customTo, setCustomTo] = useState<Dayjs | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<PaymentTrackerRecord | null>(null);
   const [historyRecord, setHistoryRecord] = useState<PaymentTrackerRecord | null>(null);
 
-  // The quick-range pills and the custom From/To both resolve to one event-date window; whichever
-  // was set last wins, so they can never silently fight each other.
+  // The quick-range pills and the custom From/To (Advanced Filters) both resolve to one
+  // event-date window; whichever was set last wins, so they can never silently fight each other.
   const range = quickRange
     ? quickRangeDates(quickRange)
     : customFrom || customTo
@@ -124,11 +133,29 @@ export default function PaymentTrackerListPage() {
 
   const eventDateFrom = range?.from ? range.from.format('YYYY-MM-DD') : undefined;
   const eventDateTo = range?.to ? range.to.format('YYYY-MM-DD') : undefined;
+  const hasDateFilter = Boolean(quickRange || customFrom || customTo);
+  const dateFilterCount = [customFrom, customTo].filter(Boolean).length;
 
+  // Narrows along with every active filter (search, customer, payment status, order status, event
+  // date range) — these are plain summary tiles, not click-filters, so unlike the Enquiry/Order
+  // dashboard cards there's no "own" filter to leave out.
   const { data: stats } = useQuery({
-    queryKey: ['payment-tracker', 'stats'],
-    queryFn: () => paymentTrackerService.getStats(),
+    queryKey: [
+      'payment-tracker',
+      'stats',
+      { search, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
+    ],
+    queryFn: () =>
+      paymentTrackerService.getStats({
+        search: search || undefined,
+        customerId: customer?.id,
+        paymentStatus: paymentStatus || undefined,
+        orderStatus: orderStatus || undefined,
+        eventDateFrom,
+        eventDateTo,
+      }),
     enabled: canView,
+    placeholderData: keepPreviousData,
   });
 
   const { data: customerOptions } = useQuery({
@@ -137,11 +164,11 @@ export default function PaymentTrackerListPage() {
     enabled: customerQuery.trim().length > 0,
   });
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: [
       'payment-tracker',
       'list',
-      { page, limit, search, paymentStatus, statusGroup, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
+      { page, limit, search, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
     ],
     queryFn: () =>
       paymentTrackerService.list({
@@ -150,7 +177,6 @@ export default function PaymentTrackerListPage() {
         search: search || undefined,
         customerId: customer?.id,
         paymentStatus: paymentStatus || undefined,
-        statusGroup: statusGroup || undefined,
         orderStatus: orderStatus || undefined,
         eventDateFrom,
         eventDateTo,
@@ -159,18 +185,11 @@ export default function PaymentTrackerListPage() {
     enabled: canView,
   });
 
-  function toggleGroup(group: PaymentTrackerStatusGroup) {
-    setStatusGroup((current) => (current === group ? '' : group));
-    setPaymentStatus('');
-    setPage(1);
-  }
-
   function resetFilters() {
     setSearch('');
     setCustomer(null);
     setCustomerQuery('');
     setPaymentStatus('');
-    setStatusGroup('');
     setOrderStatus('');
     setQuickRange(null);
     setCustomFrom(null);
@@ -178,60 +197,126 @@ export default function PaymentTrackerListPage() {
     setPage(1);
   }
 
+  function applyQuickRange(key: QuickRange | null) {
+    setQuickRange((current) => (current === key ? null : key));
+    setCustomFrom(null);
+    setCustomTo(null);
+    setPage(1);
+  }
+
+  // Everything currently narrowing the list, as individually removable chips — so an unexpected
+  // result count always has a visible cause, and one filter can be dropped without a full reset.
+  const activeFilters: ActiveFilterChip[] = [];
+  if (search) {
+    activeFilters.push({
+      key: 'search',
+      label: `Search: "${search}"`,
+      onClear: () => setSearch(''),
+    });
+  }
+  if (customer) {
+    activeFilters.push({
+      key: 'customer',
+      label: `Customer: ${customer.customerName}`,
+      onClear: () => {
+        setCustomer(null);
+        setCustomerQuery('');
+      },
+    });
+  }
+  if (paymentStatus) {
+    activeFilters.push({
+      key: 'paymentStatus',
+      label: `Payment: ${resolveStatusConfig('paymentTracker', paymentStatus).label}`,
+      onClear: () => setPaymentStatus(''),
+    });
+  }
+  if (orderStatus) {
+    activeFilters.push({
+      key: 'orderStatus',
+      label: `Order: ${resolveStatusConfig('order', orderStatus).label}`,
+      onClear: () => setOrderStatus(''),
+    });
+  }
+  if (quickRange) {
+    activeFilters.push({
+      key: 'quickRange',
+      label: QUICK_RANGES.find((option) => option.key === quickRange)!.label,
+      onClear: () => setQuickRange(null),
+    });
+  } else if (customFrom || customTo) {
+    activeFilters.push({
+      key: 'customRange',
+      label: `Event ${customFrom ? formatDate(customFrom.toISOString()) : '…'} – ${
+        customTo ? formatDate(customTo.toISOString()) : '…'
+      }`,
+      onClear: () => {
+        setCustomFrom(null);
+        setCustomTo(null);
+      },
+    });
+  }
+
   const columns: DataTableColumn<PaymentTrackerRecord>[] = [
     {
       key: 'orderNumber',
       header: 'Order No',
       sortable: true,
+      align: 'center' as const,
       width: 150,
       render: (row) => (
-        <Typography variant="body2" noWrap sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+        <span className="tw-block tw-truncate tw-font-bold tw-tabular-nums tw-text-ink dark:tw-text-ink-dark">
           {row.orderNumber}
-        </Typography>
+        </span>
       ),
       exportValue: (row) => row.orderNumber,
     },
     {
       key: 'customer',
       header: 'Customer',
+      align: 'center' as const,
+      width: 135,
       render: (row) => (
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-            {row.customer.customerName}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+        <div className="tw-min-w-0">
+          <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.customer.customerName}</div>
+          <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
             {row.customer.mobile}
-          </Typography>
-        </Box>
+          </div>
+        </div>
       ),
       exportValue: (row) => row.customer.customerName,
     },
     {
       key: 'event',
       header: 'Event',
-      render: (row) => row.enquiry?.eventName || row.enquiry?.eventType.eventName || '—',
+      align: 'center' as const,
+      width: 130,
+      render: (row) => (
+        <span className="tw-block tw-truncate">
+          {row.enquiry?.eventName || row.enquiry?.eventType.eventName || '—'}
+        </span>
+      ),
       exportValue: (row) => row.enquiry?.eventName || row.enquiry?.eventType.eventName || '',
     },
     {
       key: 'eventDate',
       header: 'Event Date',
+      align: 'center' as const,
+      width: 125,
       render: (row) => {
+        // An order confirmed before its event date was known has no day or countdown to show.
+        if (!row.eventDate) {
+          return <div className="tw-truncate tw-text-ink-muted dark:tw-text-ink-dark-muted">Not scheduled</div>;
+        }
         const proximity = eventProximity(row.eventDate);
         return (
-          <Box>
-            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-              {formatDate(row.eventDate)}
-            </Typography>
-            <Typography variant="caption" noWrap sx={{ display: 'block' }} color="text.secondary">
+          <div className="tw-min-w-0">
+            <div className="tw-truncate tw-font-semibold">{formatDate(row.eventDate)}</div>
+            <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
               {dayjs(row.eventDate).format('ddd')} ·{' '}
-              <Box
-                component="span"
-                sx={{ fontWeight: proximity.urgent ? 700 : 400, color: proximity.urgent ? 'warning.main' : 'inherit' }}
-              >
-                {proximity.text}
-              </Box>
-            </Typography>
-          </Box>
+              <span className={proximity.urgent ? 'tw-font-bold tw-text-warning' : undefined}>{proximity.text}</span>
+            </div>
+          </div>
         );
       },
       exportValue: (row) => formatDate(row.eventDate),
@@ -239,335 +324,329 @@ export default function PaymentTrackerListPage() {
     {
       key: 'status',
       header: 'Order Status',
-      align: 'center',
+      align: 'center' as const,
+      width: 130,
       render: (row) => <StatusBadge type="order" status={row.status} size="sm" />,
       exportValue: (row) => row.status,
     },
     {
       key: 'totalAmount',
       header: 'Budget',
-      align: 'right',
-      width: 120,
-      render: (row) => formatCurrency(row.totalAmount),
+      align: 'center' as const,
+      width: 115,
+      render: (row) => <span className="tw-tabular-nums">{formatCurrency(row.totalAmount)}</span>,
       exportValue: (row) => row.totalAmount,
     },
     {
       key: 'paidAmount',
       header: 'Collected',
-      align: 'right',
-      width: 120,
+      align: 'center' as const,
+      width: 115,
       render: (row) => (
-        <Typography variant="body2" sx={{ fontWeight: 600, color: Number(row.paidAmount) > 0 ? 'success.main' : 'inherit' }}>
+        <span
+          className={`tw-tabular-nums tw-font-semibold ${
+            Number(row.paidAmount) > 0 ? 'tw-text-success' : 'tw-text-ink dark:tw-text-ink-dark'
+          }`}
+        >
           {formatCurrency(row.paidAmount)}
-        </Typography>
+        </span>
       ),
       exportValue: (row) => row.paidAmount,
     },
     {
       key: 'pendingAmount',
       header: 'Balance',
-      align: 'right',
-      width: 120,
+      align: 'center' as const,
+      width: 115,
       render: (row) => (
-        <Typography variant="body2" sx={{ fontWeight: 600, color: Number(row.pendingAmount) > 0 ? 'warning.main' : 'text.secondary' }}>
+        <span
+          className={`tw-tabular-nums tw-font-semibold ${
+            Number(row.pendingAmount) > 0 ? 'tw-text-warning' : 'tw-text-ink-muted dark:tw-text-ink-dark-muted'
+          }`}
+        >
           {formatCurrency(row.pendingAmount)}
-        </Typography>
+        </span>
       ),
       exportValue: (row) => row.pendingAmount,
     },
     {
       key: 'paymentStatus',
       header: 'Payment Status',
-      align: 'center',
+      align: 'center' as const,
+      width: 140,
       render: (row) => (
-        <Box>
+        <div>
           <StatusBadge type="paymentTracker" status={trackerStatus(row)} size="sm" />
           {/* A pinned status no longer follows the payments, so the row says so rather than
               leaving a stale-looking badge unexplained. */}
           {row.paymentTracker?.statusManual && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            <div className="tw-mt-0.5 tw-text-[0.6875rem] tw-text-ink-muted dark:tw-text-ink-dark-muted">
               set manually
-            </Typography>
+            </div>
           )}
-        </Box>
+        </div>
       ),
       exportValue: (row) => trackerStatus(row),
     },
     {
       key: 'actions',
       header: 'Actions',
-      align: 'right',
+      align: 'center' as const,
+      width: 130,
       render: (row) => (
-        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
-          <Tooltip title="View payment details">
-            <IconButton
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate(`/payment-tracker/${row.id}`);
-              }}
-            >
-              <VisibilityIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Payment history">
-            <IconButton
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                setHistoryRecord(row);
-              }}
-            >
-              <HistoryIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Invoice">
-            <IconButton
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate(`/payment-tracker/${row.id}/invoice`);
-              }}
-            >
-              <ReceiptIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        <div className="tw-flex tw-justify-center tw-gap-0.5">
+          <IconButton
+            title="View payment details"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate(`/payment-tracker/${row.id}`);
+            }}
+          >
+            <VisibilityIcon fontSize="small" />
+          </IconButton>
           {canEdit && (
-            <Tooltip title="Edit payment">
-              <IconButton
-                size="small"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setEditRecord(row);
-                }}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <IconButton
+              title="Edit payment"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                setEditRecord(row);
+              }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
           )}
-        </Stack>
+          <IconButton
+            title="Payment history"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              setHistoryRecord(row);
+            }}
+          >
+            <HistoryIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            title="Invoice"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate(`/payment-tracker/${row.id}/invoice`);
+            }}
+          >
+            <ReceiptIcon fontSize="small" />
+          </IconButton>
+        </div>
       ),
-    },
+    } satisfies DataTableColumn<PaymentTrackerRecord>,
   ];
 
+  const totalRecords = data?.meta?.totalRecords;
+
   return (
-    <Box>
+    <div>
       <PageHeader
         title="Payment Tracker"
         subtitle="Budget, collections and outstanding balance for every confirmed order."
         breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Payment Tracker' }]}
+        titleAdornment={
+          totalRecords === undefined ? undefined : (
+            <span className="tw-inline-flex tw-items-center tw-rounded-full tw-bg-slate-100 tw-px-2.5 tw-py-0.5 tw-text-[0.6875rem] tw-font-semibold tw-text-ink-muted dark:tw-bg-slate-700 dark:tw-text-ink-dark-muted">
+              {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+            </span>
+          )
+        }
+        actions={<LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />}
       />
 
-      {/* §Dashboard Cards. The four count cards double as filters; the three money totals are
-          summaries of the whole book, with no row subset they could sensibly filter to. */}
-      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-4">
+      {/* §Dashboard Cards — three money totals, each with a subtext breakdown of the orders behind
+          it. Plain summary tiles rather than click-filters: the toolbar's own Payment Status /
+          Order Status dropdowns already cover that, and these three narrow along with whatever is
+          set there (see the stats query above). */}
+      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-3">
         <StatCard
-          label="Total Orders"
-          value={stats?.totalOrders ?? 0}
-          icon={<PaymentsIcon />}
-          tone="blue"
-          onClick={() => {
-            setStatusGroup('');
-            setPaymentStatus('');
-            setPage(1);
-          }}
-          selected={statusGroup === '' && paymentStatus === ''}
-        />
-        <StatCard
-          label="Pending Payments"
-          value={stats?.pendingPayments ?? 0}
-          icon={<PendingActionsIcon />}
-          tone="slate"
-          onClick={() => toggleGroup('PENDING')}
-          selected={statusGroup === 'PENDING'}
-        />
-        <StatCard
-          label="Partial Payments"
-          value={stats?.partialPayments ?? 0}
-          icon={<HourglassEmptyIcon />}
-          tone="amber"
-          onClick={() => toggleGroup('PARTIAL')}
-          selected={statusGroup === 'PARTIAL'}
-        />
-        <StatCard
-          label="Fully Paid Orders"
-          value={stats?.fullyPaidOrders ?? 0}
-          icon={<CheckCircleIcon />}
-          tone="green"
-          onClick={() => toggleGroup('PAID')}
-          selected={statusGroup === 'PAID'}
-        />
-      </div>
-
-      <div className="tw-mb-6 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-3">
-        <StatCard
-          label="Total Budget"
-          value={formatCurrency(stats?.totalBudget ?? 0)}
+          label="Total Expected Amount"
+          value={formatCurrency(stats?.totalExpectedAmount ?? 0)}
+          subtext={`${stats?.totalOrders ?? 0} Total Orders`}
           icon={<SavingsIcon />}
           tone="cyan"
         />
         <StatCard
-          label="Total Collected"
+          label="Collected Amount"
           value={formatCurrency(stats?.totalCollected ?? 0)}
+          subtext={`Advance ${stats?.advanceCount ?? 0} · Partial ${stats?.partialCount ?? 0} · Completed ${stats?.completedCount ?? 0}`}
           icon={<TrendingUpIcon />}
           tone="green"
         />
         <StatCard
-          label="Outstanding Balance"
-          value={formatCurrency(stats?.outstandingBalance ?? 0)}
+          label="Pending Amount"
+          value={formatCurrency(stats?.pendingAmount ?? 0)}
           icon={<AccountBalanceWalletIcon />}
           tone="orange"
         />
       </div>
 
-      <Paper
-        variant="outlined"
-        sx={(t) => ({
-          p: 2,
-          mb: 3,
-          borderRadius: '16px',
-          boxShadow: '0 12px 32px -18px rgba(15, 23, 42, 0.12)',
-          ...t.applyStyles('dark', { boxShadow: '0 12px 32px -18px rgba(0, 0, 0, 0.55)' }),
-        })}
-      >
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-            <Chip
-              label="All Dates"
-              size="small"
-              color={quickRange === null && !customFrom && !customTo ? 'primary' : 'default'}
-              variant={quickRange === null && !customFrom && !customTo ? 'filled' : 'outlined'}
-              onClick={() => {
-                setQuickRange(null);
-                setCustomFrom(null);
-                setCustomTo(null);
+      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-2.5 tw-px-3 tw-py-2.5`}>
+        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+          <QuickFilterPill label="All Dates" active={!hasDateFilter} onClick={() => applyQuickRange(null)} />
+          {QUICK_RANGES.map((option) => (
+            <QuickFilterPill
+              key={option.key}
+              label={option.label}
+              icon={option.icon}
+              active={quickRange === option.key}
+              onClick={() => applyQuickRange(option.key)}
+            />
+          ))}
+        </div>
+
+        {/* Primary row: always visible. Search takes the remaining width. The dropdowns carry a
+            label block above the box, so everything bottom-aligns and the input boxes themselves
+            stay on one line. Advanced Filters closes the row on the right. */}
+        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
+          <div className="tw-flex-[2] tw-basis-[240px]">
+            <SearchBar
+              fullWidth
+              value={search}
+              onChange={(value) => {
+                setSearch(value);
                 setPage(1);
               }}
+              placeholder="Search by order no, customer, mobile..."
             />
-            {QUICK_RANGES.map((option) => (
-              <Chip
-                key={option.key}
-                label={option.label}
-                size="small"
-                color={quickRange === option.key ? 'primary' : 'default'}
-                variant={quickRange === option.key ? 'filled' : 'outlined'}
-                onClick={() => {
-                  setQuickRange((current) => (current === option.key ? null : option.key));
-                  setCustomFrom(null);
-                  setCustomTo(null);
-                  setPage(1);
-                }}
-              />
-            ))}
-          </Stack>
+          </div>
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 2 }}>
-            <Box sx={{ flexGrow: 1, minWidth: 220 }}>
-              <SearchBar
-                fullWidth
-                value={search}
-                onChange={(value) => {
-                  setSearch(value);
-                  setPage(1);
-                }}
-                placeholder="Search by order no, customer, mobile..."
-              />
-            </Box>
+          {/* MUI Autocomplete — the one control here with no Tailwind equivalent (customer
+              type-ahead search); the fixed 40px height keeps its bottom edge level with the
+              Tailwind fields it sits beside. */}
+          <div className={FILTER_FIELD_WIDTH}>
+            <Autocomplete
+              size="small"
+              options={customerOptions ?? []}
+              value={customer}
+              onChange={(_event, value) => {
+                setCustomer(value);
+                setPage(1);
+              }}
+              onInputChange={(_event, value) => setCustomerQuery(value)}
+              getOptionLabel={(option) => `${option.customerName} (${option.mobile})`}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              noOptionsText={customerQuery ? 'No customers found' : 'Type to search'}
+              renderInput={(params) => <TextField {...params} label="Customer" />}
+            />
+          </div>
 
-            <Box sx={{ width: 220 }}>
-              <Autocomplete
-                size="small"
-                options={customerOptions ?? []}
-                value={customer}
-                onChange={(_event, value) => {
-                  setCustomer(value);
-                  setPage(1);
-                }}
-                onInputChange={(_event, value) => setCustomerQuery(value)}
-                getOptionLabel={(option) => `${option.customerName} (${option.mobile})`}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                noOptionsText={customerQuery ? 'No customers found' : 'Type to search'}
-                renderInput={(params) => <TextField {...params} label="Customer" />}
-              />
-            </Box>
+          <SelectField
+            className={FILTER_FIELD_WIDTH}
+            label="Payment Status"
+            emptyLabel="All"
+            value={paymentStatus}
+            onChange={(value) => {
+              setPaymentStatus(value as PaymentTrackerStatus | '');
+              setPage(1);
+            }}
+            options={PAYMENT_STATUS_OPTIONS.map((option) => ({
+              value: option,
+              label: resolveStatusConfig('paymentTracker', option).label,
+            }))}
+          />
 
-            <Box sx={{ width: 180 }}>
-              <TextField
-                select
-                fullWidth
-                size="small"
-                label="Payment Status"
-                value={paymentStatus}
-                onChange={(event) => {
-                  setPaymentStatus(event.target.value as PaymentTrackerStatus | '');
-                  setStatusGroup('');
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">All Payments</MenuItem>
-                {PAYMENT_STATUS_OPTIONS.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {resolveStatusConfig('paymentTracker', option).label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
+          <SelectField
+            className={FILTER_FIELD_WIDTH}
+            label="Order Status"
+            emptyLabel="All"
+            value={orderStatus}
+            onChange={(value) => {
+              setOrderStatus(value as OrderStatus | '');
+              setPage(1);
+            }}
+            options={ORDER_STATUS_OPTIONS.map((option) => ({
+              value: option,
+              label: resolveStatusConfig('order', option).label,
+            }))}
+          />
 
-            <Box sx={{ width: 175 }}>
-              <TextField
-                select
-                fullWidth
-                size="small"
-                label="Order Status"
-                value={orderStatus}
-                onChange={(event) => {
-                  setOrderStatus(event.target.value as OrderStatus | '');
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">All Statuses</MenuItem>
-                {ORDER_STATUS_OPTIONS.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {resolveStatusConfig('order', option).label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          </Stack>
+          <Button
+            variant="ghost"
+            onClick={() => setAdvancedOpen((previous) => !previous)}
+            startIcon={<TuneIcon fontSize="small" />}
+            endIcon={
+              <ExpandMoreIcon
+                fontSize="small"
+                className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
+              />
+            }
+          >
+            Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
+          </Button>
+        </div>
 
-          {/* §Filters "Custom Date Range" — sets the same event-date window the pills above do. */}
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 2 }}>
-            <Box sx={{ width: 180 }}>
-              <DatePickerField
-                label="Event Date From"
-                margin="none"
-                value={customFrom}
-                onChange={(value) => {
-                  setCustomFrom(value);
-                  setQuickRange(null);
-                  setPage(1);
-                }}
-              />
-            </Box>
-            <Box sx={{ width: 180 }}>
-              <DatePickerField
-                label="Event Date To"
-                margin="none"
-                minDate={customFrom ?? undefined}
-                value={customTo}
-                onChange={(value) => {
-                  setCustomTo(value);
-                  setQuickRange(null);
-                  setPage(1);
-                }}
-              />
-            </Box>
-            <Button variant="outlined" size="small" sx={{ height: 40 }} onClick={resetFilters}>
-              Reset
-            </Button>
-          </Stack>
-        </Stack>
-      </Paper>
+        {/* Advanced row: custom event-date range, collapsed by default. The 0fr→1fr grid track
+            animates the reveal without needing a measured pixel height. */}
+        <div
+          className={`tw-grid tw-transition-all tw-duration-200 ${
+            advancedOpen ? 'tw-grid-rows-[1fr] tw-opacity-100' : '-tw-mt-2.5 tw-grid-rows-[0fr] tw-opacity-0'
+          }`}
+        >
+          <div className="tw-overflow-hidden">
+            <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5 tw-pt-0.5">
+              <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
+                <div className="tw-flex-1">
+                  <DatePickerField
+                    label="Event Date From"
+                    margin="none"
+                    value={customFrom}
+                    onChange={(value) => {
+                      setCustomFrom(value);
+                      setQuickRange(null);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+                <div className="tw-flex-1">
+                  <DatePickerField
+                    label="Event Date To"
+                    margin="none"
+                    minDate={customFrom ?? undefined}
+                    value={customTo}
+                    onChange={(value) => {
+                      setCustomTo(value);
+                      setQuickRange(null);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {activeFilters.length > 0 && (
+          <>
+            <hr className="tw-my-0 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
+            <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+              <span className="tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                Active filters
+              </span>
+              {activeFilters.map((filter) => (
+                <span
+                  key={filter.key}
+                  className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-hairline tw-bg-white tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-text-slate-600 dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark"
+                >
+                  {filter.label}
+                  <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
+                    <CloseIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </span>
+              ))}
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                Clear all
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
 
       {canView ? (
         <DataTable
@@ -578,6 +657,10 @@ export default function PaymentTrackerListPage() {
           meta={data?.meta}
           page={page}
           limit={limit}
+          fixedLayout
+          dense
+          stickyHeader
+          maxHeight="calc(100vh - 260px)"
           rowAccentColor={(row) => PAYMENT_ROW_ACCENT[trackerStatus(row)]}
           onPageChange={setPage}
           onLimitChange={(newLimit) => {
@@ -589,18 +672,23 @@ export default function PaymentTrackerListPage() {
           refreshing={isFetching}
           emptyState={{
             icon: <PaymentsIcon sx={{ fontSize: 36 }} />,
-            title: 'No Payment Records Found',
-            description: 'Records appear here automatically once an enquiry is confirmed as an order.',
+            title: activeFilters.length > 0 ? 'No payment records match these filters' : 'No Payment Records Found',
+            description:
+              activeFilters.length > 0
+                ? 'Try widening the date range or clearing a filter.'
+                : 'Records appear here automatically once an enquiry is confirmed as an order.',
             action: <Button onClick={resetFilters}>Reset Filters</Button>,
           }}
           exportFileName="payment-tracker"
           canExport={canExport}
         />
       ) : (
-        <Typography color="text.secondary">You do not have access to view payments.</Typography>
+        <p className="tw-mt-2 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
+          You do not have access to view payments.
+        </p>
       )}
 
-      <PaymentTrackerEditDrawer
+      <PaymentTrackerEditDialog
         open={editRecord !== null}
         record={editRecord}
         onClose={() => setEditRecord(null)}
@@ -611,6 +699,6 @@ export default function PaymentTrackerListPage() {
         record={historyRecord}
         onClose={() => setHistoryRecord(null)}
       />
-    </Box>
+    </div>
   );
 }

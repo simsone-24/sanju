@@ -23,7 +23,7 @@ function toProfile(user: UserWithAccess): AuthenticatedProfile {
     city: user.city,
     profilePhoto: user.profilePhoto,
     userGroup: { id: user.userGroup.id, groupName: user.userGroup.groupName },
-    company: { id: user.company.id, companyName: user.company.companyName },
+    company: { id: user.company.id, companyName: user.company.companyName, logo: user.company.logo },
     permissions: effectivePermissionsFor(user),
   };
 }

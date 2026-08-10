@@ -106,17 +106,18 @@ export default function UserGroupsTab() {
   }
 
   const columns: DataTableColumn<UserGroupListItem>[] = [
-    { key: 'groupName', header: 'Group Name', sortable: true },
+    { key: 'groupName', header: 'Group Name', sortable: true, align: 'center' },
     {
       key: 'description',
       header: 'Description',
+      align: 'center',
       render: (row) => row.description ?? '—',
       exportValue: (row) => row.description ?? '',
     },
     {
       key: 'users',
       header: 'Total Users',
-      align: 'right',
+      align: 'center',
       sortable: true,
       render: (row) => row._count.users,
       exportValue: (row) => String(row._count.users),
@@ -124,15 +125,16 @@ export default function UserGroupsTab() {
     {
       key: 'status',
       header: 'Status',
+      align: 'center',
       render: (row) => <StatusBadge type="active" status={row.status} size="sm" />,
       exportValue: (row) => row.status,
     },
     {
       key: 'actions',
       header: 'Actions',
-      align: 'right',
+      align: 'center',
       render: (row) => (
-        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
           <Tooltip title="View">
             <IconButton
               size="small"

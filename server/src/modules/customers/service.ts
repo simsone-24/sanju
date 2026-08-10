@@ -76,9 +76,11 @@ export async function getHistory(companyId: string, id: string) {
     customersRepository.getCustomerPayments(id),
   ]);
 
+  // An order whose event date isn't set yet (confirmed before one was known) is neither past nor
+  // upcoming, so it sits in neither list until a date is entered on the order.
   return {
-    previousEvents: orders.filter((order) => order.eventDate < now),
-    upcomingEvents: orders.filter((order) => order.eventDate >= now),
+    previousEvents: orders.filter((order) => order.eventDate !== null && order.eventDate < now),
+    upcomingEvents: orders.filter((order) => order.eventDate !== null && order.eventDate >= now),
     payments,
   };
 }

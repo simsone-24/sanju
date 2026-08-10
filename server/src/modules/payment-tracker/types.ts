@@ -42,14 +42,20 @@ export interface UpdatePaymentTrackerInput {
   remarks?: string;
 }
 
+// The dashboard's own counts narrow along with every other active list filter — everything list
+// accepts except pagination.
+export type PaymentTrackerStatsParams = Omit<ListPaymentTrackerParams, 'page' | 'limit'>;
+
+// Three cards: Total Expected Amount (sub: order count), Collected Amount (sub: the count in each
+// still-collecting/settled bucket), Pending Amount.
 export interface PaymentTrackerStatsResult {
   totalOrders: number;
-  pendingPayments: number;
-  partialPayments: number;
-  fullyPaidOrders: number;
-  totalBudget: number;
+  totalExpectedAmount: number;
+  advanceCount: number;
+  partialCount: number;
+  completedCount: number;
   totalCollected: number;
-  outstandingBalance: number;
+  pendingAmount: number;
 }
 
 // The automatic status, from the order's own money plus the shape of its receipts. ADVANCE_PAID and

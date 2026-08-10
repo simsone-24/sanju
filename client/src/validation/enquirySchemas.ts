@@ -18,11 +18,12 @@ export const enquiryFormSchema = z
     city: z.string().optional().or(z.literal('')),
     eventTypeId: z.string().min(1, 'Select an event type.'),
     eventName: z.string().optional().or(z.literal('')),
-    eventDate: z.string().optional().or(z.literal('')),
+    eventDate: z.string().min(1, 'Event date is required.'),
     mahal: z.string().optional().or(z.literal('')),
     venue: z.string().optional().or(z.literal('')),
     estimatedBudget: z.string().optional().or(z.literal('')),
     finalBudgetAmount: z.string().optional().or(z.literal('')),
+    advanceAmount: z.string().optional().or(z.literal('')),
     notes: z.string().optional().or(z.literal('')),
     appointmentDate: z.string().optional().or(z.literal('')),
     appointmentTime: z.string().optional().or(z.literal('')),
@@ -30,6 +31,8 @@ export const enquiryFormSchema = z
     appointmentNotes: z.string().optional().or(z.literal('')),
     appointmentStatus: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
     assignedUserId: z.string().optional().or(z.literal('')),
+    // When the customer should next be contacted. Empty means no follow-up is owed.
+    followUpDate: z.string().optional().or(z.literal('')),
     // Only meaningful on create — see EnquiryFormPage's EnquiryStatusSection. Any of the 6 statuses
     // may be chosen at creation; ORDER_CONFIRMED creates the customer record immediately server-side.
     status: z.enum([

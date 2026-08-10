@@ -23,4 +23,13 @@ router.get(
   invoicesController.getForOrder,
 );
 
+// Registered alongside the JSON route above — same guard, since the PDF carries the same billing
+// data.
+router.get(
+  '/order/:orderId/pdf',
+  authorize(ModuleName.PAYMENTS, 'canView'),
+  authorize(ModuleName.PAYMENTS, 'canPrint'),
+  invoicesController.downloadPdf,
+);
+
 export default router;

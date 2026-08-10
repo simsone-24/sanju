@@ -10,6 +10,7 @@ interface DatePickerFieldProps {
   helperText?: string;
   minDate?: Dayjs;
   maxDate?: Dayjs;
+  required?: boolean;
   /** Matches MUI TextField's margin — default 'normal' fits stacked drawer forms; pass 'none'
    * inside a grid (FormSection) or a filter-bar row, where the container already spaces fields. */
   margin?: 'none' | 'dense' | 'normal';
@@ -41,6 +42,7 @@ export function DatePickerField({
   helperText,
   minDate,
   maxDate,
+  required,
   margin = 'normal',
 }: DatePickerFieldProps) {
   const [open, setOpen] = useState(false);
@@ -67,6 +69,7 @@ export function DatePickerField({
           fullWidth: true,
           size: 'small',
           margin,
+          required,
           error,
           helperText,
           onClick: () => setOpen(true),

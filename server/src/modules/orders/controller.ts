@@ -30,7 +30,6 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       limit,
       search: query.search,
       status: query.status,
-      statusGroup: query.statusGroup,
       customerId: query.customerId,
       eventDateFrom: query.eventDateFrom,
       eventDateTo: query.eventDateTo,
@@ -45,7 +44,14 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function stats(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const result = await ordersService.getStats(actor.companyId);
+    const query = parseQuery(listOrdersQuerySchema, req.query);
+    const result = await ordersService.getStats({
+      companyId: actor.companyId,
+      search: query.search,
+      customerId: query.customerId,
+      eventDateFrom: query.eventDateFrom,
+      eventDateTo: query.eventDateTo,
+    });
     sendSuccess(res, result, 'Order statistics retrieved successfully.');
   } catch (error) {
     next(error);

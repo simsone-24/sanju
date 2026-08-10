@@ -31,10 +31,10 @@ export default {
           dark: '#1D4ED8',
           light: '#3B82F6',
         },
-        success: '#22C55E',
+        success: '#10B981',
         warning: '#F59E0B',
         danger: '#EF4444',
-        info: '#06B6D4',
+        info: '#64748B',
         surface: {
           DEFAULT: '#FFFFFF',
           muted: '#EEF2FB',
@@ -53,7 +53,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         card: '16px',

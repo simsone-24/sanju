@@ -19,7 +19,26 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
       : {}),
   };
 
-  const [records, totalRecords, totalAggregate, methodBreakdown] = await Promise.all([
+  // The order-level position behind the report: what the events in this window are worth, what has
+  // been collected on them and what is still owed. Scoped by event date (as the Outstanding and
+  // Events reports scope theirs) rather than by payment date, so the three reconcile —
+  // expected = collected + pending. Rejected orders are excluded: no money is expected from them.
+  const orderWhere: Prisma.OrderWhereInput = {
+    companyId: params.companyId,
+    deletedAt: null,
+    status: { not: OrderStatus.REJECTED },
+    ...(params.eventTypeId ? { enquiry: { eventTypeId: params.eventTypeId } } : {}),
+    ...(params.dateFrom || params.dateTo
+      ? {
+          eventDate: {
+            ...(params.dateFrom ? { gte: params.dateFrom } : {}),
+            ...(params.dateTo ? { lte: params.dateTo } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const [records, totalRecords, totalAggregate, methodBreakdown, orderAggregate, monthly] = await Promise.all([
     prisma.payment.findMany({
       where,
       select: {
@@ -38,12 +57,21 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
     prisma.payment.count({ where }),
     prisma.payment.aggregate({ where, _sum: { amount: true } }),
     prisma.payment.groupBy({ by: ['paymentMethod'], where, _sum: { amount: true } }),
+    prisma.order.aggregate({
+      where: orderWhere,
+      _sum: { totalAmount: true, paidAmount: true, pendingAmount: true },
+    }),
+    listMonthlyRevenue(params),
   ]);
 
   return {
     records,
     totalRecords,
     totalRevenue: totalAggregate._sum.amount ?? new Prisma.Decimal(0),
+    expectedAmount: orderAggregate._sum.totalAmount ?? new Prisma.Decimal(0),
+    collectedAmount: orderAggregate._sum.paidAmount ?? new Prisma.Decimal(0),
+    pendingAmount: orderAggregate._sum.pendingAmount ?? new Prisma.Decimal(0),
+    monthly,
     methodBreakdown: methodBreakdown.map((entry) => ({
       paymentMethod: entry.paymentMethod,
       amount: entry._sum.amount ?? new Prisma.Decimal(0),
@@ -51,11 +79,54 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
   };
 }
 
+interface MonthlyRevenueRow {
+  month: string;
+  amount: Prisma.Decimal | null;
+  paymentCount: bigint;
+}
+
+/**
+ * Revenue collected per calendar month, oldest first.
+ *
+ * Grouping by month is an expression over payment_date, which Prisma's groupBy cannot express, so
+ * this is raw SQL — parameterised throughout, never interpolated. It aggregates in the database
+ * rather than loading every matching payment to bucket them in Node, so an unfiltered report costs
+ * one grouped scan instead of the whole payments table.
+ */
+async function listMonthlyRevenue(params: RevenueReportParams) {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`p.deleted_at IS NULL`,
+    Prisma.sql`o.company_id = ${params.companyId}`,
+  ];
+  if (params.eventTypeId) conditions.push(Prisma.sql`e.event_type_id = ${params.eventTypeId}`);
+  if (params.dateFrom) conditions.push(Prisma.sql`p.payment_date >= ${params.dateFrom}`);
+  if (params.dateTo) conditions.push(Prisma.sql`p.payment_date <= ${params.dateTo}`);
+
+  const rows = await prisma.$queryRaw<MonthlyRevenueRow[]>`
+    SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS month,
+           SUM(p.amount) AS amount,
+           COUNT(*) AS paymentCount
+    FROM payments p
+    JOIN orders o ON o.id = p.order_id
+    JOIN enquiries e ON e.id = o.enquiry_id
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    GROUP BY month
+    ORDER BY month ASC
+  `;
+
+  // COUNT() comes back as BigInt, which JSON.stringify refuses to serialise.
+  return rows.map((row) => ({
+    month: row.month,
+    amount: row.amount ?? new Prisma.Decimal(0),
+    paymentCount: Number(row.paymentCount),
+  }));
+}
+
 export async function listOutstandingOrders(params: OutstandingReportParams) {
   const where: Prisma.OrderWhereInput = {
     companyId: params.companyId,
     deletedAt: null,
-    status: { not: OrderStatus.CANCELLED },
+    status: { not: OrderStatus.REJECTED },
     pendingAmount: { gt: 0 },
     ...(params.customerId ? { customerId: params.customerId } : {}),
     ...(params.eventTypeId ? { enquiry: { eventTypeId: params.eventTypeId } } : {}),

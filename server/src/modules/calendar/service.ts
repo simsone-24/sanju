@@ -5,39 +5,39 @@ import { CalendarColor, CalendarEvent } from './types';
 type CalendarOrder = {
   id: string;
   orderNumber: string;
-  eventDate: Date;
+  // Nullable on the model: an order raised from an enquiry that had no event date yet. The range
+  // filter already excludes those rows, so a dated order is all that ever reaches toCalendarEvent.
+  eventDate: Date | null;
   venue: string | null;
   status: OrderStatus;
   customer: { customerName: string };
+  enquiry: { eventName: string | null; eventType: { eventName: string } };
 };
 
-// Grouped by narrative stage, since 5 documented colors must cover 10 statuses:
-// not-yet-started (Blue/"Upcoming"), actively being prepared (Orange/"Planning"), balance
-// still owed (Red — the one status whose name literally matches "Payment Pending"),
-// finished (Green/"Completed"), dead (Grey/"Cancelled").
+type DatedCalendarOrder = CalendarOrder & { eventDate: Date };
+
 const STATUS_COLOR: Record<OrderStatus, CalendarColor> = {
-  CONFIRMED: 'BLUE',
-  ADVANCE_PENDING: 'BLUE',
-  ADVANCE_RECEIVED: 'BLUE',
-  PLANNING: 'ORANGE',
-  READY: 'ORANGE',
+  YET_TO_START: 'BLUE',
   IN_PROGRESS: 'ORANGE',
-  COMPLETED: 'GREEN',
-  BALANCE_PENDING: 'RED',
-  CLOSED: 'GREEN',
-  CANCELLED: 'GREY',
+  ORDER_CLOSED: 'GREEN',
+  REJECTED: 'GREY',
 };
 
-function toCalendarEvent(order: CalendarOrder): CalendarEvent {
+function toCalendarEvent(order: DatedCalendarOrder): CalendarEvent {
   return {
     id: order.id,
     orderNumber: order.orderNumber,
     customerName: order.customer.customerName,
+    eventName: order.enquiry.eventName || order.enquiry.eventType.eventName,
     eventDate: order.eventDate,
     venue: order.venue,
     status: order.status,
     color: STATUS_COLOR[order.status],
   };
+}
+
+function toCalendarEvents(orders: CalendarOrder[]): CalendarEvent[] {
+  return orders.filter((order): order is DatedCalendarOrder => order.eventDate !== null).map(toCalendarEvent);
 }
 
 function getWeekRange(date: Date): { startDate: Date; endDate: Date } {
@@ -54,13 +54,13 @@ export async function getMonth(companyId: string, month: number, year: number): 
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)); // day 0 of next month = last day of this month
   const orders = await calendarRepository.findOrdersInRange(companyId, startDate, endDate);
-  return orders.map(toCalendarEvent);
+  return toCalendarEvents(orders);
 }
 
 export async function getWeek(companyId: string, date: Date): Promise<CalendarEvent[]> {
   const { startDate, endDate } = getWeekRange(date);
   const orders = await calendarRepository.findOrdersInRange(companyId, startDate, endDate);
-  return orders.map(toCalendarEvent);
+  return toCalendarEvents(orders);
 }
 
 export async function getDay(companyId: string, date: Date): Promise<CalendarEvent[]> {
@@ -69,5 +69,5 @@ export async function getDay(companyId: string, date: Date): Promise<CalendarEve
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999),
   );
   const orders = await calendarRepository.findOrdersInRange(companyId, startDate, endDate);
-  return orders.map(toCalendarEvent);
+  return toCalendarEvents(orders);
 }

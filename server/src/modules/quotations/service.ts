@@ -8,6 +8,7 @@ import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as enquiriesRepository from '../enquiries/repository';
+import * as enquiriesService from '../enquiries/service';
 import * as customersRepository from '../customers/repository';
 import * as ordersRepository from '../orders/repository';
 import * as settingsRepository from '../settings/repository';
@@ -344,16 +345,10 @@ async function resolveSource(companyId: string, input: CreateQuotationInput) {
           { field: 'enquiryId', message: 'Selected enquiry does not exist.' },
         ]);
       }
-      if (enquiry.status === EnquiryStatus.ORDER_LOST || enquiry.status === EnquiryStatus.ORDER_CONFIRMED) {
-        throw new AppError(400, `Cannot create a quotation for an enquiry with status ${enquiry.status}.`);
-      }
-      const existingApproved = await quotationsRepository.findApprovedQuotationForEnquiry(companyId, input.enquiryId!);
-      if (existingApproved) {
-        throw new AppError(
-          409,
-          'This enquiry already has an approved quotation. Convert it to an order instead of creating a new revision.',
-        );
-      }
+      // No status or existing-approval guard: "md files/Enquiry/enq.md" §2/§7 require unlimited
+      // quotations per enquiry with no rule blocking creation after one has been sent, approved, or
+      // after the enquiry itself has been confirmed or lost. The enquiry is the parent record and
+      // never restricts its children.
       return { enquiryId: input.enquiryId };
     }
     case QuotationSource.CUSTOMER: {
@@ -378,6 +373,40 @@ async function resolveSource(companyId: string, input: CreateQuotationInput) {
     default:
       return { manualCustomer: input.manualCustomer };
   }
+}
+
+/**
+ * Applies a status chosen on the quotation form.
+ *
+ * APPROVED is never written directly for an enquiry-sourced quotation: approve() is what confirms
+ * the enquiry, raises the Order and its Payment Tracker row, and re-sums the enquiry's final
+ * budget. Writing the column alone would leave an approved quotation with none of that, so the
+ * form's dropdown routes through exactly the same action the Confirm button uses. Customer /
+ * Order / Manual quotations have no enquiry to confirm, so for them APPROVED is just a label.
+ */
+async function applyFormStatus(
+  companyId: string,
+  actorId: string,
+  id: string,
+  status: QuotationStatus,
+  source: QuotationSource,
+) {
+  if (status === QuotationStatus.APPROVED && source === QuotationSource.ENQUIRY) {
+    return approve(companyId, actorId, id);
+  }
+
+  const updated = await quotationsRepository.updateQuotationStatus(id, status);
+
+  await logActivity({
+    companyId,
+    module: 'QUOTATIONS',
+    referenceId: id,
+    action: 'STATUS_CHANGE',
+    description: `Quotation "${updated.quotationNumber}" (v${updated.version}) marked as ${status}.`,
+    performedById: actorId,
+  });
+
+  return mapDetail(updated);
 }
 
 export async function create(companyId: string, actorId: string, input: CreateQuotationInput) {
@@ -445,13 +474,12 @@ export async function create(companyId: string, actorId: string, input: CreateQu
     );
 
     if (input.source === QuotationSource.ENQUIRY) {
+      // Amount/version only. "md files/Enquiry/enq.md" §1: creating a quotation must NOT change the
+      // enquiry's status — the two lifecycles are independent, and the user moves the enquiry on
+      // when they decide to, not as a side effect of raising a document.
       await enquiriesRepository.updateEnquiry(
         input.enquiryId!,
-        {
-          status: EnquiryStatus.QUOTATION_TO_SHARE,
-          quotationAmount: totalAmount,
-          quotationVersion: version,
-        },
+        { quotationAmount: totalAmount, quotationVersion: version },
         tx,
       );
     }
@@ -470,34 +498,30 @@ export async function create(companyId: string, actorId: string, input: CreateQu
     performedById: actorId,
   });
 
+  // Saved as DRAFT by the repository, so anything else the form asked for is applied on top —
+  // after the create is logged, so the timeline reads "created" then "marked as ...".
+  if (input.status && input.status !== QuotationStatus.DRAFT) {
+    return applyFormStatus(companyId, actorId, created.id, input.status, created.source);
+  }
+
   const refreshed = await quotationsRepository.findQuotationById(companyId, created.id);
   return mapDetail(refreshed ?? created);
 }
-
-// APPROVED is editable because extra work is routinely agreed late in the event — and since there is
-// no order-level item list, the quotation's items are the only place to record it. REVISED (already
-// superseded by a newer version) and REJECTED (the enquiry was lost) stay locked: editing either
-// would rewrite a dead document rather than the live one.
-const EDITABLE_QUOTATION_STATUSES: QuotationStatus[] = [
-  QuotationStatus.DRAFT,
-  QuotationStatus.SENT,
-  QuotationStatus.APPROVED,
-];
 
 export async function update(companyId: string, actorId: string, id: string, input: UpdateQuotationInput) {
   const existing = await quotationsRepository.findQuotationById(companyId, id);
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
-  if (!EDITABLE_QUOTATION_STATUSES.includes(existing.status)) {
-    throw new AppError(400, `Cannot edit a quotation with status ${existing.status}.`);
-  }
+  // No status-based edit lock: "md files/Enquiry/enq.md" §6/§7 — a quotation stays editable at every
+  // stage, including after it has been sent, revised, rejected or approved. The only remaining guard
+  // is the one below, which protects banked money rather than the workflow.
 
   // An approved quotation may already have become an order, whose totalAmount/pendingAmount are
-  // stored copies of this quotation's total. Both terminal order statuses are off limits: CLOSED is
-  // only reachable at a zero balance (orders/service.ts), so re-opening the amount would leave a
-  // closed order owing money, and a CANCELLED order should not move at all.
+  // stored copies of this quotation's total. Both terminal order statuses are off limits:
+  // ORDER_CLOSED is only reachable at a zero balance (orders/service.ts), so re-opening the amount
+  // would leave a closed order owing money, and a REJECTED order should not move at all.
   const linkedOrder = await ordersRepository.findOrderByQuotationId(companyId, id);
-  if (linkedOrder && (linkedOrder.status === OrderStatus.CLOSED || linkedOrder.status === OrderStatus.CANCELLED)) {
+  if (linkedOrder && (linkedOrder.status === OrderStatus.ORDER_CLOSED || linkedOrder.status === OrderStatus.REJECTED)) {
     throw new AppError(
       400,
       `Cannot edit this quotation because order "${linkedOrder.orderNumber}" is ${linkedOrder.status}.`,
@@ -526,7 +550,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
     ]);
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const { updated, orderTotal } = await prisma.$transaction(async (tx) => {
     const quotation = await quotationsRepository.updateQuotation(
       id,
       {
@@ -544,18 +568,24 @@ export async function update(companyId: string, actorId: string, id: string, inp
       tx,
     );
 
+    const isApproved = existing.status === QuotationStatus.APPROVED;
+    // Read back after the write above, so the edited amount is already part of the sum.
+    const approvedTotal =
+      existing.source === QuotationSource.ENQUIRY && existing.enquiry && isApproved
+        ? await quotationsRepository.sumApprovedQuotationTotalForEnquiry(companyId, existing.enquiry.id, tx)
+        : null;
+
     if (existing.source === QuotationSource.ENQUIRY && existing.enquiry) {
       const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, existing.enquiry.id, tx);
       const isLatest = Boolean(latest && latest.id === id);
-      const isApproved = existing.status === QuotationStatus.APPROVED;
       if (isLatest || isApproved) {
         await enquiriesRepository.updateEnquiry(
           existing.enquiry.id,
           {
             ...(isLatest ? { quotationAmount: totalAmount, quotationVersion: existing.version } : {}),
-            // finalBudgetAmount mirrors the approved quotation's total (set in approve()), so it has
-            // to follow that quotation when it is edited afterwards.
-            ...(isApproved ? { finalBudgetAmount: totalAmount } : {}),
+            // finalBudgetAmount is the combined total of every confirmed quotation (see approve()),
+            // so editing one of them has to re-sum rather than overwrite with this one's total.
+            ...(approvedTotal !== null ? { finalBudgetAmount: approvedTotal } : {}),
           },
           tx,
         );
@@ -565,15 +595,19 @@ export async function update(companyId: string, actorId: string, id: string, inp
     // Keep the order's stored money in step with the quotation it was raised from. Payments already
     // banked are untouched — only the total moves, so the balance absorbs the difference exactly as
     // payments/service.ts computes it (pending = total − paid).
+    const effectiveOrderTotal = approvedTotal ?? totalAmount;
     if (linkedOrder) {
       await ordersRepository.updateOrder(
         linkedOrder.id,
-        { totalAmount, pendingAmount: roundCurrency(totalAmount - Number(linkedOrder.paidAmount)) },
+        {
+          totalAmount: effectiveOrderTotal,
+          pendingAmount: roundCurrency(effectiveOrderTotal - Number(linkedOrder.paidAmount)),
+        },
         tx,
       );
     }
 
-    return quotation;
+    return { updated: quotation, orderTotal: effectiveOrderTotal };
   });
 
   await regeneratePdf(companyId, updated);
@@ -595,9 +629,15 @@ export async function update(companyId: string, actorId: string, id: string, inp
       module: 'ORDERS',
       referenceId: linkedOrder.id,
       action: 'UPDATE',
-      description: `Order total changed to ${totalAmount} after quotation "${existing.quotationNumber}" (v${existing.version}) was edited.`,
+      description: `Order total changed to ${orderTotal} after quotation "${existing.quotationNumber}" (v${existing.version}) was edited.`,
       performedById: actorId,
     });
+  }
+
+  // Applied last, so approve()'s re-sum of the enquiry's final budget and the linked order's total
+  // reads the amounts this edit just saved rather than the ones it replaced.
+  if (input.status && input.status !== existing.status) {
+    return applyFormStatus(companyId, actorId, id, input.status, existing.source);
   }
 
   const refreshed = await quotationsRepository.findQuotationById(companyId, id);
@@ -617,19 +657,10 @@ export async function changeStatus(
   const existing = await quotationsRepository.findQuotationById(companyId, id);
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const quotation = await quotationsRepository.updateQuotationStatus(id, targetStatus as QuotationStatus, tx);
-
-    // Enquiry lifecycle sync only applies to enquiry-sourced quotations. Sending marks the enquiry
-    // QUOTATION_SHARED; rejection is a lost enquiry (ORDER_LOST is the terminal "lost" bucket).
-    if (existing.source === QuotationSource.ENQUIRY && existing.enquiry) {
-      const enquiryTargetStatus =
-        targetStatus === 'SENT' ? EnquiryStatus.QUOTATION_SHARED : EnquiryStatus.ORDER_LOST;
-      await enquiriesRepository.updateEnquiryStatus(existing.enquiry.id, enquiryTargetStatus, tx);
-    }
-
-    return quotation;
-  });
+  // No enquiry lifecycle sync. "md files/Enquiry/enq.md" §3: changing a quotation's status must NOT
+  // change the enquiry's — sending or rejecting a revision says nothing about where the enquiry
+  // itself stands, and the user moves that on deliberately (or via Confirm, see approve()).
+  const updated = await quotationsRepository.updateQuotationStatus(id, targetStatus as QuotationStatus);
 
   await logActivity({
     companyId,
@@ -645,35 +676,40 @@ export async function changeStatus(
   return mapDetail(updated);
 }
 
+/**
+ * "Confirm Quotation" — "md files/Enquiry/enq.md" §5.
+ *
+ * The one manual action that does move the enquiry on: it marks this quotation confirmed, converts
+ * the enquiry to Order Confirmed, and lets the existing flow raise the Order and its Payment Tracker
+ * row. Other quotations are left exactly as they are, available as history (§5), and any number of
+ * them may be confirmed (§2) — the enquiry's committed figure is their combined total.
+ */
 export async function approve(companyId: string, actorId: string, id: string) {
   const existing = await quotationsRepository.findQuotationById(companyId, id);
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
-  // Only enquiry-sourced quotations feed the enquiry→order workflow, so approval (and its
-  // single-approved-per-enquiry guard) is limited to that source.
+  // Only enquiry-sourced quotations feed the enquiry→order workflow.
   if (existing.source !== QuotationSource.ENQUIRY || !existing.enquiry) {
-    throw new AppError(400, 'Only an enquiry-based quotation can be approved for conversion to an order.');
-  }
-
-  const alreadyApproved = await quotationsRepository.findApprovedQuotationForEnquiry(companyId, existing.enquiry.id);
-  if (alreadyApproved) {
-    throw new AppError(409, 'This enquiry already has an approved quotation.');
+    throw new AppError(400, 'Only an enquiry-based quotation can be confirmed for conversion to an order.');
   }
 
   const enquiryId = existing.enquiry.id;
-  const updated = await prisma.$transaction(async (tx) => {
+  const enquiryStatusBefore = existing.enquiry.status;
+
+  const { updated, approvedTotal } = await prisma.$transaction(async (tx) => {
     const approved = await quotationsRepository.updateQuotationStatus(id, QuotationStatus.APPROVED, tx);
-    // finalBudgetAmount is the sum of the enquiry's approved quotation(s) — only one can be
-    // approved per enquiry at a time (the alreadyApproved guard above), so this is just that
-    // quotation's total, but expressed as a sum so it stays correct if that rule ever relaxes.
-    // It's a stored, user-editable field (not recomputed on read), so a manual override made
-    // after this sticks until the next approval.
+
+    // Summed after this quotation is already APPROVED, so it is included. finalBudgetAmount stays a
+    // stored, user-editable field — a manual override made later sticks until the next confirmation.
+    const total = await quotationsRepository.sumApprovedQuotationTotalForEnquiry(companyId, enquiryId, tx);
+
     await enquiriesRepository.updateEnquiry(
       enquiryId,
-      { quotationAmount: existing.totalAmount, quotationVersion: existing.version, finalBudgetAmount: existing.totalAmount },
+      { quotationAmount: existing.totalAmount, quotationVersion: existing.version, finalBudgetAmount: total },
       tx,
     );
-    return approved;
+
+    return { updated: approved, approvedTotal: total };
   });
 
   await logActivity({
@@ -681,9 +717,50 @@ export async function approve(companyId: string, actorId: string, id: string) {
     module: 'QUOTATIONS',
     referenceId: id,
     action: 'APPROVE',
-    description: `Quotation "${existing.quotationNumber}" (v${existing.version}) approved.`,
+    description: `Quotation "${existing.quotationNumber}" (v${existing.version}) confirmed.`,
     performedById: actorId,
   });
+
+  // Delegated rather than written here: changeStatus() also materialises an unconfirmed prospect
+  // into a Customer, logs the transition, and runs the auto-conversion into Orders/Payment Tracker.
+  // Skipped when the enquiry is already confirmed, so re-confirming a second quotation does not
+  // repeat the transition.
+  if (enquiryStatusBefore !== EnquiryStatus.ORDER_CONFIRMED) {
+    await enquiriesService.changeStatus(companyId, actorId, enquiryId, EnquiryStatus.ORDER_CONFIRMED);
+  }
+
+  // The order is raised from a single quotation, so once more than one is confirmed its total has to
+  // be lifted to the combined figure. Banked payments are untouched — only the total moves, and the
+  // balance absorbs the difference (pending = total − paid), as payments/service.ts computes it.
+  const linkedOrder = await ordersRepository.findOrderByEnquiryId(companyId, enquiryId);
+  if (linkedOrder && linkedOrder.status !== OrderStatus.ORDER_CLOSED && linkedOrder.status !== OrderStatus.REJECTED) {
+    const totalChanged = roundCurrency(Number(linkedOrder.totalAmount)) !== roundCurrency(approvedTotal);
+    // An order raised before any quotation existed (or confirmed straight to Order Confirmed) has
+    // quotationId null — the first quotation approved for it afterwards is the one it should point
+    // to, so its Quotation tab and downloads stop coming up empty.
+    const quotationLinkMissing = !linkedOrder.quotationId;
+
+    if (totalChanged || quotationLinkMissing) {
+      await ordersRepository.updateOrder(linkedOrder.id, {
+        ...(totalChanged && {
+          totalAmount: approvedTotal,
+          pendingAmount: roundCurrency(approvedTotal - Number(linkedOrder.paidAmount)),
+        }),
+        ...(quotationLinkMissing && { quotationId: id }),
+      });
+
+      await logActivity({
+        companyId,
+        module: 'ORDERS',
+        referenceId: linkedOrder.id,
+        action: 'UPDATE',
+        description: totalChanged
+          ? `Order total changed to ${approvedTotal} after quotation "${existing.quotationNumber}" (v${existing.version}) was confirmed.`
+          : `Order linked to quotation "${existing.quotationNumber}" (v${existing.version}) after it was confirmed.`,
+        performedById: actorId,
+      });
+    }
+  }
 
   return mapDetail(updated);
 }

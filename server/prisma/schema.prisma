@@ -73,17 +73,13 @@ enum QuotationSource {
   MANUAL
 }
 
+// Order/event lifecycle — 4 stages only. Payment standing is tracked separately (PaymentTracker),
+// task planning is tracked separately (TaskGroup/TaskItem), and neither reads this field anymore.
 enum OrderStatus {
-  CONFIRMED
-  ADVANCE_PENDING
-  ADVANCE_RECEIVED
-  PLANNING
-  READY
+  YET_TO_START
   IN_PROGRESS
-  COMPLETED
-  BALANCE_PENDING
-  CLOSED
-  CANCELLED
+  ORDER_CLOSED
+  REJECTED
 }
 
 enum PaymentType {
@@ -433,6 +429,17 @@ model Enquiry {
   // computation, so a manual override afterward sticks instead of being recalculated away.
   finalBudgetAmount Decimal? @map("final_budget_amount") @db.Decimal(12, 2)
 
+  // The advance agreed at enquiry stage, recorded alongside the final budget. Purely a record:
+  // conversion does not seed it onto the order, and it creates no Payment — money collected still
+  // belongs solely to Orders (CLAUDE.md §Business Rules) and is entered via the Payment Tracker.
+  advanceAmount Decimal? @map("advance_amount") @db.Decimal(12, 2)
+
+  // When the customer should next be contacted — the optional Follow-up step of the documented
+  // workflow, recorded on the enquiry itself rather than as a lifecycle status. Distinct from the
+  // EnquiryFollowUp rows below, which log follow-ups that have already happened; this is the one
+  // still owed. Indexed because the value's whole purpose is "what is due" queries.
+  followUpDate DateTime? @map("follow_up_date")
+
   status EnquiryStatus @default(PENDING)
 
   createdAt DateTime  @default(now()) @map("created_at")
@@ -449,6 +456,7 @@ model Enquiry {
 
   @@index([eventDate])
   @@index([status])
+  @@index([followUpDate])
   @@map("enquiries")
 }
 
@@ -577,10 +585,16 @@ model Order {
   companyId   String @map("company_id") @db.Char(36)
   orderNumber String @unique @map("order_number")
   enquiryId   String @map("enquiry_id") @db.Char(36)
-  quotationId String @map("quotation_id") @db.Char(36)
-  customerId  String @map("customer_id") @db.Char(36)
+  // Nullable: an enquiry moved to Order Confirmed always lands in Orders and the Payment Tracker,
+  // whether or not a quotation was ever raised for it ("md files/Enquiry/flow.md" §3 — the enquiry's
+  // status is the decision). Without one, the order's total falls back to the enquiry's final /
+  // estimated budget and its invoice prints no line items.
+  quotationId String? @map("quotation_id") @db.Char(36)
+  customerId  String  @map("customer_id") @db.Char(36)
 
-  eventDate DateTime @map("event_date")
+  // Nullable for the same reason: confirming an enquiry that has no event date yet still raises the
+  // order. Such an order stays off the calendar until a date is set on it.
+  eventDate DateTime? @map("event_date")
   venue     String?
   // "Requirements" per 02_BUSINESS_WORKFLOW.md §6 (copied from the enquiry at conversion time)
   // and 03_MODULES.md Order Tab 1 — not in 04_DATABASE_DESIGN.md's field list.
@@ -599,7 +613,7 @@ model Order {
   // 02_BUSINESS_WORKFLOW.md §14 — reason is mandatory when cancelling; enforced in the Service layer.
   cancellationReason String? @map("cancellation_reason") @db.Text
 
-  status OrderStatus @default(CONFIRMED)
+  status OrderStatus @default(YET_TO_START)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -607,7 +621,7 @@ model Order {
 
   company           Company         @relation(fields: [companyId], references: [id])
   enquiry           Enquiry         @relation(fields: [enquiryId], references: [id])
-  quotation         Quotation       @relation("OrderApprovedQuotation", fields: [quotationId], references: [id])
+  quotation         Quotation?      @relation("OrderApprovedQuotation", fields: [quotationId], references: [id])
   customer          Customer        @relation(fields: [customerId], references: [id])
   coordinator       User?           @relation("OrderCoordinator", fields: [coordinatorId], references: [id])
   paymentTracker    PaymentTracker?

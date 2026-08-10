@@ -23,8 +23,31 @@ export interface RevenueMethodBreakdown {
   amount: string;
 }
 
+/** One calendar month of collected revenue. `month` is `YYYY-MM`; the API returns them oldest first. */
+export interface RevenueMonthlyPoint {
+  month: string;
+  amount: string;
+  paymentCount: number;
+}
+
+export interface RevenueReportSummary {
+  /** Payment-date based: money that came in during the filtered window. */
+  totalRevenue: string;
+  paymentCount: number;
+  /**
+   * Event-date based and reconciling — expected = collected + pending for the events in the
+   * window. A different lens from totalRevenue: what those events are worth overall, not what was
+   * received inside the date range.
+   */
+  expectedAmount: string;
+  collectedAmount: string;
+  pendingAmount: string;
+  monthly: RevenueMonthlyPoint[];
+  methodBreakdown: RevenueMethodBreakdown[];
+}
+
 export interface RevenueReportResult {
-  summary: { totalRevenue: string; paymentCount: number; methodBreakdown: RevenueMethodBreakdown[] };
+  summary: RevenueReportSummary;
   payments: RevenuePaymentRow[];
 }
 

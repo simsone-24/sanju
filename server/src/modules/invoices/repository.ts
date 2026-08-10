@@ -44,10 +44,10 @@ const invoiceSourceSelect = {
 
 export type InvoiceSource = Prisma.OrderGetPayload<{ select: typeof invoiceSourceSelect }>;
 
-// A cancelled order is not billable, so it has no invoice to raise.
+// A rejected order is not billable, so it has no invoice to raise.
 export function findInvoiceSource(companyId: string, orderId: string, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({
-    where: { id: orderId, companyId, deletedAt: null, status: { not: OrderStatus.CANCELLED } },
+    where: { id: orderId, companyId, deletedAt: null, status: { not: OrderStatus.REJECTED } },
     select: invoiceSourceSelect,
   });
 }

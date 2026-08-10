@@ -7,11 +7,21 @@ import { useForm } from 'react-hook-form';
 import { FileUploader } from '../../../components/FileUploader';
 import { usePermission } from '../../../hooks/usePermission';
 import * as companyService from '../../../services/companyService';
+import { useAuthStore } from '../../../store/authStore';
 import type { ApiErrorResponse } from '../../../types/api';
+import type { CompanyDetail } from '../../../types/company';
 import { getPublicAssetUrl } from '../../../utils/format';
 import { updateCompanySchema, type UpdateCompanyFormValues } from '../../../validation/companySchemas';
 
 const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
+
+// The sidebar draws its name and logo from the persisted auth profile, which is otherwise only
+// written at sign-in — an edit here has to be pushed into it or the branding lags a whole session.
+function syncProfileBranding(updated: CompanyDetail) {
+  const { user, setUser } = useAuthStore.getState();
+  if (!user || user.company.id !== updated.id) return;
+  setUser({ ...user, company: { ...user.company, companyName: updated.companyName, logo: updated.logo } });
+}
 
 export default function CompanyInfoTab() {
   const queryClient = useQueryClient();
@@ -98,8 +108,9 @@ export default function CompanyInfoTab() {
         footerMessage: values.footerMessage || undefined,
         termsAndConditions: values.termsAndConditions || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      syncProfileBranding(updated);
     },
   });
 
@@ -118,8 +129,9 @@ export default function CompanyInfoTab() {
 
   const logoMutation = useMutation({
     mutationFn: (file: File) => companyService.uploadLogo(file),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      syncProfileBranding(updated);
       setLogoFile(null);
     },
   });

@@ -6,14 +6,16 @@ interface FormSectionProps {
   subtitle?: string;
   /** Optional leading icon, shown in a tinted round chip in place of the plain accent bar. */
   icon?: ReactNode;
+  /** DOM id, so a link can open the page scrolled to this section (see useScrollToAnchor). */
+  id?: string;
   children: ReactNode;
 }
 
 // md files/UI-2.md "Form Sections": group fields into cards (Customer Information, Event
 // Information, Payment Details, ...) instead of one long unbroken form.
-export function FormSection({ title, subtitle, icon, children }: FormSectionProps) {
+export function FormSection({ title, subtitle, icon, id, children }: FormSectionProps) {
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+    <Paper id={id} variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 } }}>
       <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 2.5 }}>
         {icon ? (
           <Box

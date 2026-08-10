@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { PaymentType, Prisma } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
 
 const paymentSelect = {
@@ -38,4 +38,12 @@ export function findPaymentById(companyId: string, id: string, client: PrismaCli
 
 export function createPayment(data: Prisma.PaymentUncheckedCreateInput, client: PrismaClientOrTx = prisma) {
   return client.payment.create({ data, select: paymentDetailSelect });
+}
+
+/** Whether an order already has its opening advance — the guard that keeps the enquiry's advance
+ *  from being carried across a second time (orders/service.ts syncOrderFromEnquiry). */
+export function countAdvancePayments(orderId: string, client: PrismaClientOrTx = prisma) {
+  return client.payment.count({
+    where: { orderId, deletedAt: null, paymentType: PaymentType.ADVANCE },
+  });
 }

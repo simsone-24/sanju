@@ -22,6 +22,8 @@ export interface ManualCustomerInput {
 
 export interface CreateQuotationInput {
   source: QuotationSource;
+  /** Status to save the new quotation in; defaults to DRAFT. REVISED is not a valid starting state. */
+  status?: Exclude<QuotationStatus, 'REVISED'>;
   enquiryId?: string;
   customerId?: string;
   orderId?: string;
@@ -36,6 +38,7 @@ export interface CreateQuotationInput {
 }
 
 export interface UpdateQuotationInput {
+  status?: QuotationStatus;
   quotationDate?: Date;
   discount?: number;
   cgstPercent?: number;

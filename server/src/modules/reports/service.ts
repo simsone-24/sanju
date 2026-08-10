@@ -4,12 +4,30 @@ import * as reportsRepository from './repository';
 import { CustomerReportParams, EventReportParams, OutstandingReportParams, RevenueReportParams } from './types';
 
 export async function getRevenueReport(params: RevenueReportParams) {
-  const { records, totalRecords, totalRevenue, methodBreakdown } = await reportsRepository.listPaymentsForRevenue(
-    params,
-  );
+  const {
+    records,
+    totalRecords,
+    totalRevenue,
+    expectedAmount,
+    collectedAmount,
+    pendingAmount,
+    monthly,
+    methodBreakdown,
+  } = await reportsRepository.listPaymentsForRevenue(params);
   return {
     data: {
-      summary: { totalRevenue, paymentCount: totalRecords, methodBreakdown },
+      summary: {
+        // Payment-date based: money that came in during the window.
+        totalRevenue,
+        paymentCount: totalRecords,
+        // Event-date based, and reconciling: expected = collected + pending for the events in the
+        // window. Deliberately a different lens from totalRevenue above — see the repository.
+        expectedAmount,
+        collectedAmount,
+        pendingAmount,
+        monthly,
+        methodBreakdown,
+      },
       payments: records,
     },
     meta: buildPaginationMeta(params.page, params.limit, totalRecords),
