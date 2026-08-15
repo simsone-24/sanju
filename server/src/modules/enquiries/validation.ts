@@ -1,4 +1,4 @@
-import { AppointmentStatus, EnquiryStatus } from '@prisma/client';
+import { AppointmentStatus, EnquiryStatus, EventTime } from '@prisma/client';
 import { z } from 'zod';
 
 const mobileSchema = z.string().regex(/^[6-9]\d{9}$/, 'Mobile number must be a valid 10-digit number.');
@@ -25,6 +25,7 @@ export const createEnquirySchema = z.object({
   eventTypeId: z.string().uuid('A valid event type is required.'),
   eventName: z.string().min(1).optional(),
   eventDate: z.coerce.date({ required_error: 'Event date is required.' }),
+  eventTime: z.nativeEnum(EventTime).optional(),
   mahal: z.string().min(1).optional(),
   venue: z.string().min(1).optional(),
   estimatedBudget: z.coerce.number().min(0).optional(),
@@ -50,6 +51,7 @@ export const updateEnquirySchema = z
     eventTypeId: z.string().uuid().optional(),
     eventName: z.string().min(1).optional(),
     eventDate: z.coerce.date().optional(),
+    eventTime: z.nativeEnum(EventTime).optional(),
     mahal: z.string().min(1).optional(),
     venue: z.string().min(1).optional(),
     estimatedBudget: z.coerce.number().min(0).optional(),

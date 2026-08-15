@@ -20,4 +20,10 @@ export const env = {
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
   uploadPath: process.env.UPLOAD_PATH ?? 'uploads',
+  // Comma-separated browser origins allowed to call the API. Defaults to the Vite dev server
+  // so local development works without extra configuration.
+  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean),
 };

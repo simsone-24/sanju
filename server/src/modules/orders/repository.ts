@@ -46,9 +46,9 @@ const orderListSelect = {
   status: true,
   createdAt: true,
   customer: { select: { id: true, customerName: true, mobile: true } },
-  // The event's name/type live on the linked enquiry, not the order — surfaced here so the Orders
-  // list can show an Event column ("md files/order/filter.md" §Orders Table).
-  enquiry: { select: { eventName: true, eventType: { select: { eventName: true } } } },
+  // The event's name/type/time live on the linked enquiry, not the order — surfaced here so the
+  // Orders list can show an Event column ("md files/order/filter.md" §Orders Table).
+  enquiry: { select: { eventName: true, eventTime: true, eventType: { select: { eventName: true } } } },
   // The Payment Tracker's own stored status, so the Orders module reports the same payment standing
   // the tracker does (Advance Paid / Partial Payment / Fully Paid) instead of a second vocabulary
   // derived from the amounts alone — which could not tell an advance apart from a part payment.
@@ -65,7 +65,13 @@ const orderDetailSelect = {
   // OrderListItem. The extra fields feed the Order Details summary card and its Customer/Event
   // cards ("md files/order/view.md").
   enquiry: {
-    select: { id: true, enquiryNumber: true, eventName: true, eventType: { select: { eventName: true } } },
+    select: {
+      id: true,
+      enquiryNumber: true,
+      eventName: true,
+      eventTime: true,
+      eventType: { select: { eventName: true } },
+    },
   },
   customer: {
     select: { id: true, customerName: true, mobile: true, email: true, address: true, createdAt: true },

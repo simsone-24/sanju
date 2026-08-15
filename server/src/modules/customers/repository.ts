@@ -110,6 +110,14 @@ export function createCustomer(data: Prisma.CustomerUncheckedCreateInput, client
   return client.customer.create({ data, select: customerDetailSelect });
 }
 
+export function updateCustomer(
+  id: string,
+  data: Prisma.CustomerUncheckedUpdateInput,
+  client: PrismaClientOrTx = prisma,
+) {
+  return client.customer.update({ where: { id }, data, select: customerDetailSelect });
+}
+
 export function getCustomerOrders(customerId: string) {
   return prisma.order.findMany({
     where: { customerId, deletedAt: null },

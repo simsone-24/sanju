@@ -210,6 +210,7 @@ export async function create(companyId: string, actorId: string, input: CreateEn
         eventTypeId: input.eventTypeId,
         eventName: input.eventName,
         eventDate: input.eventDate,
+        eventTime: input.eventTime,
         mahal: input.mahal,
         venue: input.venue,
         estimatedBudget: input.estimatedBudget,

@@ -1,3 +1,4 @@
+import type { EventTime } from './enquiry';
 import type { PaymentTrackerStatus } from './paymentTracker';
 import type { QuotationStatus } from './quotation';
 
@@ -18,8 +19,8 @@ export interface OrderListItem {
   status: OrderStatus;
   createdAt: string;
   customer: { id: string; customerName: string; mobile: string };
-  // Event name/type come from the linked enquiry — Order itself has no event name column.
-  enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
+  // Event name/type/time come from the linked enquiry — Order itself has no event name column.
+  enquiry: { eventName: string | null; eventTime: EventTime | null; eventType: { eventName: string } } | null;
   /** The Payment Tracker's stored status, so both modules report the same payment standing. */
   paymentTracker: { paymentStatus: PaymentTrackerStatus } | null;
 }
@@ -69,7 +70,13 @@ export interface OrderDetail extends OrderListItem {
   updatedAt: string;
   // Widens OrderListItem's enquiry/customer rather than replacing them — the detail endpoint
   // returns a superset (see orderDetailSelect).
-  enquiry: { id: string; enquiryNumber: string; eventName: string | null; eventType: { eventName: string } };
+  enquiry: {
+    id: string;
+    enquiryNumber: string;
+    eventName: string | null;
+    eventTime: EventTime | null;
+    eventType: { eventName: string };
+  };
   customer: { id: string; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
   // Null when the enquiry was confirmed without any quotation — the order's total then comes from
   // the enquiry's final/estimated budget instead.

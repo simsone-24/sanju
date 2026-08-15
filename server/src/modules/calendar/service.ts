@@ -1,4 +1,4 @@
-import { OrderStatus } from '@prisma/client';
+import { EventTime, OrderStatus } from '@prisma/client';
 import * as calendarRepository from './repository';
 import { CalendarColor, CalendarEvent } from './types';
 
@@ -11,7 +11,7 @@ type CalendarOrder = {
   venue: string | null;
   status: OrderStatus;
   customer: { customerName: string };
-  enquiry: { eventName: string | null; eventType: { eventName: string } };
+  enquiry: { eventName: string | null; eventTime: EventTime | null; mahal: string | null; eventType: { eventName: string } };
 };
 
 type DatedCalendarOrder = CalendarOrder & { eventDate: Date };
@@ -29,7 +29,10 @@ function toCalendarEvent(order: DatedCalendarOrder): CalendarEvent {
     orderNumber: order.orderNumber,
     customerName: order.customer.customerName,
     eventName: order.enquiry.eventName || order.enquiry.eventType.eventName,
+    eventType: order.enquiry.eventType.eventName,
     eventDate: order.eventDate,
+    eventTime: order.enquiry.eventTime,
+    mahal: order.enquiry.mahal,
     venue: order.venue,
     status: order.status,
     color: STATUS_COLOR[order.status],

@@ -8,6 +8,8 @@ export type EnquiryStatus =
 
 export type AppointmentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
+export type EventTime = 'MORNING' | 'EVENING';
+
 export interface EnquiryListItem {
   id: string;
   enquiryNumber: string;
@@ -46,6 +48,7 @@ export interface EnquiryFollowUp {
 
 export interface EnquiryDetail extends EnquiryListItem {
   prospect: EnquiryProspect | null;
+  eventTime: EventTime | null;
   mahal: string | null;
   venue: string | null;
   estimatedBudget: string | null;
@@ -87,6 +90,7 @@ export interface CreateEnquiryInput {
   eventTypeId: string;
   eventName?: string;
   eventDate?: string;
+  eventTime?: EventTime;
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;

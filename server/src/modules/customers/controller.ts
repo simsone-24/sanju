@@ -5,7 +5,7 @@ import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
 import * as customersService from './service';
-import { listCustomersQuerySchema } from './validation';
+import { UpdateCustomerSchema, listCustomersQuerySchema } from './validation';
 
 function requireUser(req: Request): AuthenticatedUser {
   if (!req.user) throw new AppError(401, 'Authentication required.');
@@ -48,6 +48,20 @@ export async function getHistory(req: Request, res: Response, next: NextFunction
     const actor = requireUser(req);
     const history = await customersService.getHistory(actor.companyId, req.params.id);
     sendSuccess(res, history, 'Customer history retrieved successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function update(
+  req: Request<{ id: string }, unknown, UpdateCustomerSchema>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const customer = await customersService.update(actor.companyId, actor.id, req.params.id, req.body);
+    sendSuccess(res, customer, 'Customer updated successfully.');
   } catch (error) {
     next(error);
   }

@@ -29,6 +29,7 @@ const enquiryDetailSelect = {
   prospectEmail: true,
   prospectAddress: true,
   prospectCity: true,
+  eventTime: true,
   mahal: true,
   venue: true,
   estimatedBudget: true,

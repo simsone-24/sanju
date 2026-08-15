@@ -56,6 +56,11 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+enum EventTime {
+  MORNING
+  EVENING
+}
+
 enum QuotationStatus {
   DRAFT
   SENT
@@ -400,14 +405,17 @@ model Enquiry {
   prospectAddress  String? @map("prospect_address") @db.Text
   prospectCity     String? @map("prospect_city")
 
-  eventName       String?   @map("event_name")
-  eventDate       DateTime? @map("event_date")
+  eventName       String?    @map("event_name")
+  eventDate       DateTime?  @map("event_date")
+  // Coarse time-of-day for the event (Morning/Evening) — separate from the appointment's own
+  // appointmentTime, which is when the customer is met, not when the event itself happens.
+  eventTime       EventTime? @map("event_time")
   mahal           String?
   venue           String?
-  estimatedBudget Decimal?  @map("estimated_budget") @db.Decimal(12, 2)
+  estimatedBudget Decimal?   @map("estimated_budget") @db.Decimal(12, 2)
   // 03_MODULES.md's Event Information section lists "Notes" distinct from the appointment's
   // "Discussion Notes" (appointmentNotes below) — not in 04_DATABASE_DESIGN.md's field list.
-  notes           String?   @db.Text
+  notes           String?    @db.Text
 
   appointmentDate   DateTime?         @map("appointment_date")
   appointmentTime   String?           @map("appointment_time")
@@ -581,10 +589,10 @@ model QuotationImage {
 // ---------------------------------------------------------------------------
 
 model Order {
-  id          String @id @default(uuid()) @db.Char(36)
-  companyId   String @map("company_id") @db.Char(36)
-  orderNumber String @unique @map("order_number")
-  enquiryId   String @map("enquiry_id") @db.Char(36)
+  id          String  @id @default(uuid()) @db.Char(36)
+  companyId   String  @map("company_id") @db.Char(36)
+  orderNumber String  @unique @map("order_number")
+  enquiryId   String  @map("enquiry_id") @db.Char(36)
   // Nullable: an enquiry moved to Order Confirmed always lands in Orders and the Payment Tracker,
   // whether or not a quotation was ever raised for it ("md files/Enquiry/flow.md" §3 — the enquiry's
   // status is the decision). Without one, the order's total falls back to the enquiry's final /
@@ -598,10 +606,10 @@ model Order {
   venue     String?
   // "Requirements" per 02_BUSINESS_WORKFLOW.md §6 (copied from the enquiry at conversion time)
   // and 03_MODULES.md Order Tab 1 — not in 04_DATABASE_DESIGN.md's field list.
-  notes     String?  @db.Text
+  notes     String?   @db.Text
   // "Remarks" — listed separately from Requirements in 03_MODULES.md Order Tab 1; order-specific,
   // not copied from the enquiry.
-  remarks   String?  @db.Text
+  remarks   String?   @db.Text
 
   totalAmount   Decimal @map("total_amount") @db.Decimal(12, 2)
   paidAmount    Decimal @default(0) @map("paid_amount") @db.Decimal(12, 2)

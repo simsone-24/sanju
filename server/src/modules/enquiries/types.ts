@@ -1,4 +1,4 @@
-import { AppointmentStatus, EnquiryStatus } from '@prisma/client';
+import { AppointmentStatus, EnquiryStatus, EventTime } from '@prisma/client';
 
 export interface NewCustomerInput {
   type: 'NEW';
@@ -22,6 +22,7 @@ export interface CreateEnquiryInput {
   eventTypeId: string;
   eventName?: string;
   eventDate?: Date;
+  eventTime?: EventTime;
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;
@@ -48,6 +49,7 @@ export interface UpdateEnquiryInput {
   eventTypeId?: string;
   eventName?: string;
   eventDate?: Date;
+  eventTime?: EventTime;
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;

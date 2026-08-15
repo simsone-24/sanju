@@ -19,6 +19,7 @@ export const enquiryFormSchema = z
     eventTypeId: z.string().min(1, 'Select an event type.'),
     eventName: z.string().optional().or(z.literal('')),
     eventDate: z.string().min(1, 'Event date is required.'),
+    eventTime: z.enum(['MORNING', 'EVENING']).optional().or(z.literal('')),
     mahal: z.string().optional().or(z.literal('')),
     venue: z.string().optional().or(z.literal('')),
     estimatedBudget: z.string().optional().or(z.literal('')),

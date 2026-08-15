@@ -1,9 +1,7 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import BadgeIcon from '@mui/icons-material/Badge';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import EmailIcon from '@mui/icons-material/Email';
-import EventIcon from '@mui/icons-material/Event';
 import FlagIcon from '@mui/icons-material/Flag';
 import HistoryIcon from '@mui/icons-material/History';
 import HomeIcon from '@mui/icons-material/Home';
@@ -23,6 +21,7 @@ import {
   Box,
   Button,
   Chip,
+  Divider,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -204,10 +203,6 @@ export default function EnquiryDetailPage() {
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
   }
 
-  const appointmentSchedule = enquiry.appointmentDate
-    ? `${formatDate(enquiry.appointmentDate)}${enquiry.appointmentTime ? ` · ${enquiry.appointmentTime}` : ''}`
-    : 'Not scheduled';
-
   return (
     <Box>
       <Stack
@@ -276,14 +271,15 @@ export default function EnquiryDetailPage() {
 
       <EnquiryProgressTracker status={enquiry.status} />
 
-      {/* Single page, section by section — customer, event, appointment, commercials, notes and
-          quotations are all readable without switching tabs. */}
+      {/* One page, grouped into as few cards as the content allows — the header above already
+          carries customer, event date, appointment, assigned-to and the three money figures, so
+          nothing here repeats it. */}
       <Box
         sx={{
           display: 'grid',
           gap: 2.5,
           alignItems: 'start',
-          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(320px, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(300px, 1fr)' },
         }}
       >
         <Stack spacing={2.5} sx={{ minWidth: 0 }}>
@@ -294,7 +290,7 @@ export default function EnquiryDetailPage() {
               sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', rowGap: 1 }}
             >
               <Typography variant="h4" component="h2">
-                Customer &amp; Event Details
+                Customer &amp; Event
               </Typography>
               {customerRecord && <Chip size="small" variant="outlined" label={customerRecord.customerCode} />}
               {!enquiry.customer.id && (
@@ -309,7 +305,7 @@ export default function EnquiryDetailPage() {
                 gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
               }}
             >
-              <CardSection icon={<PersonOutlinedIcon fontSize="small" />} title="Customer Information" tone="primary">
+              <CardSection icon={<PersonOutlinedIcon fontSize="small" />} title="Contact" tone="primary">
                 <DetailRow
                   icon={<WhatsAppIcon sx={{ fontSize: 16 }} />}
                   label="WhatsApp"
@@ -324,50 +320,44 @@ export default function EnquiryDetailPage() {
                 <DetailRow icon={<HomeIcon sx={{ fontSize: 16 }} />} label="Address" value={contact?.address || '—'} />
               </CardSection>
 
-              <CardSection icon={<CelebrationIcon fontSize="small" />} title="Event Details" tone="success">
+              <CardSection icon={<CelebrationIcon fontSize="small" />} title="Event" tone="success">
                 <DetailRow
-                  icon={<EventIcon sx={{ fontSize: 16 }} />}
-                  label="Event Name"
-                  value={enquiry.eventName || '—'}
-                />
-                <DetailRow
-                  icon={<CalendarMonthIcon sx={{ fontSize: 16 }} />}
-                  label="Event Date"
-                  value={enquiry.eventDate ? formatDate(enquiry.eventDate) : '—'}
+                  icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
+                  label="Event Time"
+                  value={enquiry.eventTime ? (enquiry.eventTime === 'MORNING' ? 'Morning' : 'Evening') : '—'}
                 />
                 <DetailRow icon={<MeetingRoomIcon sx={{ fontSize: 16 }} />} label="Mahal" value={enquiry.mahal || '—'} />
                 <DetailRow icon={<PlaceIcon sx={{ fontSize: 16 }} />} label="Venue" value={enquiry.venue || '—'} />
               </CardSection>
             </Box>
-          </Paper>
 
-          <Paper variant="outlined" sx={CARD_SX}>
-            <CardSection icon={<CalendarMonthIcon fontSize="small" />} title="Appointment" tone="info">
-              <DetailRow
-                icon={<CalendarMonthIcon sx={{ fontSize: 16 }} />}
-                label="Scheduled For"
-                value={appointmentSchedule}
-              />
-              <DetailRow
-                icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
-                label="Status"
-                value={<StatusBadge type="appointment" status={enquiry.appointmentStatus} />}
-              />
-              <DetailRow
-                icon={<PlaceIcon sx={{ fontSize: 16 }} />}
-                label="Meeting Location"
-                value={enquiry.meetingLocation || '—'}
-              />
-              <DetailRow
-                icon={<NotesIcon sx={{ fontSize: 16 }} />}
-                label="Discussion Notes"
-                value={
-                  <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'pre-line' }}>
-                    {enquiry.appointmentNotes || '—'}
-                  </Typography>
-                }
-              />
-            </CardSection>
+            {/* Only once there is something to say beyond what the header's appointment badge and
+                date already cover — an enquiry with no meeting notes yet shouldn't grow a section. */}
+            {(enquiry.meetingLocation || enquiry.appointmentNotes) && (
+              <>
+                <Divider sx={{ my: 3 }} />
+                <CardSection icon={<CalendarMonthIcon fontSize="small" />} title="Appointment Notes" tone="info">
+                  {enquiry.meetingLocation && (
+                    <DetailRow
+                      icon={<PlaceIcon sx={{ fontSize: 16 }} />}
+                      label="Meeting Location"
+                      value={enquiry.meetingLocation}
+                    />
+                  )}
+                  {enquiry.appointmentNotes && (
+                    <DetailRow
+                      icon={<NotesIcon sx={{ fontSize: 16 }} />}
+                      label="Discussion"
+                      value={
+                        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'pre-line' }}>
+                          {enquiry.appointmentNotes}
+                        </Typography>
+                      }
+                    />
+                  )}
+                </CardSection>
+              </>
+            )}
           </Paper>
 
           <Paper variant="outlined" sx={CARD_SX}>
@@ -419,89 +409,18 @@ export default function EnquiryDetailPage() {
         <Stack spacing={2.5} sx={{ minWidth: 0 }}>
           <Paper variant="outlined" sx={CARD_SX}>
             <Typography variant="h4" component="h2" sx={{ mb: 2.5 }}>
-              Commercials
+              Activity
             </Typography>
-
-            {/* The committed figure — set from the approved quotation and editable afterwards, so it
-                is the number people come to this card for. Called out rather than listed. */}
-            <Box
-              sx={(theme) => ({
-                px: 2,
-                py: 1.5,
-                mb: 2.5,
-                borderRadius: '12px',
-                border: '1px solid',
-                borderColor: enquiry.finalBudgetAmount ? 'warning.main' : 'divider',
-                borderStyle: enquiry.finalBudgetAmount ? 'solid' : 'dashed',
-                backgroundColor: enquiry.finalBudgetAmount
-                  ? `color-mix(in srgb, ${(theme.vars ?? theme).palette.warning.main} 14%, transparent)`
-                  : 'transparent',
-              })}
-            >
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.25 }}>
-                <PaidIcon sx={{ fontSize: 16, color: enquiry.finalBudgetAmount ? 'warning.main' : 'text.secondary' }} />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
-                >
-                  Final Budget
-                </Typography>
-              </Stack>
-              <Typography
-                variant="h3"
-                component="div"
-                sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
-                color={enquiry.finalBudgetAmount ? 'text.primary' : 'text.secondary'}
-              >
-                {enquiry.finalBudgetAmount ? formatCurrency(enquiry.finalBudgetAmount) : 'Not finalised'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {enquiry.finalBudgetAmount
-                  ? "Amount committed for this enquiry — becomes the order's budget on confirmation."
-                  : 'Set automatically when a quotation is approved.'}
-              </Typography>
-            </Box>
-
             <Stack spacing={1.75}>
-              <DetailRow
-                icon={<PaidIcon sx={{ fontSize: 16 }} />}
-                label="Estimated Budget"
-                value={enquiry.estimatedBudget ? formatCurrency(enquiry.estimatedBudget) : '—'}
-              />
-              <DetailRow
-                icon={<RequestQuoteIcon sx={{ fontSize: 16 }} />}
-                label="Quotation Amount"
-                value={
-                  enquiry.quotationAmount
-                    ? `${formatCurrency(enquiry.quotationAmount)}${
-                        enquiry.quotationVersion ? ` (v${enquiry.quotationVersion})` : ''
-                      }`
-                    : 'Not quoted'
-                }
-              />
               {/* Only once recorded — an enquiry-stage advance is optional, and an empty row would
                   imply money is owed. */}
               {enquiry.advanceAmount && (
                 <DetailRow
                   icon={<PaidIcon sx={{ fontSize: 16 }} />}
-                  label="Advance Amount"
+                  label="Advance Paid"
                   value={formatCurrency(enquiry.advanceAmount)}
                 />
               )}
-            </Stack>
-          </Paper>
-
-          <Paper variant="outlined" sx={CARD_SX}>
-            <Typography variant="h4" component="h2" sx={{ mb: 2.5 }}>
-              Tracking
-            </Typography>
-            <Stack spacing={1.75}>
-              <DetailRow
-                icon={<BadgeIcon sx={{ fontSize: 16 }} />}
-                label="Assigned To"
-                value={enquiry.assignedUser?.fullName ?? 'Unassigned'}
-              />
               <DetailRow
                 icon={<UpdateIcon sx={{ fontSize: 16 }} />}
                 label="Follow-up Date"
@@ -520,21 +439,19 @@ export default function EnquiryDetailPage() {
             </Stack>
           </Paper>
 
-          <Paper variant="outlined" sx={CARD_SX}>
-            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2 }}>
-              <NotesIcon fontSize="small" sx={{ color: 'primary.main' }} />
-              <Typography variant="h4" component="h2">
-                Notes
+          {enquiry.notes && (
+            <Paper variant="outlined" sx={CARD_SX}>
+              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2 }}>
+                <NotesIcon fontSize="small" sx={{ color: 'primary.main' }} />
+                <Typography variant="h4" component="h2">
+                  Notes
+                </Typography>
+              </Stack>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {enquiry.notes}
               </Typography>
-            </Stack>
-            <Typography
-              variant="body2"
-              color={enquiry.notes ? 'text.primary' : 'text.secondary'}
-              sx={{ whiteSpace: 'pre-line' }}
-            >
-              {enquiry.notes || 'No notes recorded for this enquiry.'}
-            </Typography>
-          </Paper>
+            </Paper>
+          )}
         </Stack>
       </Box>
 
@@ -556,6 +473,10 @@ export default function EnquiryDetailPage() {
           id: enquiry.id,
           enquiryNumber: enquiry.enquiryNumber,
           customerName: enquiry.customer.customerName,
+          mobile: enquiry.customer.mobile,
+          whatsapp: enquiry.prospect?.whatsapp ?? enquiry.customer.mobile,
+          email: enquiry.prospect?.email ?? null,
+          address: enquiry.prospect?.address ?? null,
         }}
         onClose={() => setQuotationDialogOpen(false)}
         onSaved={() => {

@@ -8,7 +8,20 @@ import { AppError } from './utils/AppError';
 
 const app = express();
 
-app.use(cors());
+// Only the deployed frontend(s) listed in CORS_ORIGINS may call the API from a browser.
+// Requests without an Origin header (curl, server-to-server, health checks) are left alone —
+// they are not subject to the browser same-origin policy, so blocking them buys no security.
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || env.corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new AppError(403, 'Origin not allowed.'));
+    },
+  }),
+);
 app.use(express.json());
 
 // Only the company-logo subfolder is statically served — it's meant to be publicly

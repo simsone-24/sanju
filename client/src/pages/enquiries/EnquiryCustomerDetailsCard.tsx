@@ -1,11 +1,12 @@
 import CallIcon from '@mui/icons-material/Call';
+import EditIcon from '@mui/icons-material/Edit';
 import EmailIcon from '@mui/icons-material/Email';
 import EventIcon from '@mui/icons-material/Event';
 import HomeIcon from '@mui/icons-material/Home';
 import LocationCityIcon from '@mui/icons-material/LocationCity';
 import PaidIcon from '@mui/icons-material/Paid';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import { Avatar, Box, Chip, Paper, Skeleton, Stack, Typography } from '@mui/material';
+import { Avatar, Box, Button, Chip, Paper, Skeleton, Stack, Typography } from '@mui/material';
 import { InfoLine } from '../../components/InfoCard';
 import type { CustomerDetail } from '../../types/customer';
 import { avatarHue, avatarInitials } from '../../utils/avatar';
@@ -22,13 +23,16 @@ interface EnquiryCustomerDetailsCardProps {
   canViewCustomers: boolean;
   /** Edit mode: a saved enquiry's linked customer cannot be swapped. */
   locked?: boolean;
+  /** Present only when the actor holds Customers > Edit and the full record has loaded. Opens the
+   *  customer master for editing without leaving the enquiry. */
+  onEdit?: () => void;
 }
 
 // enquiry.md §Step 1 "Existing Customer": once a customer is picked (create) or already linked
-// (edit), their master record is shown read-only so staff can confirm they picked the right person
-// — and see the contact details and history they would otherwise have to leave the form to look up.
-// The record is never editable here; the customer master owns it, and duplicating the fields into
-// the enquiry payload would break "never duplicate customer information".
+// (edit), their master record is shown here so staff can confirm they picked the right person —
+// and see the contact details and history they would otherwise have to leave the form to look up.
+// The fields themselves are never part of the enquiry payload (duplicating them would break "never
+// duplicate customer information"); Edit opens the customer master record itself via onEdit.
 export function EnquiryCustomerDetailsCard({
   customerName,
   mobile,
@@ -37,6 +41,7 @@ export function EnquiryCustomerDetailsCard({
   isLoading,
   canViewCustomers,
   locked = false,
+  onEdit,
 }: EnquiryCustomerDetailsCardProps) {
   const hue = avatarHue(customerName || mobile);
   const code = customer?.customerCode || customerCode;
@@ -62,14 +67,19 @@ export function EnquiryCustomerDetailsCard({
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {locked
-              ? 'Customer cannot be changed after the enquiry is created.'
-              : 'Details come from the customer master — edit them on the customer profile.'}
+              ? 'Customer cannot be swapped after the enquiry is created.'
+              : 'Details come from the customer master.'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} sx={{ ml: { sm: 'auto' }, flexWrap: 'wrap', rowGap: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ ml: { sm: 'auto' }, flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
           {code && <Chip size="small" variant="outlined" label={code} />}
           {customer && <Chip size="small" variant="outlined" label={customer.status === 'ACTIVE' ? 'Active' : 'Inactive'} />}
           {locked && <Chip size="small" variant="outlined" label="Linked customer" />}
+          {onEdit && (
+            <Button size="small" variant="outlined" startIcon={<EditIcon fontSize="small" />} onClick={onEdit}>
+              Edit
+            </Button>
+          )}
         </Stack>
       </Stack>
 

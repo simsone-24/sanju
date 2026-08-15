@@ -5,7 +5,7 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import TodayIcon from '@mui/icons-material/Today';
 import UpcomingIcon from '@mui/icons-material/Upcoming';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,8 @@ import * as calendarService from '../services/calendarService';
 import * as enquiryService from '../services/enquiryService';
 import * as reportService from '../services/reportService';
 import { startOfWeekMonday } from './calendar/weekUtils';
+import type { CalendarEvent } from '../types/calendar';
+import DashboardEventSection from './dashboard/DashboardEventSection';
 
 // docs/03_MODULES.md §2 (Dashboard Widgets) and docs/06_UI_UX_GUIDELINES.md §6 (Dashboard
 // Layout). No backend /dashboard endpoint exists — every tile here is assembled client-side from
@@ -56,6 +58,14 @@ export default function DashboardPage() {
     queryFn: () => calendarService.getMonth(monthReference.month() + 1, monthReference.year()),
   });
 
+  const nextWeekStart = weekStart.add(7, 'day');
+  const nextWeekEnd = nextWeekStart.add(6, 'day');
+
+  const { data: nextWeekEvents, isLoading: nextWeekEventsLoading } = useQuery({
+    queryKey: ['dashboard', 'next-week-events', nextWeekStart.format('YYYY-MM-DD')],
+    queryFn: () => calendarService.getWeek(nextWeekStart.format('YYYY-MM-DD')),
+  });
+
   // Every event dated today or later, with no upper bound.
   const { data: allUpcomingEvents, isLoading: allUpcomingEventsLoading } = useQuery({
     queryKey: ['dashboard', 'upcoming-events-all', today],
@@ -76,6 +86,10 @@ export default function DashboardPage() {
     queryFn: () =>
       enquiryService.list({ page: 1, limit: 10, appointmentDateFrom: tomorrow, appointmentDateTo: tomorrow }),
   });
+
+  function handleEventClick(event: CalendarEvent) {
+    navigate(`/orders/${event.id}`);
+  }
 
   return (
     <Box>
@@ -160,6 +174,55 @@ export default function DashboardPage() {
           tone="amber"
           loading={tomorrowAppointmentsLoading}
           onClick={() => navigate(`/enquiries?apptFrom=${tomorrow}&apptTo=${tomorrow}`)}
+        />
+      </Box>
+
+      {/* Agenda: what's actually on in each period, not just the count. Click an event to open
+          its order — same destination as the Calendar page's own event cards. */}
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 3, mb: 1.25 }}>
+        Agenda
+      </Typography>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)', xl: 'repeat(5, 1fr)' },
+          gap: 2,
+        }}
+      >
+        <DashboardEventSection
+          title="Today"
+          subtitle={dayjs(today).format('ddd, D MMM YYYY')}
+          events={todayEvents}
+          loading={todayEventsLoading}
+          onEventClick={handleEventClick}
+        />
+        <DashboardEventSection
+          title="Tomorrow"
+          subtitle={dayjs(tomorrow).format('ddd, D MMM YYYY')}
+          events={tomorrowEvents}
+          loading={tomorrowEventsLoading}
+          onEventClick={handleEventClick}
+        />
+        <DashboardEventSection
+          title="This Week"
+          subtitle={`${weekStart.format('D MMM')} – ${weekEnd.format('D MMM YYYY')}`}
+          events={weekEvents}
+          loading={weekEventsLoading}
+          onEventClick={handleEventClick}
+        />
+        <DashboardEventSection
+          title="Next Week"
+          subtitle={`${nextWeekStart.format('D MMM')} – ${nextWeekEnd.format('D MMM YYYY')}`}
+          events={nextWeekEvents}
+          loading={nextWeekEventsLoading}
+          onEventClick={handleEventClick}
+        />
+        <DashboardEventSection
+          title="This Month"
+          subtitle={monthReference.format('MMMM YYYY')}
+          events={monthEvents}
+          loading={monthEventsLoading}
+          onEventClick={handleEventClick}
         />
       </Box>
     </Box>

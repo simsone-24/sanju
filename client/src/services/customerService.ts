@@ -1,6 +1,12 @@
 import { apiClient } from '../api/client';
 import type { ApiSuccessResponse, PaginationMeta } from '../types/api';
-import type { CustomerDetail, CustomerHistory, CustomerListItem, ListCustomersParams } from '../types/customer';
+import type {
+  CustomerDetail,
+  CustomerHistory,
+  CustomerListItem,
+  ListCustomersParams,
+  UpdateCustomerInput,
+} from '../types/customer';
 import type { CustomerOption } from '../types/masters';
 
 // A blank query intentionally omits the `search` param instead of sending an empty string (the API
@@ -39,5 +45,10 @@ export async function getById(id: string): Promise<CustomerDetail> {
 
 export async function getHistory(id: string): Promise<CustomerHistory> {
   const response = await apiClient.get<ApiSuccessResponse<CustomerHistory>>(`/customers/${id}/orders`);
+  return response.data.data;
+}
+
+export async function update(id: string, input: UpdateCustomerInput): Promise<CustomerDetail> {
+  const response = await apiClient.put<ApiSuccessResponse<CustomerDetail>>(`/customers/${id}`, input);
   return response.data.data;
 }

@@ -362,7 +362,8 @@ export default function OrderListPage() {
               {formatDate(row.eventDate)}
             </Typography>
             <Typography variant="caption" noWrap sx={{ display: 'block' }} color="text.secondary">
-              {dayjs(row.eventDate).format('ddd')} ·{' '}
+              {dayjs(row.eventDate).format('ddd')}
+              {row.enquiry?.eventTime ? ` · ${row.enquiry.eventTime === 'MORNING' ? 'Morning' : 'Evening'}` : ''} ·{' '}
               <Box
                 component="span"
                 sx={{ fontWeight: proximity.urgent ? 700 : 400, color: proximity.urgent ? 'warning.main' : 'inherit' }}
@@ -373,7 +374,8 @@ export default function OrderListPage() {
           </Box>
         );
       },
-      exportValue: (row) => formatDate(row.eventDate),
+      exportValue: (row) =>
+        formatDate(row.eventDate) + (row.eventDate && row.enquiry?.eventTime ? ` (${row.enquiry.eventTime === 'MORNING' ? 'Morning' : 'Evening'})` : ''),
     },
     {
       key: 'venue',

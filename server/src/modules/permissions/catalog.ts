@@ -140,10 +140,11 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     module: ModuleName.CUSTOMERS,
     label: 'Customers',
     description: 'Customer directory and order history',
-    // Enforced by: modules/customers/routes.ts. Customer records are created and updated by the
-    // enquiry workflow rather than by hand (no create/edit/delete endpoint exists), so this module
-    // exposes only the two actions that have something to guard.
-    actions: [VIEW, EXPORT],
+    // Enforced by: modules/customers/routes.ts. Customer records are still created only by the
+    // enquiry workflow (no create/delete endpoint exists) — but once linked, correcting a
+    // customer's own contact details (name, mobile, WhatsApp, email, address, city) is Edit,
+    // reachable from the customer profile and from the Enquiry form's Existing Customer step.
+    actions: [VIEW, EDIT, EXPORT],
   },
   {
     module: ModuleName.CALENDAR,

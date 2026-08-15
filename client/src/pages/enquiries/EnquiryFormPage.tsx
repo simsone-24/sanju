@@ -68,6 +68,7 @@ import type {
 } from '../../types/quotation';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { enquiryFormSchema, type EnquiryFormValues } from '../../validation/enquirySchemas';
+import { CustomerEditDialog } from './CustomerEditDialog';
 import { EnquiryCustomerDetailsCard } from './EnquiryCustomerDetailsCard';
 import { orderConfirmedWarning } from './enquiryOrderConfirmGuard';
 import { EnquiryQuotationDialog } from './EnquiryQuotationDialog';
@@ -625,6 +626,10 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
             id: enquiry.id,
             enquiryNumber: enquiry.enquiryNumber,
             customerName: enquiry.customer.customerName,
+            mobile: enquiry.customer.mobile,
+            whatsapp: enquiry.prospect?.whatsapp ?? enquiry.customer.mobile,
+            email: enquiry.prospect?.email ?? null,
+            address: enquiry.prospect?.address ?? null,
           }}
           onClose={() => setCreateDialogOpen(false)}
           onSaved={() => {
@@ -708,6 +713,7 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     eventTypeId: values.eventTypeId,
     eventName: cleanOptional(values.eventName),
     eventDate: cleanOptional(values.eventDate),
+    eventTime: cleanOptional(values.eventTime) as CreateEnquiryInput['eventTime'],
     mahal: cleanOptional(values.mahal),
     venue: cleanOptional(values.venue),
     estimatedBudget: values.estimatedBudget ? Number(values.estimatedBudget) : undefined,
@@ -764,6 +770,7 @@ const EMPTY_VALUES: EnquiryFormValues = {
   eventTypeId: '',
   eventName: '',
   eventDate: '',
+  eventTime: '',
   mahal: '',
   venue: '',
   estimatedBudget: '',
@@ -788,6 +795,7 @@ export default function EnquiryFormPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const canViewCustomers = usePermission('CUSTOMERS', 'canView');
+  const canEditCustomers = usePermission('CUSTOMERS', 'canEdit');
   const canAssign = usePermission('ENQUIRIES', 'canAssign');
 
   // A caller that sent the user here to correct enquiry details — currently the quotation view
@@ -804,6 +812,7 @@ export default function EnquiryFormPage() {
   const [customerSearchInput, setCustomerSearchInput] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
   const [sameAsMobile, setSameAsMobile] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(false);
 
   // Inline "create a quotation together with this enquiry" draft — create mode only. Kept as plain
   // state rather than part of the enquiry form/schema since it submits as a separate request only
@@ -877,6 +886,7 @@ export default function EnquiryFormPage() {
       eventTypeId: existingEnquiry.eventType.id,
       eventName: existingEnquiry.eventName ?? '',
       eventDate: existingEnquiry.eventDate ?? '',
+      eventTime: existingEnquiry.eventTime ?? '',
       mahal: existingEnquiry.mahal ?? '',
       venue: existingEnquiry.venue ?? '',
       estimatedBudget: existingEnquiry.estimatedBudget ?? '',
@@ -1170,6 +1180,7 @@ export default function EnquiryFormPage() {
             isLoading={isLoadingLinkedCustomer}
             canViewCustomers={canViewCustomers}
             locked
+            onEdit={canEditCustomers && linkedCustomer ? () => setEditingCustomer(true) : undefined}
           />
         ) : (
           <>
@@ -1245,6 +1256,7 @@ export default function EnquiryFormPage() {
                     customer={linkedCustomer}
                     isLoading={isLoadingLinkedCustomer}
                     canViewCustomers={canViewCustomers}
+                    onEdit={canEditCustomers && linkedCustomer ? () => setEditingCustomer(true) : undefined}
                   />
                 )}
               </>
@@ -1350,6 +1362,29 @@ export default function EnquiryFormPage() {
               error={Boolean(errors.eventDate)}
               helperText={errors.eventDate?.message}
             />
+          )}
+        />
+        <Controller
+          name="eventTime"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              select
+              label="Event Time"
+              fullWidth
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              error={Boolean(errors.eventTime)}
+              helperText={errors.eventTime?.message}
+            >
+              <MenuItem value="">
+                <em>Not set</em>
+              </MenuItem>
+              <MenuItem value="MORNING">Morning</MenuItem>
+              <MenuItem value="EVENING">Evening</MenuItem>
+            </TextField>
           )}
         />
         <TextField label="Mahal" fullWidth placeholder="e.g. Sri Krishna Mahal" {...register('mahal')} />
@@ -1556,6 +1591,21 @@ export default function EnquiryFormPage() {
         }}
         onClose={() => setPendingOrderConfirmWarning(null)}
       />
+
+      {linkedCustomer && (
+        <CustomerEditDialog
+          open={editingCustomer}
+          customer={linkedCustomer}
+          onClose={() => setEditingCustomer(false)}
+          onSaved={(updated) => {
+            // Keeps the picker's label and the read-only card in sync immediately, without waiting
+            // on the invalidated ['customer', id] query to refetch.
+            if (selectedCustomer && selectedCustomer.id === updated.id) {
+              setSelectedCustomer({ ...selectedCustomer, customerName: updated.customerName, mobile: updated.mobile });
+            }
+          }}
+        />
+      )}
     </FormPage>
   );
 }

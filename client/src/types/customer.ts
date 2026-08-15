@@ -57,3 +57,13 @@ export interface ListCustomersParams {
   search?: string;
   city?: string;
 }
+
+export interface UpdateCustomerInput {
+  customerName?: string;
+  mobile?: string;
+  whatsapp?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  remarks?: string;
+}

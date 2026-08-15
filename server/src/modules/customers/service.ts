@@ -1,10 +1,11 @@
 import { SequenceType } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
 import { AppError } from '../../utils/AppError';
+import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as customersRepository from './repository';
-import { CreateCustomerInput, ListCustomersParams } from './types';
+import { CreateCustomerInput, ListCustomersParams, UpdateCustomerInput } from './types';
 
 // Not exposed via its own route (customers are auto-created, never manually — see
 // 02_BUSINESS_WORKFLOW.md §10). Called internally by the Enquiry module's "new customer" path.
@@ -59,6 +60,43 @@ export async function list(params: ListCustomersParams) {
 export async function getById(companyId: string, id: string) {
   const customer = await customersRepository.findCustomerById(companyId, id);
   if (!customer) throw new AppError(404, 'Customer not found.');
+
+  const statsMap = await customersRepository.getOrderStatsForCustomers([id], new Date());
+  const stats = statsMap.get(id) ?? { totalEvents: 0, lastEvent: null, outstandingAmount: 0 };
+
+  return { ...customer, ...stats };
+}
+
+// Edits the customer master directly — the enquiry workflow still creates and links customers on
+// its own (create() above), but once a customer is linked to an enquiry, correcting a typo'd name
+// or an outdated phone number has nowhere else to happen: the enquiry never duplicates these
+// fields onto itself ("never duplicate customer information").
+export async function update(companyId: string, actorId: string, id: string, input: UpdateCustomerInput) {
+  const existing = await customersRepository.findCustomerById(companyId, id);
+  if (!existing) throw new AppError(404, 'Customer not found.');
+
+  if (input.mobile && input.mobile !== existing.mobile) {
+    const duplicate = await customersRepository.findCustomerByMobile(companyId, input.mobile);
+    if (duplicate && duplicate.id !== id) {
+      throw new AppError(409, `A customer with mobile number ${input.mobile} already exists.`, [
+        {
+          field: 'mobile',
+          message: `Customer "${duplicate.customerName}" already exists with this mobile number.`,
+        },
+      ]);
+    }
+  }
+
+  const customer = await customersRepository.updateCustomer(id, input);
+
+  await logActivity({
+    companyId,
+    module: 'CUSTOMERS',
+    referenceId: id,
+    action: 'UPDATE',
+    description: `Customer "${existing.customerName}" updated.`,
+    performedById: actorId,
+  });
 
   const statsMap = await customersRepository.getOrderStatsForCustomers([id], new Date());
   const stats = statsMap.get(id) ?? { totalEvents: 0, lastEvent: null, outstandingAmount: 0 };
