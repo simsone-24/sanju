@@ -1,31 +1,26 @@
 import AddIcon from '@mui/icons-material/Add';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
-import DateRangeIcon from '@mui/icons-material/DateRange';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import TodayIcon from '@mui/icons-material/Today';
 import TuneIcon from '@mui/icons-material/Tune';
-import UpdateIcon from '@mui/icons-material/Update';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { CustomerFilter } from '../../components/CustomerFilter';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
+import { CUSTOM_DATE_RANGE, DateRangeFilter, type DateRangeValue } from '../../components/DateRangeFilter';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { LastUpdated } from '../../components/LastUpdated';
-import { QuickFilterPill } from '../../components/QuickFilterPill';
-import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -34,11 +29,18 @@ import { IconButton } from '../../components/ui/IconButton';
 import { SelectField } from '../../components/ui/Select';
 import { usePermission } from '../../hooks/usePermission';
 import * as enquiryService from '../../services/enquiryService';
-import * as eventTypeService from '../../services/eventTypeService';
-import * as userService from '../../services/userService';
+import * as customerService from '../../services/customerService';
 import type { ApiErrorResponse } from '../../types/api';
 import type { AppointmentStatus, EnquiryListItem, EnquiryStatus, EnquiryStatusGroup } from '../../types/enquiry';
+import type { CustomerOption } from '../../types/masters';
 import { avatarHue, avatarInitials } from '../../utils/avatar';
+import {
+  DATE_RANGE_LABELS,
+  dateRangeBounds,
+  EVENT_DATE_PRESETS,
+  toDateRangePreset,
+  type DateRangePreset,
+} from '../../utils/dateRange';
 import { eventProximity, formatDate } from '../../utils/format';
 
 const ENQUIRY_STATUS_OPTIONS: EnquiryStatus[] = [
@@ -64,44 +66,17 @@ const ENQUIRY_ROW_ACCENT: Record<EnquiryStatus, string> = {
   ORDER_LOST: '#EF4444',
 };
 
-// "md files/Enquiry/UI1.md" §Quick Filters — one-click date ranges over the event date.
-type QuickFilter = 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'THIS_MONTH' | 'UPCOMING';
-
-// Each range carries its own icon rather than all five repeating one generic calendar — an icon
-// that's identical across every pill carries no information and just adds visual noise.
-const QUICK_FILTERS: { key: QuickFilter; label: string; icon: ReactNode }[] = [
-  { key: 'TODAY', label: 'Today', icon: <TodayIcon fontSize="small" /> },
-  { key: 'TOMORROW', label: 'Tomorrow', icon: <UpdateIcon fontSize="small" /> },
-  { key: 'THIS_WEEK', label: 'This Week', icon: <DateRangeIcon fontSize="small" /> },
-  { key: 'THIS_MONTH', label: 'This Month', icon: <CalendarMonthIcon fontSize="small" /> },
-  { key: 'UPCOMING', label: 'Upcoming', icon: <ScheduleIcon fontSize="small" /> },
-];
-
-const QUICK_FILTER_KEYS = new Set<string>(QUICK_FILTERS.map((filter) => filter.key));
+// "md files/Enquiry/UI1.md" §Quick Filters — named date ranges over the event date, all offered
+// from the toolbar's single Date Range dropdown. Enquiries adds Upcoming to the shared
+// forward-looking set: an enquiry list is most often read as "everything still ahead of us".
+const QUICK_FILTERS: readonly DateRangePreset[] = [...EVENT_DATE_PRESETS, 'UPCOMING'];
 
 const STATUS_GROUP_KEYS = new Set<string>(['ACTIVE', 'CONFIRMED', 'PENDING', 'APPOINTMENT_PENDING']);
 
-// Filter controls grow to share whatever width the search bar leaves, rather than sitting at a
-// fixed size and stranding empty space at the row's right edge. The basis is the width they settle
-// at once the row is full enough to wrap.
+// Filter controls grow to share the row's width rather than sitting at a fixed size and stranding
+// empty space at its right edge. The basis is the width they settle at once the row is full enough
+// to wrap.
 const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[150px]';
-
-// `to: null` means open-ended (Upcoming = everything from today onwards).
-function quickFilterRange(key: QuickFilter): { from: Dayjs; to: Dayjs | null } {
-  const today = dayjs();
-  switch (key) {
-    case 'TODAY':
-      return { from: today, to: today };
-    case 'TOMORROW':
-      return { from: today.add(1, 'day'), to: today.add(1, 'day') };
-    case 'THIS_WEEK':
-      return { from: today.startOf('week'), to: today.endOf('week') };
-    case 'THIS_MONTH':
-      return { from: today.startOf('month'), to: today.endOf('month') };
-    case 'UPCOMING':
-      return { from: today, to: null };
-  }
-}
 
 function parseParamDate(value: string | null): Dayjs | null {
   if (!value) return null;
@@ -145,6 +120,9 @@ export default function EnquiryListPage() {
   const canExport = usePermission('ENQUIRIES', 'canExport');
   const canEdit = usePermission('ENQUIRIES', 'canEdit');
   const canDelete = usePermission('ENQUIRIES', 'canDelete');
+  // The Customer filter is only meaningful to someone allowed to see the customer list it is
+  // built from, so both the options query and the control itself hang off that permission.
+  const canViewCustomers = usePermission('CUSTOMERS', 'canView');
   const queryClient = useQueryClient();
 
   // Every filter lives in the query string rather than component state, so a refresh, a bookmark,
@@ -152,42 +130,36 @@ export default function EnquiryListPage() {
   // "Preserve filter state after refresh"), and browser Back steps through filter changes.
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const search = searchParams.get('q') ?? '';
   const status = (searchParams.get('status') ?? '') as EnquiryStatus | '';
   const appointmentStatus = (searchParams.get('apptStatus') ?? '') as AppointmentStatus | '';
-  const assignedUserId = searchParams.get('user') ?? '';
-  const eventTypeId = searchParams.get('eventType') ?? '';
+  const customerId = searchParams.get('customer') ?? '';
   // Dashboard cards are single-select: `view` holds at most one group, and clicking a different
   // card replaces it rather than adding to it — only the most recently clicked card's filter
   // should ever be reflected in the URL.
   const viewParam = searchParams.get('view');
   const statusGroups = viewParam && STATUS_GROUP_KEYS.has(viewParam) ? [viewParam as EnquiryStatusGroup] : [];
-  const quickParam = searchParams.get('quick');
-  const quickFilter = quickParam && QUICK_FILTER_KEYS.has(quickParam) ? (quickParam as QuickFilter) : null;
+  const quickFilter = toDateRangePreset(searchParams.get('quick'), QUICK_FILTERS);
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
   const limit = Number(searchParams.get('limit')) || 10;
 
-  // A quick-filter pill and explicit Event From/To are two ways of setting the same range: the pill
-  // wins while it's active (and its dates show in the date fields), and editing a date field drops
-  // the pill.
-  const quickRange = quickFilter ? quickFilterRange(quickFilter) : null;
+  // A named window from the Date Range dropdown and explicit Event From/To are two ways of setting
+  // the same range: the named window wins while it's selected (and its dates show in the date
+  // fields), and editing a date field drops it back to "Custom Range".
+  const quickRange = quickFilter ? dateRangeBounds(quickFilter) : null;
   const eventDateFrom = quickRange ? quickRange.from : parseParamDate(searchParams.get('eventFrom'));
   const eventDateTo = quickRange ? quickRange.to : parseParamDate(searchParams.get('eventTo'));
   const appointmentDateFrom = parseParamDate(searchParams.get('apptFrom'));
   const appointmentDateTo = parseParamDate(searchParams.get('apptTo'));
 
-  const dateFilterCount = [
-    searchParams.get('eventFrom'),
-    searchParams.get('eventTo'),
-    searchParams.get('apptFrom'),
-    searchParams.get('apptTo'),
-  ].filter(Boolean).length;
+  // Event dates now sit in the main row, so all that is left behind the Advanced Filters reveal is
+  // the appointment range — and that is what its badge counts.
+  const appointmentFilterCount = [searchParams.get('apptFrom'), searchParams.get('apptTo')].filter(Boolean).length;
 
-  // "All" stays lit only while nothing at all narrows the event date — a pill range or an explicit
-  // From/To both take it off.
-  const hasDateFilter = Boolean(quickFilter || eventDateFrom || eventDateTo);
+  // The dropdown shows the named window while one is selected, and reads "Custom Range" whenever
+  // an explicit Event From/To is what's narrowing the list instead.
+  const dateRangeValue: DateRangeValue = quickFilter ?? (eventDateFrom || eventDateTo ? CUSTOM_DATE_RANGE : '');
 
-  const [advancedOpen, setAdvancedOpen] = useState(dateFilterCount > 0);
+  const [advancedOpen, setAdvancedOpen] = useState(appointmentFilterCount > 0);
   const [deletingEnquiry, setDeletingEnquiry] = useState<EnquiryListItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | undefined>(
@@ -225,11 +197,9 @@ export default function EnquiryListPage() {
       'enquiries',
       'stats',
       {
-        search,
         status,
         appointmentStatus,
-        eventTypeId,
-        assignedUserId,
+        customerId,
         eventDateFrom: eventDateFrom?.format('YYYY-MM-DD'),
         eventDateTo: eventDateTo?.format('YYYY-MM-DD'),
         appointmentDateFrom: appointmentDateFrom?.format('YYYY-MM-DD'),
@@ -238,11 +208,9 @@ export default function EnquiryListPage() {
     ],
     queryFn: () =>
       enquiryService.getStats({
-        search: search || undefined,
         status: status || undefined,
         appointmentStatus: appointmentStatus || undefined,
-        eventTypeId: eventTypeId || undefined,
-        assignedUserId: assignedUserId || undefined,
+        customerId: customerId || undefined,
         eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
         eventDateTo: eventDateTo ? eventDateTo.format('YYYY-MM-DD') : undefined,
         appointmentDateFrom: appointmentDateFrom ? appointmentDateFrom.format('YYYY-MM-DD') : undefined,
@@ -251,15 +219,16 @@ export default function EnquiryListPage() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: eventTypeOptions } = useQuery({
-    queryKey: ['event-types', 'active'],
-    queryFn: () => eventTypeService.listActive(),
+  // Unlike Orders and Payment Tracker, which hold the chosen customer in component state, this
+  // page keeps its filters in the URL — so a bookmarked ?customer=<id> arrives with only an id and
+  // no name for the type-ahead to display. The customer is fetched by that id to fill it in.
+  const { data: selectedCustomer } = useQuery({
+    queryKey: ['customers', 'detail', customerId],
+    queryFn: () => customerService.getById(customerId),
+    enabled: canViewCustomers && Boolean(customerId),
   });
 
-  const { data: userOptions } = useQuery({
-    queryKey: ['users', 'active'],
-    queryFn: () => userService.listActive(),
-  });
+  const customer: CustomerOption | null = customerId ? (selectedCustomer ?? null) : null;
 
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: [
@@ -267,12 +236,10 @@ export default function EnquiryListPage() {
       {
         page,
         limit,
-        search,
         status,
         appointmentStatus,
         statusGroups,
-        eventTypeId,
-        assignedUserId,
+        customerId,
         eventDateFrom: eventDateFrom?.format('YYYY-MM-DD'),
         eventDateTo: eventDateTo?.format('YYYY-MM-DD'),
         appointmentDateFrom: appointmentDateFrom?.format('YYYY-MM-DD'),
@@ -283,12 +250,10 @@ export default function EnquiryListPage() {
       enquiryService.list({
         page,
         limit,
-        search: search || undefined,
         status: status || undefined,
         appointmentStatus: appointmentStatus || undefined,
         statusGroup: statusGroups.length ? statusGroups.join(',') : undefined,
-        eventTypeId: eventTypeId || undefined,
-        assignedUserId: assignedUserId || undefined,
+        customerId: customerId || undefined,
         eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
         eventDateTo: eventDateTo ? eventDateTo.format('YYYY-MM-DD') : undefined,
         appointmentDateFrom: appointmentDateFrom ? appointmentDateFrom.format('YYYY-MM-DD') : undefined,
@@ -328,17 +293,24 @@ export default function EnquiryListPage() {
     patchParams({ view: statusGroups.includes(value) ? null : value });
   }
 
-  function applyQuickFilter(key: QuickFilter | null) {
-    // The pill replaces any explicit event-date range, so both can't disagree.
-    patchParams({ quick: key === quickFilter ? null : key, eventFrom: null, eventTo: null });
+  function applyDateRange(value: DateRangeValue) {
+    // "Custom Range" computes no window of its own — it hands the range straight back to the Event
+    // From/To fields beside it, keeping whichever bounds are already on screen.
+    if (value === CUSTOM_DATE_RANGE) {
+      patchParams({
+        quick: null,
+        eventFrom: formatParamDate(eventDateFrom),
+        eventTo: formatParamDate(eventDateTo),
+      });
+      return;
+    }
+    // A named window replaces any explicit event-date range, so the two can't disagree.
+    patchParams({ quick: value || null, eventFrom: null, eventTo: null });
   }
 
   // Everything currently narrowing the list, as individually removable chips — so an unexpected
   // result count always has a visible cause, and one filter can be dropped without a full reset.
   const activeFilters: ActiveFilterChip[] = [];
-  if (search) {
-    activeFilters.push({ key: 'q', label: `Search: "${search}"`, onClear: () => patchParams({ q: null }) });
-  }
   if (appointmentStatus) {
     activeFilters.push({
       key: 'apptStatus',
@@ -371,26 +343,17 @@ export default function EnquiryListPage() {
       });
     }
   }
-  if (assignedUserId) {
-    const assignedUser = userOptions?.find((option) => option.id === assignedUserId);
+  if (customerId) {
     activeFilters.push({
-      key: 'user',
-      label: `Assigned: ${assignedUser?.fullName ?? 'Selected user'}`,
-      onClear: () => patchParams({ user: null }),
-    });
-  }
-  if (eventTypeId) {
-    const eventType = eventTypeOptions?.find((option) => option.id === eventTypeId);
-    activeFilters.push({
-      key: 'eventType',
-      label: `Event: ${eventType?.eventName ?? 'Selected type'}`,
-      onClear: () => patchParams({ eventType: null }),
+      key: 'customer',
+      label: `Customer: ${customer?.customerName ?? 'Selected customer'}`,
+      onClear: () => patchParams({ customer: null }),
     });
   }
   if (quickFilter) {
     activeFilters.push({
       key: 'quick',
-      label: QUICK_FILTERS.find((filter) => filter.key === quickFilter)!.label,
+      label: DATE_RANGE_LABELS[quickFilter],
       onClear: () => patchParams({ quick: null }),
     });
   } else if (eventDateFrom || eventDateTo) {
@@ -649,72 +612,21 @@ export default function EnquiryListPage() {
         {/* Filter toolbar, integrated into the page header so it reads as one chrome band with
             the title rather than a separate card eating vertical space above the table. */}
         <div className="tw-mt-3 tw-flex tw-flex-col tw-gap-2.5">
-          {/* Row 1: quick-range pills on the left, the Advanced Filters reveal on the right. */}
-          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
-            <span className="tw-mr-0.5 tw-text-[0.6875rem] tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              Quick Filters
-            </span>
-            <QuickFilterPill label="All" active={!hasDateFilter} onClick={() => applyQuickFilter(null)} />
-            {QUICK_FILTERS.map((filter) => (
-              <QuickFilterPill
-                key={filter.key}
-                label={filter.label}
-                active={quickFilter === filter.key}
-                icon={filter.icon}
-                onClick={() => applyQuickFilter(filter.key)}
-              />
-            ))}
-
-            {/* Filters apply as they're changed (UIen.md §UX Improvements — "Search updates results
-                instantly (debounced)"), so the row needs no Apply button; clearing is handled by the
-                active-filter chips below. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="tw-ml-auto"
-              onClick={() => setAdvancedOpen((previous) => !previous)}
-              startIcon={<TuneIcon fontSize="small" />}
-              endIcon={
-                <ExpandMoreIcon
-                  fontSize="small"
-                  className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
-                />
-              }
-            >
-              Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
-            </Button>
-          </div>
-
-          {/* Row 2: search plus the four dropdowns, all compact (sm) so the bar stays one short
-              line. Each dropdown keeps its label block above the box; everything bottom-aligns so
-              the input boxes themselves sit on one line. */}
+          {/* Filters in the order the list is actually read: pick the event window first, then
+              narrow by where the enquiry stands, then by who it is for. Everything runs at the
+              standard 40px filter height so the date pickers sit level with the dropdowns, and each
+              control keeps its label block above the box so the row bottom-aligns. */}
           <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
-            <div className="tw-flex-[2] tw-basis-[220px]">
-              <SearchBar
-                fullWidth
-                size="sm"
-                value={search}
-                onChange={(value) => patchParams({ q: value || null })}
-                onSubmit={() => void refetch()}
-                placeholder="Search enquiry no, customer, mobile, event..."
-              />
-            </div>
-
-            <SelectField
-              size="sm"
+            <DateRangeFilter
               className={FILTER_FIELD_WIDTH}
-              label="Appointment Status"
-              emptyLabel="All"
-              value={appointmentStatus}
-              onChange={(value) => patchParams({ apptStatus: value || null })}
-              options={APPOINTMENT_STATUS_OPTIONS.map((option) => ({
-                value: option,
-                label: resolveStatusConfig('appointment', option).label,
-              }))}
+              label="Event Date Range"
+              presets={QUICK_FILTERS}
+              value={dateRangeValue}
+              onChange={applyDateRange}
+              custom
             />
 
             <SelectField
-              size="sm"
               className={FILTER_FIELD_WIDTH}
               label="Enquiry Status"
               emptyLabel="All"
@@ -726,30 +638,74 @@ export default function EnquiryListPage() {
               }))}
             />
 
-            <SelectField
-              size="sm"
-              className={FILTER_FIELD_WIDTH}
-              label="Assigned User"
-              emptyLabel="All"
-              value={assignedUserId}
-              onChange={(value) => patchParams({ user: value || null })}
-              options={(userOptions ?? []).map((option) => ({ value: option.id, label: option.fullName }))}
-            />
+            {/* The two bounds of the window the dropdown names — editing either is what "Custom
+                Range" means, so both handlers drop the named window. */}
+            <div className="tw-flex-1 tw-basis-[145px]">
+              <DatePickerField
+                label="Event From"
+                margin="none"
+                value={eventDateFrom}
+                onChange={(value) =>
+                  patchParams({ eventFrom: formatParamDate(value), eventTo: formatParamDate(eventDateTo), quick: null })
+                }
+              />
+            </div>
+            <div className="tw-flex-1 tw-basis-[145px]">
+              <DatePickerField
+                label="Event To"
+                margin="none"
+                value={eventDateTo}
+                onChange={(value) =>
+                  patchParams({ eventFrom: formatParamDate(eventDateFrom), eventTo: formatParamDate(value), quick: null })
+                }
+                minDate={eventDateFrom ?? undefined}
+              />
+            </div>
 
             <SelectField
-              size="sm"
               className={FILTER_FIELD_WIDTH}
-              label="Event Type"
+              label="Appointment Status"
               emptyLabel="All"
-              value={eventTypeId}
-              onChange={(value) => patchParams({ eventType: value || null })}
-              options={(eventTypeOptions ?? []).map((option) => ({ value: option.id, label: option.eventName }))}
+              value={appointmentStatus}
+              onChange={(value) => patchParams({ apptStatus: value || null })}
+              options={APPOINTMENT_STATUS_OPTIONS.map((option) => ({
+                value: option,
+                label: resolveStatusConfig('appointment', option).label,
+              }))}
             />
+
+            {/* Its 40px height lines up with the Tailwind fields it sits beside; the wider basis
+                gives customer names room the fixed-width dropdowns don't need. */}
+            {canViewCustomers && (
+              <CustomerFilter
+                className="tw-w-full tw-flex-[2] sm:tw-basis-[240px]"
+                value={customer}
+                onChange={(next) => patchParams({ customer: next?.id ?? null })}
+              />
+            )}
+
+            {/* Filters apply as they're changed, so the row needs no Apply button; clearing is
+                handled by the active-filter chips below. */}
+            <Button
+              variant="ghost"
+              className="tw-h-10"
+              onClick={() => setAdvancedOpen((previous) => !previous)}
+              startIcon={<TuneIcon fontSize="small" />}
+              endIcon={
+                <ExpandMoreIcon
+                  fontSize="small"
+                  className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
+                />
+              }
+            >
+              Advanced Filters{appointmentFilterCount > 0 ? ` (${appointmentFilterCount})` : ''}
+            </Button>
           </div>
 
-          {/* Advanced row: date-range filters, collapsed by default. The 0fr→1fr grid track animates
-              the reveal without needing a measured pixel height. Collapsed it still has zero height
-              but is still a flex child, so the column's gap would leave a dead band behind it — the
+          {/* Advanced row: the appointment range, collapsed by default — the event range the list is
+              usually read by now sits in the main row above. The 0fr→1fr grid track animates the
+              reveal without needing a measured pixel height. Collapsed it still has zero height but
+              is still a flex child, so the column's gap would leave a dead band behind it — the
               negative margin cancels exactly that one gap while the panel is shut. */}
           <div
             className={`tw-grid tw-transition-all tw-duration-200 ${
@@ -757,8 +713,6 @@ export default function EnquiryListPage() {
             }`}
           >
             <div className="tw-overflow-hidden">
-              {/* The two ranges stay visually paired, but each pair now spreads across the width the
-                  row actually has instead of stopping at a fixed 155px and leaving the rest blank. */}
               <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-3 tw-pt-0.5">
                 <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
                   <div className="tw-flex-1">
@@ -776,30 +730,6 @@ export default function EnquiryListPage() {
                       value={appointmentDateTo}
                       onChange={(value) => patchParams({ apptTo: formatParamDate(value) })}
                       minDate={appointmentDateFrom ?? undefined}
-                    />
-                  </div>
-                </div>
-
-                <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
-                  <div className="tw-flex-1">
-                    <DatePickerField
-                      label="Event From"
-                      margin="none"
-                      value={eventDateFrom}
-                      onChange={(value) =>
-                        patchParams({ eventFrom: formatParamDate(value), eventTo: formatParamDate(eventDateTo), quick: null })
-                      }
-                    />
-                  </div>
-                  <div className="tw-flex-1">
-                    <DatePickerField
-                      label="Event To"
-                      margin="none"
-                      value={eventDateTo}
-                      onChange={(value) =>
-                        patchParams({ eventFrom: formatParamDate(eventDateFrom), eventTo: formatParamDate(value), quick: null })
-                      }
-                      minDate={eventDateFrom ?? undefined}
                     />
                   </div>
                 </div>

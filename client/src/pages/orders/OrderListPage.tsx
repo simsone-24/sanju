@@ -9,7 +9,6 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import TodayIcon from '@mui/icons-material/Today';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -31,8 +30,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { CustomerFilter } from '../../components/CustomerFilter';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { SearchBar } from '../../components/SearchBar';
+import { DateRangeFilter, type DateRangeValue } from '../../components/DateRangeFilter';
 import { StatCard } from '../../components/StatCard';
 import {
   resolveOrderPaymentBadge,
@@ -41,7 +41,6 @@ import {
 } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
-import * as customerService from '../../services/customerService';
 import * as orderService from '../../services/orderService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
@@ -49,6 +48,7 @@ import type { CustomerOption } from '../../types/masters';
 import type { OrderListItem, OrderStatus } from '../../types/order';
 // Rows are ordered by event date (soonest first, server-side), so the date cell carries the
 // scanning weight: weekday for planning, plus how near the event is (eventProximity).
+import { DATE_RANGE_LABELS, dateRangeBounds, type DateRangePreset } from '../../utils/dateRange';
 import { eventProximity, formatCurrency, formatDate } from '../../utils/format';
 import { allowedOrderTransitions } from './orderStatusTransitions';
 
@@ -75,50 +75,8 @@ const ORDER_ROW_ACCENT: Record<OrderStatus, string> = {
   REJECTED: '#EF4444',
 };
 
-// "md files/order/filter.md" §Date Filter — one-at-a-time quick ranges over the event date.
-// TOMORROW has no pill of its own below (only the Tomorrow Events dashboard card drives it) —
-// everything else here is also offered as a pill.
-type QuickRange = 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH';
-
-const QUICK_RANGES: { key: QuickRange; label: string }[] = [
-  { key: 'TODAY', label: 'Today' },
-  { key: 'THIS_WEEK', label: 'This Week' },
-  { key: 'NEXT_WEEK', label: 'Next Week' },
-  { key: 'THIS_MONTH', label: 'This Month' },
-  { key: 'NEXT_MONTH', label: 'Next Month' },
-];
-
-// Every QuickRange's label, including TOMORROW which has no pill of its own — used wherever a
-// label is needed regardless of whether the value came from a pill or a dashboard card.
-const QUICK_RANGE_LABELS: Record<QuickRange, string> = {
-  TODAY: 'Today',
-  TOMORROW: 'Tomorrow',
-  THIS_WEEK: 'This Week',
-  NEXT_WEEK: 'Next Week',
-  THIS_MONTH: 'This Month',
-  NEXT_MONTH: 'Next Month',
-};
-
-function quickRangeDates(key: QuickRange): { from: Dayjs; to: Dayjs } {
-  const today = dayjs();
-  switch (key) {
-    case 'TODAY':
-      return { from: today, to: today };
-    case 'TOMORROW': {
-      const tomorrow = today.add(1, 'day');
-      return { from: tomorrow, to: tomorrow };
-    }
-    case 'THIS_WEEK':
-      return { from: today.startOf('week'), to: today.endOf('week') };
-    case 'NEXT_WEEK':
-      return { from: today.add(1, 'week').startOf('week'), to: today.add(1, 'week').endOf('week') };
-    case 'THIS_MONTH':
-      return { from: today.startOf('month'), to: today.endOf('month') };
-    case 'NEXT_MONTH':
-      return { from: today.add(1, 'month').startOf('month'), to: today.add(1, 'month').endOf('month') };
-  }
-}
-
+// "md files/order/filter.md" §Date Filter — one-at-a-time named ranges over the event date, all
+// offered from the toolbar's single Date Range dropdown (the shared forward-looking set).
 export default function OrderListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -138,25 +96,26 @@ export default function OrderListPage() {
   const [statusMenu, setStatusMenu] = useState<{ anchor: HTMLElement; row: OrderListItem } | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [search, setSearch] = useState('');
   const [status, setStatus] = useState<OrderStatus | ''>('');
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
-  const [customerQuery, setCustomerQuery] = useState('');
   // One of PAYMENT_FILTER_OPTIONS' status values, or '' for all — it spans two status scales, so
   // it is held as the raw value both configs are keyed by.
   const [paymentStatus, setPaymentStatus] = useState<string>('');
-  const [quickRange, setQuickRange] = useState<QuickRange | null>(null);
+  const [quickRange, setQuickRange] = useState<DateRangePreset | null>(null);
   const [month, setMonth] = useState<Dayjs | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ row: OrderListItem; target: OrderStatus } | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
-  // The quick-range pills and the month picker both resolve to one event-date window; whichever
+  // The Date Range dropdown and the month picker both resolve to one event-date window; whichever
   // was set last wins, so they can't silently fight each other.
   const range = quickRange
-    ? quickRangeDates(quickRange)
+    ? dateRangeBounds(quickRange)
     : month
       ? { from: month.startOf('month'), to: month.endOf('month') }
       : null;
+
+  const eventDateFrom = range ? range.from.format('YYYY-MM-DD') : undefined;
+  const eventDateTo = range?.to ? range.to.format('YYYY-MM-DD') : undefined;
 
   // Narrows along with every active filter except `status` — each card defines its own status,
   // so folding the currently-selected card's status back into its own count would be circular
@@ -166,27 +125,19 @@ export default function OrderListPage() {
       'orders',
       'stats',
       {
-        search,
         customerId: customer?.id,
-        from: range?.from.format('YYYY-MM-DD'),
-        to: range?.to.format('YYYY-MM-DD'),
+        from: eventDateFrom,
+        to: eventDateTo,
       },
     ],
     queryFn: () =>
       orderService.getStats({
-        search: search || undefined,
         customerId: customer?.id,
-        eventDateFrom: range ? range.from.format('YYYY-MM-DD') : undefined,
-        eventDateTo: range ? range.to.format('YYYY-MM-DD') : undefined,
+        eventDateFrom,
+        eventDateTo,
       }),
     enabled: canView,
     placeholderData: keepPreviousData,
-  });
-
-  const { data: customerOptions } = useQuery({
-    queryKey: ['customers', 'search', customerQuery],
-    queryFn: () => customerService.search(customerQuery),
-    enabled: customerQuery.trim().length > 0,
   });
 
   const { data, isLoading } = useQuery({
@@ -195,22 +146,20 @@ export default function OrderListPage() {
       {
         page,
         limit,
-        search,
         status,
         customerId: customer?.id,
-        from: range?.from.format('YYYY-MM-DD'),
-        to: range?.to.format('YYYY-MM-DD'),
+        from: eventDateFrom,
+        to: eventDateTo,
       },
     ],
     queryFn: () =>
       orderService.list({
         page,
         limit,
-        search: search || undefined,
         status: status || undefined,
         customerId: customer?.id,
-        eventDateFrom: range ? range.from.format('YYYY-MM-DD') : undefined,
-        eventDateTo: range ? range.to.format('YYYY-MM-DD') : undefined,
+        eventDateFrom,
+        eventDateTo,
       }),
     placeholderData: keepPreviousData,
     enabled: canView,
@@ -244,11 +193,9 @@ export default function OrderListPage() {
   }
 
   function resetFilters() {
-    setSearch('');
     setStatus('');
     setPaymentStatus('');
     setCustomer(null);
-    setCustomerQuery('');
     setQuickRange(null);
     setMonth(null);
     setPage(1);
@@ -266,32 +213,35 @@ export default function OrderListPage() {
     setPage(1);
   }
 
-  // Same toggle-off behaviour as the quick-range pills' own onClick (clicking the active one clears
-  // it back to "All Dates"), reused by the event-date dashboard cards.
-  function toggleQuickRange(value: QuickRange) {
+  // Clicking the already-active event-date dashboard card clears its window back to "All Dates",
+  // so a card doubles as its own toggle.
+  function toggleQuickRange(value: DateRangePreset) {
     setQuickRange((current) => (current === value ? null : value));
     setMonth(null);
     setPage(1);
   }
 
-  const activeFilters: { key: string; label: string; onClear: () => void }[] = [];
-  if (search) {
-    activeFilters.push({ key: 'search', label: `Search: "${search}"`, onClear: () => setSearch('') });
+  // A named window replaces the month picker, so the two can't disagree.
+  function applyDateRange(value: DateRangeValue) {
+    setQuickRange(value ? (value as DateRangePreset) : null);
+    setMonth(null);
+    setPage(1);
   }
+
+  const activeFilters: { key: string; label: string; onClear: () => void }[] = [];
   if (customer) {
     activeFilters.push({
       key: 'customer',
       label: `Customer: ${customer.customerName}`,
       onClear: () => {
         setCustomer(null);
-        setCustomerQuery('');
       },
     });
   }
   if (quickRange) {
     activeFilters.push({
       key: 'quickRange',
-      label: QUICK_RANGE_LABELS[quickRange],
+      label: DATE_RANGE_LABELS[quickRange],
       onClear: () => setQuickRange(null),
     });
   } else if (month) {
@@ -505,7 +455,10 @@ export default function OrderListPage() {
                 size="small"
                 onClick={(event) => {
                   event.stopPropagation();
-                  navigate(`/orders/${row.id}`);
+                  // `?edit=1` opens the detail page straight into its edit drawer — the same
+                  // deep-link mechanism the Payments action uses for `?tab=`. Without it this
+                  // action landed on the read-only view, identical to the View button beside it.
+                  navigate(`/orders/${row.id}?edit=1`);
                 }}
               >
                 <EditIcon fontSize="small" />
@@ -630,81 +583,23 @@ export default function OrderListPage() {
         })}
       >
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-            <Chip
-              label="All Dates"
-              size="small"
-              color={quickRange === null && month === null ? 'primary' : 'default'}
-              variant={quickRange === null && month === null ? 'filled' : 'outlined'}
-              onClick={() => {
-                setQuickRange(null);
-                setMonth(null);
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', flexWrap: 'wrap', rowGap: 2 }}>
+            <CustomerFilter
+              sx={{ width: 220 }}
+              value={customer}
+              onChange={(next) => {
+                setCustomer(next);
                 setPage(1);
               }}
             />
-            {QUICK_RANGES.map((option) => (
-              <Chip
-                key={option.key}
-                label={option.label}
-                size="small"
-                color={quickRange === option.key ? 'primary' : 'default'}
-                variant={quickRange === option.key ? 'filled' : 'outlined'}
-                onClick={() => {
-                  setQuickRange((current) => (current === option.key ? null : option.key));
-                  setMonth(null);
-                  setPage(1);
-                }}
-              />
-            ))}
-          </Stack>
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', flexWrap: 'wrap', rowGap: 2 }}>
-            {/* SearchBar (36px, Tailwind) sits next to MUI's 40px "small" fields below — the fixed
-                height plus a centered inner flex keeps its input vertically centered against
-                theirs instead of sitting a few pixels off when the row bottom-aligns. */}
-            <Box sx={{ flexGrow: 1, minWidth: 220, height: 40, display: 'flex', alignItems: 'center' }}>
-              <SearchBar
-                fullWidth
-                value={search}
-                onChange={(value) => {
-                  setSearch(value);
-                  setPage(1);
-                }}
-                placeholder="Search by order no, customer, mobile..."
-              />
-            </Box>
-
-            <Box sx={{ width: 220 }}>
-              <Autocomplete
-                size="small"
-                options={customerOptions ?? []}
-                value={customer}
-                onChange={(_event, value) => {
-                  setCustomer(value);
-                  setPage(1);
-                }}
-                onInputChange={(_event, value) => setCustomerQuery(value)}
-                getOptionLabel={(option) => `${option.customerName} (${option.mobile})`}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                noOptionsText={customerQuery ? 'No customers found' : 'Type to search'}
-                renderInput={(params) => <TextField {...params} label="Customer" />}
-              />
-            </Box>
-
-            <Box sx={{ width: 160 }}>
-              <DatePicker
-                label="Month"
-                views={['year', 'month']}
-                openTo="month"
-                value={month}
-                onChange={(value: Dayjs | null) => {
-                  setMonth(value);
-                  setQuickRange(null);
-                  setPage(1);
-                }}
-                slotProps={{ textField: { size: 'small', fullWidth: true }, field: { clearable: true } }}
-              />
-            </Box>
+            <DateRangeFilter
+              variant="floating"
+              label="Event Date Range"
+              sx={{ width: 180 }}
+              value={quickRange ?? ''}
+              onChange={applyDateRange}
+            />
 
             <Box sx={{ width: 175 }}>
               <TextField
@@ -746,6 +641,21 @@ export default function OrderListPage() {
                   </MenuItem>
                 ))}
               </TextField>
+            </Box>
+
+            <Box sx={{ width: 160 }}>
+              <DatePicker
+                label="Month"
+                views={['year', 'month']}
+                openTo="month"
+                value={month}
+                onChange={(value: Dayjs | null) => {
+                  setMonth(value);
+                  setQuickRange(null);
+                  setPage(1);
+                }}
+                slotProps={{ textField: { size: 'small', fullWidth: true }, field: { clearable: true } }}
+              />
             </Box>
 
             <Button

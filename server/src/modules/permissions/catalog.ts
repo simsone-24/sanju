@@ -20,6 +20,7 @@ export const ModuleName = {
   PAYMENTS: 'PAYMENTS',
   CUSTOMERS: 'CUSTOMERS',
   CALENDAR: 'CALENDAR',
+  RENT: 'RENT',
   REPORTS: 'REPORTS',
   MASTERS: 'MASTERS',
   SETTINGS: 'SETTINGS',
@@ -152,6 +153,19 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     description: 'Event calendar for confirmed orders',
     // Enforced by: modules/calendar/routes.ts.
     actions: [VIEW],
+  },
+  {
+    module: ModuleName.RENT,
+    label: 'Rent',
+    description: 'Rental persons, stock out, returns and rent payments',
+    // Enforced by: the modules/rent-* routes. One module covers the whole rent workflow rather than
+    // one per screen — "md files/Stock/stock.md" §40 describes a single RENT module, and its
+    // sub-screens are views of the same records, not separately-owned data.
+    //
+    // canCreate covers recording a return and a collection as well as raising a stock out: all three
+    // write a new rent transaction, and a group trusted to issue stock is the same group that books
+    // what comes back. canPrint gates the printable stock out document (§12 Actions).
+    actions: [VIEW, CREATE, EDIT, DELETE, PRINT, EXPORT],
   },
   {
     module: ModuleName.REPORTS,

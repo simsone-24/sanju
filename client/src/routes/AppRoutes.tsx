@@ -18,6 +18,17 @@ import PaymentTrackerListPage from '../pages/payment-tracker/PaymentTrackerListP
 import QuotationDetailPage from '../pages/quotations/QuotationDetailPage';
 import QuotationFormPage from '../pages/quotations/QuotationFormPage';
 import QuotationListPage from '../pages/quotations/QuotationListPage';
+import RentDashboardPage from '../pages/rent/RentDashboardPage';
+import RentPaymentListPage from '../pages/rent/RentPaymentListPage';
+import RentReportsPage from '../pages/rent/RentReportsPage';
+import RentalItemListPage from '../pages/rent/RentalItemListPage';
+import RentalPersonDetailPage from '../pages/rent/RentalPersonDetailPage';
+import RentalPersonListPage from '../pages/rent/RentalPersonListPage';
+import StockOutDetailPage from '../pages/rent/StockOutDetailPage';
+import StockOutFormPage from '../pages/rent/StockOutFormPage';
+import StockOutListPage from '../pages/rent/StockOutListPage';
+import StockOutPrintPage from '../pages/rent/StockOutPrintPage';
+import StockReturnPage from '../pages/rent/StockReturnPage';
 import ReportsPage from '../pages/reports/ReportsPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
@@ -59,6 +70,23 @@ export const router = createBrowserRouter(
           <Route path="/payment-tracker/:id" element={<PaymentTrackerDetailPage />} />
 
           <Route path="/calendar" element={<CalendarPage />} />
+
+          {/* Rent — a self-contained workflow with no link to enquiries, quotations or orders
+              ("md files/Stock/stock.md" §1). Create/edit are dedicated pages like every other
+              module; returns and payments are dialogs raised from the record they belong to. */}
+          <Route path="/rent" element={<RentDashboardPage />} />
+          <Route path="/rent/persons" element={<RentalPersonListPage />} />
+          <Route path="/rent/persons/:id" element={<RentalPersonDetailPage />} />
+          <Route path="/rent/items" element={<RentalItemListPage />} />
+          <Route path="/rent/stock-outs" element={<StockOutListPage />} />
+          {/* Registered before ":id" so "new" isn't captured as an id. */}
+          <Route path="/rent/stock-outs/new" element={<StockOutFormPage />} />
+          <Route path="/rent/stock-outs/:id/edit" element={<StockOutFormPage />} />
+          <Route path="/rent/stock-outs/:id/print" element={<StockOutPrintPage />} />
+          <Route path="/rent/stock-outs/:id" element={<StockOutDetailPage />} />
+          <Route path="/rent/returns" element={<StockReturnPage />} />
+          <Route path="/rent/payments" element={<RentPaymentListPage />} />
+          <Route path="/rent/reports" element={<RentReportsPage />} />
 
           <Route path="/customers" element={<CustomerListPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

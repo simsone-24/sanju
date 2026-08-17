@@ -247,37 +247,11 @@ export default function PaymentTrackerDetailPage() {
           display: 'grid',
           gap: 2.5,
           alignItems: 'start',
-          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(320px, 1fr)' },
+          // The summary is the narrow rail and the receipts table the wide panel, so the track
+          // widths swap along with the order — each keeps the proportions it needs.
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(320px, 1fr) minmax(0, 1.7fr)' },
         }}
       >
-        <Paper variant="outlined" sx={{ borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0 }}>
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2.5 }}>
-            <ReceiptLongIcon fontSize="small" sx={{ color: 'primary.main' }} />
-            <Typography variant="h4" component="h2">
-              Collections ({data.payments.length})
-            </Typography>
-          </Stack>
-          {/* disableContainer: the card is already the surface — a second bordered box inside it
-              would double the frame. */}
-          <DataTable
-            disableContainer
-            columns={columns}
-            rows={data.payments}
-            getRowId={(row) => row.id}
-            page={1}
-            limit={100}
-            onPageChange={() => {}}
-            onLimitChange={() => {}}
-            exportFileName={`${data.orderNumber}-payments`}
-            canExport={canExport}
-            emptyState={{
-              icon: <ReceiptLongIcon sx={{ fontSize: 36 }} />,
-              title: 'No collections yet',
-              description: 'Receipts recorded against this order will appear here.',
-            }}
-          />
-        </Paper>
-
         <Paper variant="outlined" sx={{ borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0 }}>
           <Typography variant="h4" component="h2" sx={{ mb: 2.5 }}>
             Collection Summary
@@ -334,6 +308,34 @@ export default function PaymentTrackerDetailPage() {
               </Typography>
             </Box>
           )}
+        </Paper>
+
+        <Paper variant="outlined" sx={{ borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0 }}>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2.5 }}>
+            <ReceiptLongIcon fontSize="small" sx={{ color: 'primary.main' }} />
+            <Typography variant="h4" component="h2">
+              Collections ({data.payments.length})
+            </Typography>
+          </Stack>
+          {/* disableContainer: the card is already the surface — a second bordered box inside it
+              would double the frame. */}
+          <DataTable
+            disableContainer
+            columns={columns}
+            rows={data.payments}
+            getRowId={(row) => row.id}
+            page={1}
+            limit={100}
+            onPageChange={() => {}}
+            onLimitChange={() => {}}
+            exportFileName={`${data.orderNumber}-payments`}
+            canExport={canExport}
+            emptyState={{
+              icon: <ReceiptLongIcon sx={{ fontSize: 36 }} />,
+              title: 'No collections yet',
+              description: 'Receipts recorded against this order will appear here.',
+            }}
+          />
         </Paper>
       </Box>
 

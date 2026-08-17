@@ -72,7 +72,9 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
     defaultValues: {
       collectedAmount: '',
       paymentMethod: 'CASH',
-      paymentDate: '',
+      // Money is nearly always recorded on the day it comes in, so the field opens on today rather
+      // than empty. It stays clearable for a receipt being entered late.
+      paymentDate: dayjs().format('YYYY-MM-DD'),
       paymentStatus: 'AUTO',
       remarks: '',
     },
@@ -86,7 +88,7 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
     reset({
       collectedAmount: '',
       paymentMethod: 'CASH',
-      paymentDate: '',
+      paymentDate: dayjs().format('YYYY-MM-DD'),
       paymentStatus: currentStatusChoice(record),
       remarks: record.paymentTracker?.remarks ?? '',
     });
@@ -216,13 +218,22 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
           />
 
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-            <TextField select label="Payment Method" fullWidth {...register('paymentMethod')}>
-              {PAYMENT_METHODS.map((method) => (
-                <MenuItem key={method} value={method}>
-                  {method}
-                </MenuItem>
-              ))}
-            </TextField>
+            {/* Controller, not register: MUI's Select keeps its own display state, so bound by ref
+                alone it opens blank instead of on the default and holds the last pick across the
+                reset above — the field and react-hook-form then disagree silently. */}
+            <Controller
+              name="paymentMethod"
+              control={control}
+              render={({ field }) => (
+                <TextField {...field} select label="Payment Method" fullWidth>
+                  {PAYMENT_METHODS.map((method) => (
+                    <MenuItem key={method} value={method}>
+                      {method}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            />
 
             <Controller
               name="paymentDate"
@@ -239,19 +250,28 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
             />
           </Box>
 
-          <TextField
-            select
-            label="Payment Status"
-            fullWidth
-            helperText="Automatic follows the payments. Choosing a status pins it until you switch back."
-            {...register('paymentStatus')}
-          >
-            {PAYMENT_STATUS_CHOICES.map((choice) => (
-              <MenuItem key={choice} value={choice}>
-                {choice === 'AUTO' ? 'Automatic (from payments)' : resolveStatusConfig('paymentTracker', choice).label}
-              </MenuItem>
-            ))}
-          </TextField>
+          {/* Same reason as Payment Method — and it matters more here: this one is reset to the
+              edited row's own status, so bound by ref it would still show the previously edited
+              row's while react-hook-form holds the right one. */}
+          <Controller
+            name="paymentStatus"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                select
+                label="Payment Status"
+                fullWidth
+                helperText="Automatic follows the payments. Choosing a status pins it until you switch back."
+              >
+                {PAYMENT_STATUS_CHOICES.map((choice) => (
+                  <MenuItem key={choice} value={choice}>
+                    {choice === 'AUTO' ? 'Automatic (from payments)' : resolveStatusConfig('paymentTracker', choice).label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          />
 
           <TextField
             label="Notes"

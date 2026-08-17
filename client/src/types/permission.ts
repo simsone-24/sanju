@@ -10,6 +10,7 @@ export type ModuleName =
   | 'PAYMENTS'
   | 'CUSTOMERS'
   | 'CALENDAR'
+  | 'RENT'
   | 'REPORTS'
   | 'MASTERS'
   | 'SETTINGS';

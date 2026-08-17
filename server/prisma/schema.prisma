@@ -159,6 +159,55 @@ enum SequenceType {
   // and customers are always auto-created (never manual) — extending the same documented
   // PREFIX-YYYY-NNNNN pattern used by every other entity for consistency.
   CUSTOMER
+  // Rent module documents ("md files/Stock/stock.md" §9, §18, §21). The doc's examples read
+  // RENT-OUT-0001; §9 also says "Use the existing project's numbering convention if one already
+  // exists", so these follow the same PREFIX-YYYY-NNNNN counter as every other document.
+  RENT_OUT
+  RENT_RETURN
+  RENT_PAYMENT
+}
+
+// ---------------------------------------------------------------------------
+// Rent module enums — "md files/Stock/stock.md"
+// ---------------------------------------------------------------------------
+
+enum RentalPersonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RentalItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// stock.md §33 — a stock out that already carries returns or payments is never hard-deleted;
+// it is cancelled so the financial and return history stays auditable.
+enum StockOutStatus {
+  ACTIVE
+  CANCELLED
+}
+
+// stock.md §10 — derived from returned quantities, never chosen by a user.
+enum StockReturnStatus {
+  NOT_RETURNED
+  PARTIAL_RETURNED
+  RETURNED
+}
+
+// stock.md §23 — derived from the sum of the stock out's payments.
+enum RentPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum RentPaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  OTHER
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +258,11 @@ model Company {
   activityLogs      ActivityLog[]
   documentSequences DocumentSequence[]
   invoices          Invoice[]
+  rentalPersons     RentalPerson[]
+  rentalItems       RentalItem[]
+  stockOuts         StockOut[]
+  stockReturns      StockReturn[]
+  rentPayments      RentPayment[]
 
   @@map("companies")
 }
@@ -305,6 +359,9 @@ model User {
   tasksCompleted        OrderTask[]              @relation("OrderTaskCompletedBy")
   documentsUploaded     OrderDocument[]          @relation("DocumentUploadedBy")
   activityLogsPerformed ActivityLog[]            @relation("ActivityPerformedBy")
+  stockOutsCreated      StockOut[]               @relation("StockOutCreatedBy")
+  stockReturnsCreated   StockReturn[]            @relation("StockReturnCreatedBy")
+  rentPaymentsReceived  RentPayment[]            @relation("RentPaymentReceivedBy")
 
   @@index([mobile])
   @@map("users")
@@ -803,6 +860,222 @@ model OrderDocument {
   uploadedBy User? @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
 
   @@map("order_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Rent — "md files/Stock/stock.md"
+//
+// A self-contained workflow: the company hands decoration stock to a rental person, records what
+// went out at what rate, then tracks returns and collections against it. Deliberately NOT linked to
+// Enquiry / Quotation / Order / Payment (stock.md §1 "Important", §36 Rule 1) — nothing in here
+// references those tables and nothing there references these.
+//
+// Phase 1 carries no physical inventory (stock.md §2 "Future Enhancement", §36 Rule 14): there is no
+// total/available/rented stock and no availability check before a stock out. RentalItem is a plain
+// catalogue so those columns can be added to it later without reshaping the transaction tables.
+// ---------------------------------------------------------------------------
+
+model RentalPerson {
+  id        String             @id @default(uuid()) @db.Char(36)
+  companyId String             @map("company_id") @db.Char(36)
+  name      String
+  phone     String
+  email     String?
+  address   String?            @db.Text
+  city      String?
+  notes     String?            @db.Text
+  status    RentalPersonStatus @default(ACTIVE)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  deletedAt DateTime?          @map("deleted_at")
+
+  company   Company       @relation(fields: [companyId], references: [id])
+  stockOuts StockOut[]
+  payments  RentPayment[]
+
+  @@index([companyId, name])
+  @@index([phone])
+  @@map("rental_persons")
+}
+
+// The rentable catalogue. The project has no existing item/product master to reuse (stock.md §6):
+// QuotationItem is a free-text line on one document, not a reusable record, so rent gets its own
+// master rather than borrowing a table that cannot be selected from.
+model RentalItem {
+  id              String           @id @default(uuid()) @db.Char(36)
+  companyId       String           @map("company_id") @db.Char(36)
+  itemName        String           @map("item_name")
+  category        String?
+  defaultRentRate Decimal?         @map("default_rent_rate") @db.Decimal(12, 2)
+  description     String?          @db.Text
+  status          RentalItemStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+
+  company Company        @relation(fields: [companyId], references: [id])
+  usages  StockOutItem[]
+
+  @@unique([companyId, itemName])
+  @@map("rental_items")
+}
+
+// The rent transaction itself (stock.md §7).
+//
+// `paidAmount`, `issuedQuantity`, `returnedQuantity`, `returnStatus` and `paymentStatus` are caches,
+// not user input: stock.md §28 asks for them to be calculated from related records, and §31 allows a
+// cached value provided it is written transactionally. They are stored because the Stock Out and
+// Stock Return lists filter and sort on return/payment status across a paginated result set, which
+// a per-row aggregate cannot do. Every writer recomputes them from the child rows inside the same
+// transaction that changes those rows — see rent-stock-outs/service.ts recalculate().
+model StockOut {
+  id                 String    @id @default(uuid()) @db.Char(36)
+  companyId          String    @map("company_id") @db.Char(36)
+  rentNo             String    @unique @map("rent_no")
+  rentalPersonId     String    @map("rental_person_id") @db.Char(36)
+  stockOutDate       DateTime  @map("stock_out_date")
+  expectedReturnDate DateTime? @map("expected_return_date")
+
+  subtotal Decimal @db.Decimal(12, 2)
+  // Discount is entered as a percentage of the subtotal; `discount` is the resulting amount,
+  // computed and stored by the service. Both are kept for the same reason the Quotation model keeps
+  // cgstPercent alongside `tax`: the percentage is what the user agreed, the amount is what every
+  // total, report and balance downstream actually reads.
+  discountPercent   Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  discount          Decimal @default(0) @db.Decimal(12, 2)
+  additionalCharges Decimal @default(0) @map("additional_charges") @db.Decimal(12, 2)
+  grandTotal        Decimal @map("grand_total") @db.Decimal(12, 2)
+
+  paidAmount       Decimal           @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  issuedQuantity   Decimal           @default(0) @map("issued_quantity") @db.Decimal(12, 2)
+  returnedQuantity Decimal           @default(0) @map("returned_quantity") @db.Decimal(12, 2)
+  returnStatus     StockReturnStatus @default(NOT_RETURNED) @map("return_status")
+  paymentStatus    RentPaymentStatus @default(UNPAID) @map("payment_status")
+
+  notes       String?        @db.Text
+  status      StockOutStatus @default(ACTIVE)
+  createdById String?        @map("created_by_id") @db.Char(36)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company      Company        @relation(fields: [companyId], references: [id])
+  rentalPerson RentalPerson   @relation(fields: [rentalPersonId], references: [id])
+  createdBy    User?          @relation("StockOutCreatedBy", fields: [createdById], references: [id])
+  items        StockOutItem[]
+  returns      StockReturn[]
+  payments     RentPayment[]
+
+  @@index([companyId, stockOutDate])
+  @@index([rentalPersonId])
+  @@index([returnStatus])
+  @@index([paymentStatus])
+  @@index([expectedReturnDate])
+  @@map("stock_outs")
+}
+
+// One issued line. `itemName` is a snapshot (stock.md §28) so a rental document stays truthful after
+// the master item is renamed; `rentalItemId` is kept alongside it, and is nullable so a line whose
+// master row was deleted still reads correctly.
+//
+// `returnedQuantity` is the same kind of transactional cache as StockOut's — it is what the return
+// screen shows as "Previously Returned" and what the over-return guard (§16) checks against.
+model StockOutItem {
+  id               String   @id @default(uuid()) @db.Char(36)
+  stockOutId       String   @map("stock_out_id") @db.Char(36)
+  rentalItemId     String?  @map("rental_item_id") @db.Char(36)
+  itemName         String   @map("item_name_snapshot")
+  quantity         Decimal  @db.Decimal(10, 2)
+  rate             Decimal  @db.Decimal(12, 2)
+  amount           Decimal  @db.Decimal(12, 2)
+  returnedQuantity Decimal  @default(0) @map("returned_quantity") @db.Decimal(10, 2)
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  stockOut    StockOut          @relation(fields: [stockOutId], references: [id])
+  rentalItem  RentalItem?       @relation(fields: [rentalItemId], references: [id])
+  returnItems StockReturnItem[]
+
+  @@index([stockOutId])
+  @@map("stock_out_items")
+}
+
+// One return event against a stock out. stock.md §17 — a stock out may be returned in as many
+// instalments as the customer brings items back, so returns are rows rather than a boolean, and the
+// history is never overwritten.
+model StockReturn {
+  id          String   @id @default(uuid()) @db.Char(36)
+  companyId   String   @map("company_id") @db.Char(36)
+  returnNo    String   @unique @map("return_no")
+  stockOutId  String   @map("stock_out_id") @db.Char(36)
+  returnDate  DateTime @map("return_date")
+  notes       String?  @db.Text
+  createdById String?  @map("created_by_id") @db.Char(36)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company   Company           @relation(fields: [companyId], references: [id])
+  stockOut  StockOut          @relation(fields: [stockOutId], references: [id])
+  createdBy User?             @relation("StockReturnCreatedBy", fields: [createdById], references: [id])
+  items     StockReturnItem[]
+
+  @@index([stockOutId])
+  @@index([companyId, returnDate])
+  @@map("stock_returns")
+}
+
+model StockReturnItem {
+  id               String   @id @default(uuid()) @db.Char(36)
+  stockReturnId    String   @map("stock_return_id") @db.Char(36)
+  stockOutItemId   String   @map("stock_out_item_id") @db.Char(36)
+  quantityReturned Decimal  @map("quantity_returned") @db.Decimal(10, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  stockReturn  StockReturn  @relation(fields: [stockReturnId], references: [id])
+  stockOutItem StockOutItem @relation(fields: [stockOutItemId], references: [id])
+
+  @@index([stockReturnId])
+  @@index([stockOutItemId])
+  @@map("stock_return_items")
+}
+
+// Rent collections (stock.md §19). Separate from the Payment table above, which belongs to Orders:
+// the two workflows never mix, and a rent payment answers to a stock out, not an order.
+//
+// `rentalPersonId` is stored as well as reachable through the stock out — the person-wise
+// outstanding report (§24) groups payments by person directly, and the service checks the two agree
+// before writing (§31).
+model RentPayment {
+  id             String          @id @default(uuid()) @db.Char(36)
+  companyId      String          @map("company_id") @db.Char(36)
+  paymentNo      String          @unique @map("payment_no")
+  stockOutId     String          @map("stock_out_id") @db.Char(36)
+  rentalPersonId String          @map("rental_person_id") @db.Char(36)
+  paymentDate    DateTime        @map("payment_date")
+  amount         Decimal         @db.Decimal(12, 2)
+  paymentMode    RentPaymentMode @map("payment_mode")
+  referenceNo    String?         @map("reference_no")
+  notes          String?         @db.Text
+  receivedById   String?         @map("received_by_id") @db.Char(36)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  company      Company      @relation(fields: [companyId], references: [id])
+  stockOut     StockOut     @relation(fields: [stockOutId], references: [id])
+  rentalPerson RentalPerson @relation(fields: [rentalPersonId], references: [id])
+  receivedBy   User?        @relation("RentPaymentReceivedBy", fields: [receivedById], references: [id])
+
+  @@index([stockOutId])
+  @@index([rentalPersonId])
+  @@index([companyId, paymentDate])
+  @@map("rent_payments")
 }
 
 // ---------------------------------------------------------------------------

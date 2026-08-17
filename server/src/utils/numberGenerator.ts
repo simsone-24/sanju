@@ -8,6 +8,9 @@ const PREFIX: Record<SequenceType, string> = {
   RECEIPT: 'RCT',
   INVOICE: 'INV',
   CUSTOMER: 'CUS',
+  RENT_OUT: 'RENT-OUT',
+  RENT_RETURN: 'RENT-RET',
+  RENT_PAYMENT: 'RENT-PAY',
 };
 
 // Sequential per company, resets every calendar year, no MAX()+1 — per

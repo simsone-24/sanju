@@ -100,6 +100,30 @@ const ACTIVE_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
   INACTIVE: { label: 'Inactive', color: 'default' },
 };
 
+// "md files/Stock/stock.md" §35 — the rent badges spell their state out in full; colour is a second
+// signal, never the only one. Not Returned is red rather than neutral: stock that has gone out and
+// not come back is an open liability, not a resting state.
+const RENT_RETURN_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
+  NOT_RETURNED: { label: 'Not Returned', color: 'error' },
+  PARTIAL_RETURNED: { label: 'Partial Returned', color: 'warning' },
+  RETURNED: { label: 'Returned', color: 'success' },
+};
+
+// Deliberately separate from the Orders `payment` scale above: rent has three states with different
+// wording (Unpaid / Partially Paid / Paid) and no overdue concept, since a rental carries no event
+// date to fall behind.
+const RENT_PAYMENT_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
+  UNPAID: { label: 'Unpaid', color: 'error' },
+  PARTIALLY_PAID: { label: 'Partially Paid', color: 'warning' },
+  PAID: { label: 'Paid', color: 'success' },
+};
+
+// A stock out is live work or a retired record (stock.md §33) — never deleted once it has history.
+const STOCK_OUT_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
+  ACTIVE: { label: 'Active', color: 'info' },
+  CANCELLED: { label: 'Cancelled', color: 'default' },
+};
+
 const STATUS_CONFIG_BY_TYPE = {
   enquiry: ENQUIRY_STATUS_CONFIG,
   quotation: QUOTATION_STATUS_CONFIG,
@@ -110,6 +134,9 @@ const STATUS_CONFIG_BY_TYPE = {
   payment: PAYMENT_STATUS_CONFIG,
   paymentTracker: PAYMENT_TRACKER_STATUS_CONFIG,
   active: ACTIVE_STATUS_CONFIG,
+  rentReturn: RENT_RETURN_STATUS_CONFIG,
+  rentPayment: RENT_PAYMENT_STATUS_CONFIG,
+  stockOut: STOCK_OUT_STATUS_CONFIG,
 } as const;
 
 export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';

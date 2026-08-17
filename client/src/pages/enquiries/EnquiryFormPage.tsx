@@ -811,7 +811,10 @@ export default function EnquiryFormPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [customerSearchInput, setCustomerSearchInput] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
-  const [sameAsMobile, setSameAsMobile] = useState(false);
+  // On by default: a WhatsApp number is the phone number far more often than not, so it autofills
+  // as the phone number is typed. Editing the WhatsApp field turns this off and hands it over. In
+  // edit mode the effect that loads an existing enquiry recomputes it from what was saved.
+  const [sameAsMobile, setSameAsMobile] = useState(true);
   const [editingCustomer, setEditingCustomer] = useState(false);
 
   // Inline "create a quotation together with this enquiry" draft — create mode only. Kept as plain
@@ -917,6 +920,10 @@ export default function EnquiryFormPage() {
   const customerType = watch('customerType');
   const mobileValue = watch('mobile');
   const whatsappValue = watch('whatsapp');
+  // Registered up here because both fields wrap their own onChange around the one react-hook-form
+  // hands back, and calling register() inline would rebuild that handler on every render.
+  const mobileField = register('mobile');
+  const whatsappField = register('whatsapp');
   const customerNameValue = watch('customerName');
   const emailValue = watch('email');
   const addressValue = watch('address');
@@ -1279,15 +1286,30 @@ export default function EnquiryFormPage() {
                   placeholder="10-digit mobile number"
                   error={Boolean(errors.mobile)}
                   helperText={errors.mobile?.message}
-                  {...register('mobile')}
+                  slotProps={{ htmlInput: { maxLength: 10, inputMode: 'numeric' } }}
+                  {...mobileField}
+                  // A 10-digit number is the only thing this field can hold, so anything else is
+                  // dropped as it is typed rather than waiting for submit to reject it. Rewriting
+                  // the event before handing it on keeps react-hook-form the single source of
+                  // truth for the value. Pasting a formatted number ("+91 98765 43210") therefore
+                  // lands as its digits, trimmed to the first ten.
+                  onChange={(event) => {
+                    event.target.value = event.target.value.replace(/\D/g, '').slice(0, 10);
+                    return mobileField.onChange(event);
+                  }}
                 />
                 <Box>
                   <TextField
                     label="WhatsApp"
                     fullWidth
-                    placeholder="If different from mobile"
-                    disabled={sameAsMobile}
-                    {...register('whatsapp')}
+                    placeholder="If different from phone number"
+                    {...whatsappField}
+                    // Typing here is the user taking the number over, so the mirror stops — their
+                    // value would otherwise be overwritten on the next phone-number keystroke.
+                    onChange={(event) => {
+                      setSameAsMobile(false);
+                      return whatsappField.onChange(event);
+                    }}
                   />
                   <FormControlLabel
                     sx={{ mt: 0.25, ml: 0 }}

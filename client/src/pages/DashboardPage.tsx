@@ -113,6 +113,7 @@ export default function DashboardPage() {
         }}
       >
         <StatCard
+          size="md"
           label="Today's Events"
           value={todayEvents?.length ?? 0}
           subtext={dayjs(today).format('ddd, D MMM YYYY')}
@@ -122,6 +123,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=day&date=${today}`)}
         />
         <StatCard
+          size="md"
           label="Tomorrow's Events"
           value={tomorrowEvents?.length ?? 0}
           subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}
@@ -131,6 +133,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=day&date=${tomorrow}`)}
         />
         <StatCard
+          size="md"
           label="Events This Week"
           value={weekEvents?.length ?? 0}
           subtext={`${weekStart.format('D MMM')} – ${weekEnd.format('D MMM YYYY')}`}
@@ -140,6 +143,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=week&date=${today}`)}
         />
         <StatCard
+          size="md"
           label="Events This Month"
           value={monthEvents?.length ?? 0}
           subtext={monthReference.format('MMMM YYYY')}
@@ -149,6 +153,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=month&date=${today}`)}
         />
         <StatCard
+          size="md"
           label="Upcoming Events"
           value={allUpcomingEvents?.summary.totalEvents ?? 0}
           subtext="All future dates"
@@ -158,6 +163,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/reports?tab=events&from=${today}`)}
         />
         <StatCard
+          size="md"
           label="Today's Appointments"
           value={todayAppointments?.meta.totalRecords ?? 0}
           subtext={dayjs(today).format('ddd, D MMM YYYY')}
@@ -167,6 +173,7 @@ export default function DashboardPage() {
           onClick={() => navigate(`/enquiries?apptFrom=${today}&apptTo=${today}`)}
         />
         <StatCard
+          size="md"
           label="Tomorrow's Appointments"
           value={tomorrowAppointments?.meta.totalRecords ?? 0}
           subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}
@@ -187,6 +194,9 @@ export default function DashboardPage() {
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)', xl: 'repeat(5, 1fr)' },
           gap: 2,
+          // Each card sizes to its own content: grid's default `stretch` would pad every card in
+          // the row out to match whichever one is expanded.
+          alignItems: 'start',
         }}
       >
         <DashboardEventSection

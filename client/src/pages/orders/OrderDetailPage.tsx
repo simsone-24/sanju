@@ -71,8 +71,12 @@ export default function OrderDetailPage() {
   // Overview tab, rather than duplicating the form. The tab index is controlled here too: AppTabs
   // only mounts the active tab, so the button must bring Overview forward first or the drawer it
   // targets wouldn't exist yet.
+  //
+  // `?edit=1` seeds the same counter above zero, so the Orders list' Edit action lands directly in
+  // the drawer instead of on the read-only view. Like `?tab=`, it stays in the URL and so survives
+  // a refresh.
   const [activeTab, setActiveTab] = useState(initialIndex);
-  const [editRequestId, setEditRequestId] = useState(0);
+  const [editRequestId, setEditRequestId] = useState(searchParams.get('edit') === '1' ? 1 : 0);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
 

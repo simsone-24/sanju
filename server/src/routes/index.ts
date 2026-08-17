@@ -12,6 +12,13 @@ import paymentTrackerRoutes from '../modules/payment-tracker/routes';
 import paymentsRoutes from '../modules/payments/routes';
 import permissionsRoutes from '../modules/permissions/routes';
 import quotationsRoutes from '../modules/quotations/routes';
+import rentDashboardRoutes from '../modules/rent-dashboard/routes';
+import rentItemsRoutes from '../modules/rent-items/routes';
+import rentPaymentsRoutes from '../modules/rent-payments/routes';
+import rentPersonsRoutes from '../modules/rent-persons/routes';
+import rentReportsRoutes from '../modules/rent-reports/routes';
+import rentReturnsRoutes from '../modules/rent-returns/routes';
+import rentStockOutsRoutes from '../modules/rent-stock-outs/routes';
 import reportsRoutes from '../modules/reports/routes';
 import settingsRoutes from '../modules/settings/routes';
 import taskPlanRoutes from '../modules/task-plan/routes';
@@ -39,6 +46,17 @@ router.use('/invoices', invoicesRoutes);
 router.use('/tasks', tasksRoutes);
 router.use('/task-plan', taskPlanRoutes);
 router.use('/calendar', calendarRoutes);
+
+// Rent — "md files/Stock/stock.md" §30. A standalone workflow with no link to enquiries, quotations
+// or orders, so it owns its own /rent namespace rather than hanging off any of theirs.
+router.use('/rent/persons', rentPersonsRoutes);
+router.use('/rent/items', rentItemsRoutes);
+router.use('/rent/stock-outs', rentStockOutsRoutes);
+router.use('/rent/returns', rentReturnsRoutes);
+router.use('/rent/payments', rentPaymentsRoutes);
+router.use('/rent/dashboard', rentDashboardRoutes);
+router.use('/rent/reports', rentReportsRoutes);
+
 router.use('/reports', reportsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/documents', documentsRoutes);

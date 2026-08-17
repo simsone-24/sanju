@@ -1,6 +1,11 @@
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import BoltIcon from '@mui/icons-material/Bolt';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CategoryIcon from '@mui/icons-material/Category';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import GroupsIcon from '@mui/icons-material/Groups';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import LightModeIcon from '@mui/icons-material/LightMode';
@@ -108,6 +113,12 @@ interface NavItem {
   path: string;
   icon: React.ReactNode;
   module: ModuleName;
+  /**
+   * Highlight only on this exact path. For a section landing page whose siblings live underneath it
+   * (Rent's dashboard at /rent, with /rent/stock-outs and the rest below), where the usual
+   * startsWith match would keep the parent lit on every child page.
+   */
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -129,6 +140,21 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Quotations', path: '/quotations', icon: <RequestQuoteIcon />, module: 'QUOTATIONS' },
       { label: 'Orders', path: '/orders', icon: <Inventory2Icon />, module: 'ORDERS' },
       { label: 'Payment Tracker', path: '/payment-tracker', icon: <PaymentsIcon />, module: 'PAYMENTS' },
+    ],
+  },
+  // Rent is its own section, not part of OPERATIONS: it shares no data with the enquiry-to-order
+  // chain above ("md files/Stock/stock.md" §1) and grouping it there would imply a link that does
+  // not exist.
+  {
+    title: 'RENT',
+    items: [
+      { label: 'Rent Dashboard', path: '/rent', icon: <SpaceDashboardIcon />, module: 'RENT', exact: true },
+      { label: 'Stock Out', path: '/rent/stock-outs', icon: <LocalShippingIcon />, module: 'RENT' },
+      { label: 'Stock Return', path: '/rent/returns', icon: <AssignmentReturnIcon />, module: 'RENT' },
+      { label: 'Rent Payments', path: '/rent/payments', icon: <PaymentsIcon />, module: 'RENT' },
+      { label: 'Rental Persons', path: '/rent/persons', icon: <GroupsIcon />, module: 'RENT' },
+      { label: 'Rental Items', path: '/rent/items', icon: <CategoryIcon />, module: 'RENT' },
+      { label: 'Rent Reports', path: '/rent/reports', icon: <AssessmentIcon />, module: 'RENT' },
     ],
   },
   {
@@ -176,6 +202,9 @@ export default function AppLayout() {
   const isItemActive = (item: NavItem): boolean => {
     if (item.path === '/') {
       return location.pathname === '/';
+    }
+    if (item.exact) {
+      return location.pathname === item.path;
     }
     if (item.path.includes('?')) {
       const [path, query] = item.path.split('?');

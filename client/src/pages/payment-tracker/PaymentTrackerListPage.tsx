@@ -1,29 +1,24 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CloseIcon from '@mui/icons-material/Close';
-import DateRangeIcon from '@mui/icons-material/DateRange';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import SavingsIcon from '@mui/icons-material/Savings';
-import ScheduleIcon from '@mui/icons-material/Schedule';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TuneIcon from '@mui/icons-material/Tune';
-import UpdateIcon from '@mui/icons-material/Update';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Autocomplete, TextField } from '@mui/material';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CustomerFilter } from '../../components/CustomerFilter';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
+import { CUSTOM_DATE_RANGE, DateRangeFilter, type DateRangeValue } from '../../components/DateRangeFilter';
 import { LastUpdated } from '../../components/LastUpdated';
 import { PageHeader } from '../../components/PageHeader';
-import { QuickFilterPill } from '../../components/QuickFilterPill';
-import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -32,11 +27,11 @@ import { CARD_SURFACE } from '../../components/ui/Card';
 import { IconButton } from '../../components/ui/IconButton';
 import { SelectField } from '../../components/ui/Select';
 import { usePermission } from '../../hooks/usePermission';
-import * as customerService from '../../services/customerService';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { CustomerOption } from '../../types/masters';
 import type { OrderStatus } from '../../types/order';
 import type { PaymentTrackerRecord, PaymentTrackerStatus } from '../../types/paymentTracker';
+import { DATE_RANGE_LABELS, dateRangeBounds, type DateRangePreset } from '../../utils/dateRange';
 import { eventProximity, formatCurrency, formatDate } from '../../utils/format';
 import { PaymentHistoryDialog } from './PaymentHistoryDialog';
 import { PaymentTrackerEditDialog } from './PaymentTrackerEditDialog';
@@ -61,37 +56,25 @@ const PAYMENT_ROW_ACCENT: Record<PaymentTrackerStatus, string> = {
   FULLY_PAID: '#10B981',
 };
 
-// "payment/payment.md" §Filters — one-at-a-time quick ranges over the event date, alongside the
-// custom From/To range in Advanced Filters.
-type QuickRange = 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH';
-
-// Each range carries its own icon rather than all four repeating one generic calendar — an icon
-// that's identical across every pill carries no information and just adds visual noise
-// ("md files/Enquiry/UI1.md" §Quick Filters).
-const QUICK_RANGES: { key: QuickRange; label: string; icon: ReactNode }[] = [
-  { key: 'THIS_WEEK', label: 'This Week', icon: <DateRangeIcon fontSize="small" /> },
-  { key: 'NEXT_WEEK', label: 'Next Week', icon: <UpdateIcon fontSize="small" /> },
-  { key: 'THIS_MONTH', label: 'This Month', icon: <CalendarMonthIcon fontSize="small" /> },
-  { key: 'NEXT_MONTH', label: 'Next Month', icon: <ScheduleIcon fontSize="small" /> },
+// "payment/payment.md" §Filters — named ranges over the event date, offered from the toolbar's
+// Date Range dropdown alongside the custom From/To range that the dropdown's own "Custom Range"
+// option hands over to in Advanced Filters. Unlike the other event-date modules this one leads
+// with the windows that have already closed: collection is chased against events that have run.
+// Single days are not offered at all — a day's worth of events is too narrow to read a payment
+// position from, and Custom Range covers the rare case.
+const DATE_RANGE_PRESETS: readonly DateRangePreset[] = [
+  'LAST_WEEK',
+  'LAST_MONTH',
+  'THIS_WEEK',
+  'NEXT_WEEK',
+  'THIS_MONTH',
+  'NEXT_MONTH',
 ];
 
-// Filter controls grow to share whatever width the search bar leaves, rather than sitting at a
-// fixed size and stranding empty space at the row's right edge.
-const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[170px]';
 
-function quickRangeDates(key: QuickRange): { from: Dayjs; to: Dayjs } {
-  const today = dayjs();
-  switch (key) {
-    case 'THIS_WEEK':
-      return { from: today.startOf('week'), to: today.endOf('week') };
-    case 'NEXT_WEEK':
-      return { from: today.add(1, 'week').startOf('week'), to: today.add(1, 'week').endOf('week') };
-    case 'THIS_MONTH':
-      return { from: today.startOf('month'), to: today.endOf('month') };
-    case 'NEXT_MONTH':
-      return { from: today.add(1, 'month').startOf('month'), to: today.add(1, 'month').endOf('month') };
-  }
-}
+// Filter controls grow to share the row's width rather than sitting at a fixed size and stranding
+// empty space at its right edge.
+const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[170px]';
 
 function trackerStatus(row: PaymentTrackerRecord): PaymentTrackerStatus {
   return row.paymentTracker?.paymentStatus ?? 'PENDING';
@@ -111,43 +94,41 @@ export default function PaymentTrackerListPage() {
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [search, setSearch] = useState('');
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
-  const [customerQuery, setCustomerQuery] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<PaymentTrackerStatus | ''>('');
   const [orderStatus, setOrderStatus] = useState<OrderStatus | ''>('');
-  const [quickRange, setQuickRange] = useState<QuickRange | null>(null);
+  const [dateRange, setDateRange] = useState<DateRangeValue>('');
   const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
   const [customTo, setCustomTo] = useState<Dayjs | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<PaymentTrackerRecord | null>(null);
   const [historyRecord, setHistoryRecord] = useState<PaymentTrackerRecord | null>(null);
 
-  // The quick-range pills and the custom From/To (Advanced Filters) both resolve to one
-  // event-date window; whichever was set last wins, so they can never silently fight each other.
-  const range = quickRange
-    ? quickRangeDates(quickRange)
+  // The Date Range dropdown and the custom From/To (Advanced Filters) both resolve to one
+  // event-date window: a named preset computes its own bounds, and "Custom Range" — like leaving
+  // the dropdown unset — defers to whatever the date fields hold, so the two can never fight.
+  const preset = dateRange && dateRange !== CUSTOM_DATE_RANGE ? dateRange : null;
+  const range = preset
+    ? dateRangeBounds(preset)
     : customFrom || customTo
       ? { from: customFrom, to: customTo }
       : null;
 
   const eventDateFrom = range?.from ? range.from.format('YYYY-MM-DD') : undefined;
   const eventDateTo = range?.to ? range.to.format('YYYY-MM-DD') : undefined;
-  const hasDateFilter = Boolean(quickRange || customFrom || customTo);
   const dateFilterCount = [customFrom, customTo].filter(Boolean).length;
 
-  // Narrows along with every active filter (search, customer, payment status, order status, event
+  // Narrows along with every active filter (customer, payment status, order status, event
   // date range) — these are plain summary tiles, not click-filters, so unlike the Enquiry/Order
   // dashboard cards there's no "own" filter to leave out.
   const { data: stats } = useQuery({
     queryKey: [
       'payment-tracker',
       'stats',
-      { search, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
+      { paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
     ],
     queryFn: () =>
       paymentTrackerService.getStats({
-        search: search || undefined,
         customerId: customer?.id,
         paymentStatus: paymentStatus || undefined,
         orderStatus: orderStatus || undefined,
@@ -158,23 +139,16 @@ export default function PaymentTrackerListPage() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: customerOptions } = useQuery({
-    queryKey: ['customers', 'search', customerQuery],
-    queryFn: () => customerService.search(customerQuery),
-    enabled: customerQuery.trim().length > 0,
-  });
-
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: [
       'payment-tracker',
       'list',
-      { page, limit, search, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
+      { page, limit, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
     ],
     queryFn: () =>
       paymentTrackerService.list({
         page,
         limit,
-        search: search || undefined,
         customerId: customer?.id,
         paymentStatus: paymentStatus || undefined,
         orderStatus: orderStatus || undefined,
@@ -186,41 +160,46 @@ export default function PaymentTrackerListPage() {
   });
 
   function resetFilters() {
-    setSearch('');
     setCustomer(null);
-    setCustomerQuery('');
     setPaymentStatus('');
     setOrderStatus('');
-    setQuickRange(null);
+    setDateRange('');
     setCustomFrom(null);
     setCustomTo(null);
     setPage(1);
   }
 
-  function applyQuickRange(key: QuickRange | null) {
-    setQuickRange((current) => (current === key ? null : key));
-    setCustomFrom(null);
-    setCustomTo(null);
+  // Picking a named window discards any custom From/To, so the range shown is always the one the
+  // dropdown names. "Custom Range" instead opens Advanced Filters, where those fields live.
+  function applyDateRange(value: DateRangeValue) {
+    setDateRange(value);
+    if (value === CUSTOM_DATE_RANGE) {
+      setAdvancedOpen(true);
+    } else {
+      setCustomFrom(null);
+      setCustomTo(null);
+    }
+    setPage(1);
+  }
+
+  // Editing either date field is what "Custom Range" means, so the dropdown follows the edit
+  // rather than leaving a named window selected that no longer describes the list.
+  function applyCustomRange(next: { from?: Dayjs | null; to?: Dayjs | null }) {
+    if (next.from !== undefined) setCustomFrom(next.from);
+    if (next.to !== undefined) setCustomTo(next.to);
+    setDateRange(CUSTOM_DATE_RANGE);
     setPage(1);
   }
 
   // Everything currently narrowing the list, as individually removable chips — so an unexpected
   // result count always has a visible cause, and one filter can be dropped without a full reset.
   const activeFilters: ActiveFilterChip[] = [];
-  if (search) {
-    activeFilters.push({
-      key: 'search',
-      label: `Search: "${search}"`,
-      onClear: () => setSearch(''),
-    });
-  }
   if (customer) {
     activeFilters.push({
       key: 'customer',
       label: `Customer: ${customer.customerName}`,
       onClear: () => {
         setCustomer(null);
-        setCustomerQuery('');
       },
     });
   }
@@ -238,11 +217,11 @@ export default function PaymentTrackerListPage() {
       onClear: () => setOrderStatus(''),
     });
   }
-  if (quickRange) {
+  if (preset) {
     activeFilters.push({
-      key: 'quickRange',
-      label: QUICK_RANGES.find((option) => option.key === quickRange)!.label,
-      onClear: () => setQuickRange(null),
+      key: 'dateRange',
+      label: DATE_RANGE_LABELS[preset],
+      onClear: () => setDateRange(''),
     });
   } else if (customFrom || customTo) {
     activeFilters.push({
@@ -253,6 +232,7 @@ export default function PaymentTrackerListPage() {
       onClear: () => {
         setCustomFrom(null);
         setCustomTo(null);
+        setDateRange('');
       },
     });
   }
@@ -488,54 +468,20 @@ export default function PaymentTrackerListPage() {
       </div>
 
       <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-2.5 tw-px-3 tw-py-2.5`}>
-        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
-          <QuickFilterPill label="All Dates" active={!hasDateFilter} onClick={() => applyQuickRange(null)} />
-          {QUICK_RANGES.map((option) => (
-            <QuickFilterPill
-              key={option.key}
-              label={option.label}
-              icon={option.icon}
-              active={quickRange === option.key}
-              onClick={() => applyQuickRange(option.key)}
-            />
-          ))}
-        </div>
-
-        {/* Primary row: always visible. Search takes the remaining width. The dropdowns carry a
-            label block above the box, so everything bottom-aligns and the input boxes themselves
-            stay on one line. Advanced Filters closes the row on the right. */}
+        {/* Primary row: always visible. The dropdowns carry a label block above the box, so
+            everything bottom-aligns and the input boxes themselves stay on one line. Advanced
+            Filters closes the row on the right. */}
         <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
-          <div className="tw-flex-[2] tw-basis-[240px]">
-            <SearchBar
-              fullWidth
-              value={search}
-              onChange={(value) => {
-                setSearch(value);
-                setPage(1);
-              }}
-              placeholder="Search by order no, customer, mobile..."
-            />
-          </div>
-
-          {/* MUI Autocomplete — the one control here with no Tailwind equivalent (customer
-              type-ahead search); the fixed 40px height keeps its bottom edge level with the
-              Tailwind fields it sits beside. */}
-          <div className={FILTER_FIELD_WIDTH}>
-            <Autocomplete
-              size="small"
-              options={customerOptions ?? []}
-              value={customer}
-              onChange={(_event, value) => {
-                setCustomer(value);
-                setPage(1);
-              }}
-              onInputChange={(_event, value) => setCustomerQuery(value)}
-              getOptionLabel={(option) => `${option.customerName} (${option.mobile})`}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              noOptionsText={customerQuery ? 'No customers found' : 'Type to search'}
-              renderInput={(params) => <TextField {...params} label="Customer" />}
-            />
-          </div>
+          {/* The shared customer type-ahead — an MUI control, but its fixed 40px height keeps its
+              bottom edge level with the Tailwind fields it sits beside. */}
+          <CustomerFilter
+            className={FILTER_FIELD_WIDTH}
+            value={customer}
+            onChange={(next) => {
+              setCustomer(next);
+              setPage(1);
+            }}
+          />
 
           <SelectField
             className={FILTER_FIELD_WIDTH}
@@ -565,6 +511,15 @@ export default function PaymentTrackerListPage() {
               value: option,
               label: resolveStatusConfig('order', option).label,
             }))}
+          />
+
+          <DateRangeFilter
+            className={FILTER_FIELD_WIDTH}
+            label="Event Date Range"
+            presets={DATE_RANGE_PRESETS}
+            value={dateRange}
+            onChange={applyDateRange}
+            custom
           />
 
           <Button
@@ -597,11 +552,7 @@ export default function PaymentTrackerListPage() {
                     label="Event Date From"
                     margin="none"
                     value={customFrom}
-                    onChange={(value) => {
-                      setCustomFrom(value);
-                      setQuickRange(null);
-                      setPage(1);
-                    }}
+                    onChange={(value) => applyCustomRange({ from: value })}
                   />
                 </div>
                 <div className="tw-flex-1">
@@ -610,11 +561,7 @@ export default function PaymentTrackerListPage() {
                     margin="none"
                     minDate={customFrom ?? undefined}
                     value={customTo}
-                    onChange={(value) => {
-                      setCustomTo(value);
-                      setQuickRange(null);
-                      setPage(1);
-                    }}
+                    onChange={(value) => applyCustomRange({ to: value })}
                   />
                 </div>
               </div>

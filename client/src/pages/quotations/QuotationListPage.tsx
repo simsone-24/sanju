@@ -20,6 +20,7 @@ import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
+import { CUSTOM_DATE_RANGE, DateRangeFilter, type DateRangeValue } from '../../components/DateRangeFilter';
 import { LastUpdated } from '../../components/LastUpdated';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
@@ -38,6 +39,12 @@ import * as userService from '../../services/userService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
 import type { QuotationGroupedRow, QuotationSource, QuotationStatus } from '../../types/quotation';
+import {
+  DATE_RANGE_LABELS,
+  dateRangeBounds,
+  TRANSACTION_DATE_PRESETS,
+  toDateRangePreset,
+} from '../../utils/dateRange';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { QuotationPreviewDialog } from './QuotationPreviewDialog';
 import { buildQuotationWhatsAppLink, canShareQuotation } from './quotationActions';
@@ -193,8 +200,14 @@ export default function QuotationListPage() {
   const sourceFilter = (searchParams.get('source') ?? '') as QuotationSource | '';
   const customerId = searchParams.get('customer') ?? '';
   const assignedUserId = searchParams.get('user') ?? '';
-  const dateFrom = parseParamDate(searchParams.get('from'));
-  const dateTo = parseParamDate(searchParams.get('to'));
+  // A named window from the Date Range dropdown and an explicit From/To are two ways of setting
+  // the same quotation-date range: the named window wins while it's selected (and its bounds show
+  // in the date fields), and editing either field drops the selection back to "Custom Range".
+  const dateRangePreset = toDateRangePreset(searchParams.get('range'), TRANSACTION_DATE_PRESETS);
+  const presetBounds = dateRangePreset ? dateRangeBounds(dateRangePreset) : null;
+  const dateFrom = presetBounds ? presetBounds.from : parseParamDate(searchParams.get('from'));
+  const dateTo = presetBounds ? presetBounds.to : parseParamDate(searchParams.get('to'));
+  const dateRangeValue: DateRangeValue = dateRangePreset ?? (dateFrom || dateTo ? CUSTOM_DATE_RANGE : '');
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
   const limit = Number(searchParams.get('limit')) || 20;
 
@@ -302,6 +315,27 @@ export default function QuotationListPage() {
     patchParams({ status: status === value ? null : value });
   }
 
+  // A named window replaces any hand-picked From/To, so the two can't disagree. "Custom Range"
+  // computes no window of its own — it just hands the range back to the date fields.
+  function applyDateRange(value: DateRangeValue) {
+    if (value === CUSTOM_DATE_RANGE) {
+      patchParams({ range: null, from: formatParamDate(dateFrom), to: formatParamDate(dateTo) });
+      return;
+    }
+    patchParams({ range: value || null, from: null, to: null });
+  }
+
+  // Editing one bound is what "Custom Range" means. The bound the user did not touch is carried
+  // over from whatever is on screen, so switching off a named window narrows the range instead of
+  // half-clearing it.
+  function applyCustomBound(patch: { from?: Dayjs | null; to?: Dayjs | null }) {
+    patchParams({
+      from: formatParamDate(patch.from !== undefined ? patch.from : dateFrom),
+      to: formatParamDate(patch.to !== undefined ? patch.to : dateTo),
+      range: null,
+    });
+  }
+
   async function handleConfirmAction() {
     if (!pendingAction) return;
     setActionError(null);
@@ -396,7 +430,13 @@ export default function QuotationListPage() {
       onClear: () => patchParams({ user: null }),
     });
   }
-  if (dateFrom || dateTo) {
+  if (dateRangePreset) {
+    activeFilters.push({
+      key: 'range',
+      label: DATE_RANGE_LABELS[dateRangePreset],
+      onClear: () => patchParams({ range: null }),
+    });
+  } else if (dateFrom || dateTo) {
     activeFilters.push({
       key: 'range',
       label: `Date ${dateFrom ? formatDate(dateFrom.toISOString()) : '…'} – ${
@@ -744,12 +784,20 @@ export default function QuotationListPage() {
             options={(userOptions ?? []).map((option) => ({ value: option.id, label: option.fullName }))}
           />
 
+          <DateRangeFilter
+            className={FILTER_FIELD_WIDTH}
+            presets={TRANSACTION_DATE_PRESETS}
+            value={dateRangeValue}
+            onChange={applyDateRange}
+            custom
+          />
+
           <div className="tw-flex-1 tw-basis-[145px]">
             <DatePickerField
               label="Date From"
               margin="none"
               value={dateFrom}
-              onChange={(value) => patchParams({ from: formatParamDate(value) })}
+              onChange={(value) => applyCustomBound({ from: value })}
             />
           </div>
           <div className="tw-flex-1 tw-basis-[145px]">
@@ -757,7 +805,7 @@ export default function QuotationListPage() {
               label="Date To"
               margin="none"
               value={dateTo}
-              onChange={(value) => patchParams({ to: formatParamDate(value) })}
+              onChange={(value) => applyCustomBound({ to: value })}
               minDate={dateFrom ?? undefined}
             />
           </div>

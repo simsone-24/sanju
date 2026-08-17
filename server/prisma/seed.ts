@@ -71,6 +71,16 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
     'Event Coordinator': ['canView'],
     Accountant: ['canView'],
   },
+  // "md files/Stock/stock.md" — rent is a back-office stock workflow, not a sales one. Managers run
+  // it end to end, the Event Coordinator issues and books back stock without the right to delete or
+  // cancel a transaction, and the Accountant sees it for the money side.
+  RENT: {
+    'Super Admin': 'All',
+    Manager: 'All',
+    'Sales Executive': 'No Access',
+    'Event Coordinator': ['canView', 'canCreate', 'canEdit', 'canPrint'],
+    Accountant: ['canView', 'canCreate', 'canExport'],
+  },
   REPORTS: {
     'Super Admin': 'All',
     Manager: 'All',
