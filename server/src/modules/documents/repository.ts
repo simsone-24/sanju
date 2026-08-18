@@ -15,7 +15,7 @@ const documentDetailSelect = {
   order: { select: { id: true, orderNumber: true, companyId: true } },
 } satisfies Prisma.OrderDocumentSelect;
 
-export function listDocumentsForOrder(companyId: string, orderId: string) {
+export function listDocumentsForOrder(companyId: number, orderId: number) {
   return prisma.orderDocument.findMany({
     where: { orderId, deletedAt: null, order: { companyId } },
     select: documentSelect,
@@ -23,7 +23,7 @@ export function listDocumentsForOrder(companyId: string, orderId: string) {
   });
 }
 
-export function findDocumentById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findDocumentById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.orderDocument.findFirst({
     where: { id, deletedAt: null, order: { companyId } },
     select: documentDetailSelect,
@@ -34,6 +34,6 @@ export function createDocument(data: Prisma.OrderDocumentUncheckedCreateInput, c
   return client.orderDocument.create({ data, select: documentSelect });
 }
 
-export function softDeleteDocument(id: string, client: PrismaClientOrTx = prisma) {
+export function softDeleteDocument(id: number, client: PrismaClientOrTx = prisma) {
   return client.orderDocument.update({ where: { id }, data: { deletedAt: new Date() } });
 }

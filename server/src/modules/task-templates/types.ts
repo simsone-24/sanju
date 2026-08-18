@@ -15,7 +15,7 @@ export interface UpdateTaskTemplateInput {
 }
 
 export interface ListTaskTemplatesParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

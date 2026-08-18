@@ -28,13 +28,14 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { ProgressDonut } from '../../components/ProgressDonut';
 import { RecordHeaderCard } from '../../components/RecordHeaderCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { PaymentTrackerPayment } from '../../types/paymentTracker';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
@@ -72,7 +73,7 @@ function DetailSkeleton() {
  * and where collection stands on the right.
  */
 export default function PaymentTrackerDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const canEdit = usePermission('PAYMENTS', 'canEdit');
   const canExport = usePermission('PAYMENTS', 'canExport');
@@ -82,7 +83,7 @@ export default function PaymentTrackerDetailPage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['payment-tracker', 'detail', id],
-    queryFn: () => paymentTrackerService.getByOrderId(id!),
+    queryFn: () => paymentTrackerService.getByOrderId(id),
     enabled: Boolean(id),
   });
 

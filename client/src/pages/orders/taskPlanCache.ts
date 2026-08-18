@@ -23,7 +23,7 @@ function withRecalculatedProgress(group: TaskGroupDetail): TaskGroupDetail {
  */
 export function applyItemStatus(
   groups: TaskGroupDetail[] | undefined,
-  itemId: string,
+  itemId: number,
   status: TaskItemStatus,
 ): TaskGroupDetail[] | undefined {
   if (!groups) return groups;

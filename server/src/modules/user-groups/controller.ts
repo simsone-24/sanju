@@ -3,6 +3,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import { AuthenticatedUser } from '../auth/types';
 import * as userGroupsService from './service';
 import { CreateUserGroupSchema, UpdateUserGroupSchema, listUserGroupsQuerySchema } from './validation';
@@ -44,7 +45,7 @@ export async function listOptions(req: Request, res: Response, next: NextFunctio
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const userGroup = await userGroupsService.getById(actor.companyId, req.params.id);
+    const userGroup = await userGroupsService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, userGroup, 'User group retrieved successfully.');
   } catch (error) {
     next(error);
@@ -72,7 +73,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const userGroup = await userGroupsService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const userGroup = await userGroupsService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, userGroup, 'User group updated successfully.');
   } catch (error) {
     next(error);
@@ -82,7 +83,7 @@ export async function update(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await userGroupsService.remove(actor.companyId, actor.id, req.params.id);
+    await userGroupsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'User group deleted successfully.');
   } catch (error) {
     next(error);

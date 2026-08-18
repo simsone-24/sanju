@@ -41,7 +41,7 @@ export interface Invoice {
   invoiceDate: string;
   company: InvoiceCompany;
   order: {
-    id: string;
+    id: number;
     orderNumber: string;
     /** Null while the order's event date is still unknown — see OrderListItem.eventDate. */
     eventDate: string | null;

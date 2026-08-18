@@ -1,9 +1,10 @@
 import { RentPaymentMode } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 export const createRentPaymentSchema = z.object({
-  stockOutId: z.string().uuid('Select a stock out.'),
-  rentalPersonId: z.string().uuid('Select a rental person.'),
+  stockOutId: idSchema('Select a stock out.'),
+  rentalPersonId: idSchema('Select a rental person.'),
   paymentDate: z.coerce.date().optional(),
   amount: z.coerce.number().positive('Payment amount must be greater than zero.'),
   paymentMode: z.nativeEnum(RentPaymentMode),
@@ -28,8 +29,8 @@ export const listRentPaymentsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
-  stockOutId: z.string().uuid().optional(),
-  rentalPersonId: z.string().uuid().optional(),
+  stockOutId: idSchema().optional(),
+  rentalPersonId: idSchema().optional(),
   paymentMode: z.nativeEnum(RentPaymentMode).optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),

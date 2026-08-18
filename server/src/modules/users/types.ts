@@ -1,37 +1,35 @@
 import { PermissionGrant } from '../permissions/types';
 
 export interface CreateUserInput {
-  employeeCode?: string;
   fullName: string;
   username: string;
   password: string;
   mobile: string;
   email?: string;
   city?: string;
-  userGroupId: string;
+  userGroupId: number;
   isActive?: boolean;
   /** user.md §User Permission Override — extra permissions granted to this user alone. */
   permissionOverrides?: PermissionGrant[];
 }
 
 export interface UpdateUserInput {
-  employeeCode?: string;
   fullName?: string;
   username?: string;
   password?: string;
   mobile?: string;
   email?: string;
   city?: string;
-  userGroupId?: string;
+  userGroupId?: number;
   isActive?: boolean;
   permissionOverrides?: PermissionGrant[];
 }
 
 export interface ListUsersParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
-  userGroupId?: string;
+  userGroupId?: number;
   isActive?: boolean;
 }

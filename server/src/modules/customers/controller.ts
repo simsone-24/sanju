@@ -4,6 +4,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as customersService from './service';
 import { UpdateCustomerSchema, listCustomersQuerySchema } from './validation';
 
@@ -36,7 +37,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function getById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const customer = await customersService.getById(actor.companyId, req.params.id);
+    const customer = await customersService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, customer, 'Customer retrieved successfully.');
   } catch (error) {
     next(error);
@@ -46,7 +47,7 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
 export async function getHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const history = await customersService.getHistory(actor.companyId, req.params.id);
+    const history = await customersService.getHistory(actor.companyId, parseId(req.params.id));
     sendSuccess(res, history, 'Customer history retrieved successfully.');
   } catch (error) {
     next(error);
@@ -60,7 +61,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const customer = await customersService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const customer = await customersService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, customer, 'Customer updated successfully.');
   } catch (error) {
     next(error);

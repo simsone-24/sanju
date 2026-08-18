@@ -44,7 +44,7 @@ export interface StockOutReportTotals {
 }
 
 export async function stockOutReport(
-  companyId: string,
+  companyId: number,
   query: StockOutReportQuerySchema,
 ): Promise<ReportEnvelope<StockOutReportRow, StockOutReportTotals>> {
   const filters = {
@@ -89,7 +89,7 @@ export async function stockOutReport(
 // ---------------------------------------------------------------------------
 
 export interface ReturnReportRow {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: Date;
   expectedReturnDate: Date | null;
@@ -109,7 +109,7 @@ export interface ReturnReportTotals {
 }
 
 export async function returnReport(
-  companyId: string,
+  companyId: number,
   query: ReturnReportQuerySchema,
 ): Promise<ReportEnvelope<ReturnReportRow, ReturnReportTotals>> {
   const records = await stockOutsRepository.findStockOutsFiltered(
@@ -163,7 +163,7 @@ export async function returnReport(
 
 /** Item-level, unlike the report above: this one answers "what exactly is still out there". */
 export interface PendingReturnReportRow {
-  stockOutId: string;
+  stockOutId: number;
   rentNo: string;
   personName: string;
   personPhone: string;
@@ -182,7 +182,7 @@ export interface PendingReturnReportTotals {
 }
 
 export async function pendingReturnReport(
-  companyId: string,
+  companyId: number,
   query: PendingReturnReportQuerySchema,
 ): Promise<ReportEnvelope<PendingReturnReportRow, PendingReturnReportTotals>> {
   const records = await stockOutsRepository.listStockOutsForReport(
@@ -241,7 +241,7 @@ export async function pendingReturnReport(
 // ---------------------------------------------------------------------------
 
 export interface PaymentReportRow {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: Date;
   personName: string;
@@ -265,7 +265,7 @@ export interface PaymentReportTotals {
  * therefore reads as "transactions that received a payment by this mode".
  */
 export async function paymentReport(
-  companyId: string,
+  companyId: number,
   query: PaymentReportQuerySchema,
 ): Promise<ReportEnvelope<PaymentReportRow, PaymentReportTotals>> {
   const records = await stockOutsRepository.findStockOutsFiltered(
@@ -317,7 +317,7 @@ export async function paymentReport(
 // ---------------------------------------------------------------------------
 
 export interface PersonSummaryReportRow {
-  id: string;
+  id: number;
   name: string;
   phone: string;
   city: string | null;
@@ -339,7 +339,7 @@ export interface PersonSummaryReportTotals {
 }
 
 export async function personSummaryReport(
-  companyId: string,
+  companyId: number,
   query: PersonSummaryReportQuerySchema,
 ): Promise<ReportEnvelope<PersonSummaryReportRow, PersonSummaryReportTotals>> {
   const persons = await rentReportsRepository.listPersonsForSummary(
@@ -359,8 +359,8 @@ export async function personSummaryReport(
 
   const totalsByPerson = new Map(totalsRows.map((row) => [row.rentalPersonId, row]));
 
-  const returnedByPerson = new Map<string, number>();
-  const pendingByPerson = new Map<string, number>();
+  const returnedByPerson = new Map<number, number>();
+  const pendingByPerson = new Map<number, number>();
   for (const row of returnCountRows) {
     const target = row.returnStatus === StockReturnStatus.RETURNED ? returnedByPerson : pendingByPerson;
     target.set(row.rentalPersonId, (target.get(row.rentalPersonId) ?? 0) + row.count);

@@ -1,12 +1,12 @@
 export type DocumentType = 'QUOTATION_PDF' | 'RECEIPT' | 'AGREEMENT' | 'EVENT_PHOTO' | 'OTHER';
 
 export interface OrderDocumentDetail {
-  id: string;
+  id: number;
   documentType: DocumentType;
   fileName: string;
   filePath: string;
   uploadedAt: string;
-  uploadedBy: { id: string; fullName: string } | null;
+  uploadedBy: { id: number; fullName: string } | null;
 }
 
 export interface UploadDocumentInput {

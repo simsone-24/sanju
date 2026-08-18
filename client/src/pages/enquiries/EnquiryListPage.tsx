@@ -42,6 +42,7 @@ import {
   type DateRangePreset,
 } from '../../utils/dateRange';
 import { eventProximity, formatDate } from '../../utils/format';
+import { toId, toOptionalId } from '../../utils/ids';
 
 const ENQUIRY_STATUS_OPTIONS: EnquiryStatus[] = [
   'PENDING',
@@ -162,8 +163,8 @@ export default function EnquiryListPage() {
   const [advancedOpen, setAdvancedOpen] = useState(appointmentFilterCount > 0);
   const [deletingEnquiry, setDeletingEnquiry] = useState<EnquiryListItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [highlightId, setHighlightId] = useState<string | undefined>(
-    () => (location.state as { highlightId?: string } | null)?.highlightId,
+  const [highlightId, setHighlightId] = useState<number | undefined>(
+    () => (location.state as { highlightId?: number } | null)?.highlightId,
   );
 
   useEffect(() => {
@@ -210,7 +211,7 @@ export default function EnquiryListPage() {
       enquiryService.getStats({
         status: status || undefined,
         appointmentStatus: appointmentStatus || undefined,
-        customerId: customerId || undefined,
+        customerId: toOptionalId(customerId),
         eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
         eventDateTo: eventDateTo ? eventDateTo.format('YYYY-MM-DD') : undefined,
         appointmentDateFrom: appointmentDateFrom ? appointmentDateFrom.format('YYYY-MM-DD') : undefined,
@@ -224,7 +225,7 @@ export default function EnquiryListPage() {
   // no name for the type-ahead to display. The customer is fetched by that id to fill it in.
   const { data: selectedCustomer } = useQuery({
     queryKey: ['customers', 'detail', customerId],
-    queryFn: () => customerService.getById(customerId),
+    queryFn: () => customerService.getById(toId(customerId)),
     enabled: canViewCustomers && Boolean(customerId),
   });
 
@@ -253,7 +254,7 @@ export default function EnquiryListPage() {
         status: status || undefined,
         appointmentStatus: appointmentStatus || undefined,
         statusGroup: statusGroups.length ? statusGroups.join(',') : undefined,
-        customerId: customerId || undefined,
+        customerId: toOptionalId(customerId),
         eventDateFrom: eventDateFrom ? eventDateFrom.format('YYYY-MM-DD') : undefined,
         eventDateTo: eventDateTo ? eventDateTo.format('YYYY-MM-DD') : undefined,
         appointmentDateFrom: appointmentDateFrom ? appointmentDateFrom.format('YYYY-MM-DD') : undefined,
@@ -265,7 +266,7 @@ export default function EnquiryListPage() {
   // Deleting an enquiry takes its quotations and its order with it, so the caches those modules
   // read from are invalidated alongside the enquiry list and its dashboard counts.
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => enquiryService.remove(id),
+    mutationFn: (id: number) => enquiryService.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['enquiries'] });
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
@@ -680,7 +681,7 @@ export default function EnquiryListPage() {
               <CustomerFilter
                 className="tw-w-full tw-flex-[2] sm:tw-basis-[240px]"
                 value={customer}
-                onChange={(next) => patchParams({ customer: next?.id ?? null })}
+                onChange={(next) => patchParams({ customer: next ? String(next.id) : null })}
               />
             )}
 

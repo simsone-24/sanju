@@ -1,5 +1,6 @@
 import { RentPaymentMode, RentPaymentStatus, StockReturnStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 // One filter schema per report, matching the filter lists in "md files/Stock/stock.md" §27. They
 // share a shape rather than one permissive schema so a filter a report does not offer is rejected
@@ -12,29 +13,29 @@ const dateRange = {
 
 export const stockOutReportQuerySchema = z.object({
   ...dateRange,
-  rentalPersonId: z.string().uuid().optional(),
-  rentalItemId: z.string().uuid().optional(),
+  rentalPersonId: idSchema().optional(),
+  rentalItemId: idSchema().optional(),
   search: z.string().trim().min(1).optional(),
 });
 
 export const returnReportQuerySchema = z.object({
   ...dateRange,
-  rentalPersonId: z.string().uuid().optional(),
-  rentalItemId: z.string().uuid().optional(),
+  rentalPersonId: idSchema().optional(),
+  rentalItemId: idSchema().optional(),
   returnStatus: z.nativeEnum(StockReturnStatus).optional(),
   search: z.string().trim().min(1).optional(),
 });
 
 export const pendingReturnReportQuerySchema = z.object({
   ...dateRange,
-  rentalPersonId: z.string().uuid().optional(),
-  rentalItemId: z.string().uuid().optional(),
+  rentalPersonId: idSchema().optional(),
+  rentalItemId: idSchema().optional(),
   search: z.string().trim().min(1).optional(),
 });
 
 export const paymentReportQuerySchema = z.object({
   ...dateRange,
-  rentalPersonId: z.string().uuid().optional(),
+  rentalPersonId: idSchema().optional(),
   paymentMode: z.nativeEnum(RentPaymentMode).optional(),
   paymentStatus: z.nativeEnum(RentPaymentStatus).optional(),
   search: z.string().trim().min(1).optional(),

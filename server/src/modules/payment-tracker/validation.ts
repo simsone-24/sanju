@@ -1,5 +1,6 @@
 import { OrderStatus, PaymentMethod, PaymentTrackerStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 import { PAYMENT_TRACKER_STATUS_GROUPS, PaymentTrackerStatusGroup } from './types';
 
 // Derived from the group map rather than restated, so a new dashboard bucket can never be accepted
@@ -13,7 +14,7 @@ export const listPaymentTrackerQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().trim().min(1).optional(),
-  customerId: z.string().uuid().optional(),
+  customerId: idSchema().optional(),
   paymentStatus: z.nativeEnum(PaymentTrackerStatus).optional(),
   statusGroup: z.enum(STATUS_GROUP_KEYS).optional(),
   orderStatus: z.nativeEnum(OrderStatus).optional(),

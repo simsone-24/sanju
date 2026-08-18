@@ -1,5 +1,5 @@
 export interface CompanyDetail {
-  id: string;
+  id: number;
   companyName: string;
   contactPerson: string | null;
   mobile: string | null;

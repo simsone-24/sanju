@@ -17,13 +17,13 @@ export function findUserByUsername(username: string) {
   });
 }
 
-export function findUserById(id: string) {
+export function findUserById(id: number) {
   return prisma.user.findFirst({
     where: { id, deletedAt: null },
     include: userWithAccessInclude,
   });
 }
 
-export function getUserWithPermissions(id: string) {
+export function getUserWithPermissions(id: number) {
   return findUserById(id);
 }

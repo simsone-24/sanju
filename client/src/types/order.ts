@@ -7,7 +7,7 @@ import type { QuotationStatus } from './quotation';
 export type OrderStatus = 'YET_TO_START' | 'IN_PROGRESS' | 'ORDER_CLOSED' | 'REJECTED';
 
 export interface OrderListItem {
-  id: string;
+  id: number;
   orderNumber: string;
   // Null on an order raised from an enquiry that was confirmed before an event date was known —
   // confirming an enquiry always produces an order, and the date is filled in on the order after.
@@ -18,7 +18,7 @@ export interface OrderListItem {
   pendingAmount: string;
   status: OrderStatus;
   createdAt: string;
-  customer: { id: string; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string };
   // Event name/type/time come from the linked enquiry — Order itself has no event name column.
   enquiry: { eventName: string | null; eventTime: EventTime | null; eventType: { eventName: string } } | null;
   /** The Payment Tracker's stored status, so both modules report the same payment standing. */
@@ -35,7 +35,7 @@ export interface OrderStats {
 }
 
 export interface OrderPaymentSummary {
-  id: string;
+  id: number;
   paymentDate: string;
   paymentType: string;
   amount: string;
@@ -45,18 +45,18 @@ export interface OrderPaymentSummary {
 }
 
 export interface OrderTaskSummary {
-  id: string;
+  id: number;
   taskName: string;
   taskCategory: 'PLANNING' | 'EXECUTION';
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
   dueDate: string | null;
   completedDate: string | null;
-  assignedTo: { id: string; fullName: string } | null;
-  completedBy: { id: string; fullName: string } | null;
+  assignedTo: { id: number; fullName: string } | null;
+  completedBy: { id: number; fullName: string } | null;
 }
 
 export interface OrderDocumentSummary {
-  id: string;
+  id: number;
   documentType: string;
   fileName: string;
   filePath: string;
@@ -71,17 +71,17 @@ export interface OrderDetail extends OrderListItem {
   // Widens OrderListItem's enquiry/customer rather than replacing them — the detail endpoint
   // returns a superset (see orderDetailSelect).
   enquiry: {
-    id: string;
+    id: number;
     enquiryNumber: string;
     eventName: string | null;
     eventTime: EventTime | null;
     eventType: { eventName: string };
   };
-  customer: { id: string; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
+  customer: { id: number; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
   // Null when the enquiry was confirmed without any quotation — the order's total then comes from
   // the enquiry's final/estimated budget instead.
   quotation: {
-    id: string;
+    id: number;
     quotationNumber: string;
     version: number;
     totalAmount: string;
@@ -90,14 +90,14 @@ export interface OrderDetail extends OrderListItem {
     status: QuotationStatus;
     quotationDate: string;
   } | null;
-  coordinator: { id: string; fullName: string } | null;
+  coordinator: { id: number; fullName: string } | null;
   payments: OrderPaymentSummary[];
   tasks: OrderTaskSummary[];
   documents: OrderDocumentSummary[];
 }
 
 export interface OrderTimelineEntry {
-  id: string;
+  id: number;
   action: string;
   description: string | null;
   /**
@@ -106,7 +106,7 @@ export interface OrderTimelineEntry {
    */
   metadata: Record<string, unknown> | null;
   performedAt: string;
-  performedBy: { id: string; fullName: string } | null;
+  performedBy: { id: number; fullName: string } | null;
 }
 
 export interface UpdateOrderInput {
@@ -114,7 +114,7 @@ export interface UpdateOrderInput {
   venue?: string;
   notes?: string;
   remarks?: string;
-  coordinatorId?: string;
+  coordinatorId?: number;
 }
 
 export interface ChangeOrderStatusInput {
@@ -128,7 +128,7 @@ export interface ListOrdersParams {
   limit: number;
   search?: string;
   status?: OrderStatus;
-  customerId?: string;
+  customerId?: number;
   eventDateFrom?: string;
   eventDateTo?: string;
 }

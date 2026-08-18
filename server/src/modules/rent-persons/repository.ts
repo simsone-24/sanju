@@ -50,7 +50,7 @@ export async function listRentalPersons(params: ListRentalPersonsParams) {
 }
 
 export interface RentalPersonTotals {
-  rentalPersonId: string;
+  rentalPersonId: number;
   stockOutCount: number;
   totalAmount: number;
   paidAmount: number;
@@ -65,8 +65,8 @@ export interface RentalPersonTotals {
  * everyone.
  */
 export async function sumStockOutTotalsByPerson(
-  companyId: string,
-  personIds?: string[],
+  companyId: number,
+  personIds?: number[],
 ): Promise<RentalPersonTotals[]> {
   const grouped = await prisma.stockOut.groupBy({
     by: ['rentalPersonId'],
@@ -89,15 +89,15 @@ export async function sumStockOutTotalsByPerson(
 }
 
 export interface RentalPersonReturnCounts {
-  rentalPersonId: string;
+  rentalPersonId: number;
   returnStatus: string;
   count: number;
 }
 
 /** Stock out counts per person per return status — the person-wise report's returned/pending split. */
 export async function countStockOutsByPersonAndReturnStatus(
-  companyId: string,
-  personIds?: string[],
+  companyId: number,
+  personIds?: number[],
 ): Promise<RentalPersonReturnCounts[]> {
   const grouped = await prisma.stockOut.groupBy({
     by: ['rentalPersonId', 'returnStatus'],
@@ -117,18 +117,18 @@ export async function countStockOutsByPersonAndReturnStatus(
   }));
 }
 
-export function findRentalPersonById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findRentalPersonById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.rentalPerson.findFirst({
     where: { id, companyId, deletedAt: null },
     select: rentalPersonSelect,
   });
 }
 
-export function findRentalPersonByPhone(companyId: string, phone: string) {
+export function findRentalPersonByPhone(companyId: number, phone: string) {
   return prisma.rentalPerson.findFirst({ where: { companyId, phone, deletedAt: null }, select: { id: true, name: true } });
 }
 
-export function countStockOutsForPerson(rentalPersonId: string) {
+export function countStockOutsForPerson(rentalPersonId: number) {
   return prisma.stockOut.count({ where: { rentalPersonId, deletedAt: null } });
 }
 
@@ -136,10 +136,10 @@ export function createRentalPerson(data: Prisma.RentalPersonUncheckedCreateInput
   return prisma.rentalPerson.create({ data, select: rentalPersonSelect });
 }
 
-export function updateRentalPerson(id: string, data: Prisma.RentalPersonUpdateInput) {
+export function updateRentalPerson(id: number, data: Prisma.RentalPersonUpdateInput) {
   return prisma.rentalPerson.update({ where: { id }, data, select: rentalPersonSelect });
 }
 
-export function softDeleteRentalPerson(id: string) {
+export function softDeleteRentalPerson(id: number) {
   return prisma.rentalPerson.update({ where: { id }, data: { deletedAt: new Date() } });
 }

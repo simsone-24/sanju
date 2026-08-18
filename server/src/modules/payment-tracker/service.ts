@@ -26,14 +26,14 @@ function sumAdvance(payments: { paymentType: PaymentType; amount: Prisma.Decimal
     .reduce((total, payment) => total + Number(payment.amount), 0);
 }
 
-export async function getByOrderId(companyId: string, orderId: string) {
+export async function getByOrderId(companyId: number, orderId: number) {
   const order = await paymentTrackerRepository.findTrackerOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Payment tracker record not found.');
 
   return { ...order, advanceAmount: sumAdvance(order.payments) };
 }
 
-export async function getHistory(companyId: string, orderId: string) {
+export async function getHistory(companyId: number, orderId: number) {
   const order = await paymentTrackerRepository.findTrackerOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Payment tracker record not found.');
 
@@ -56,9 +56,9 @@ function resolvePaymentType(collectedSoFar: number, pendingBefore: number, amoun
  * request that changes the budget AND records a collection can never apply one without the other.
  */
 export async function update(
-  companyId: string,
-  actorId: string,
-  orderId: string,
+  companyId: number,
+  actorId: number,
+  orderId: number,
   input: UpdatePaymentTrackerInput,
 ) {
   const order = await paymentTrackerRepository.findTrackerOrderById(companyId, orderId);

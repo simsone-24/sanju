@@ -17,7 +17,7 @@ const PREFIX: Record<SequenceType, string> = {
 // docs/10_IMPLEMENTATION_DECISIONS.md §10. Prisma's upsert compiles to a single
 // INSERT ... ON DUPLICATE KEY UPDATE statement on MySQL, so this is atomic
 // under concurrent callers without needing an explicit transaction wrapper.
-export async function generateDocumentNumber(companyId: string, sequenceType: SequenceType): Promise<string> {
+export async function generateDocumentNumber(companyId: number, sequenceType: SequenceType): Promise<string> {
   const year = new Date().getFullYear();
 
   const sequence = await prisma.documentSequence.upsert({

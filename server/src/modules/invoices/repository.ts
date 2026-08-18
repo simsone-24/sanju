@@ -45,14 +45,14 @@ const invoiceSourceSelect = {
 export type InvoiceSource = Prisma.OrderGetPayload<{ select: typeof invoiceSourceSelect }>;
 
 // A rejected order is not billable, so it has no invoice to raise.
-export function findInvoiceSource(companyId: string, orderId: string, client: PrismaClientOrTx = prisma) {
+export function findInvoiceSource(companyId: number, orderId: number, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({
     where: { id: orderId, companyId, deletedAt: null, status: { not: OrderStatus.REJECTED } },
     select: invoiceSourceSelect,
   });
 }
 
-export function findInvoiceByOrderId(companyId: string, orderId: string, client: PrismaClientOrTx = prisma) {
+export function findInvoiceByOrderId(companyId: number, orderId: number, client: PrismaClientOrTx = prisma) {
   return client.invoice.findFirst({
     where: { orderId, companyId, deletedAt: null },
     select: { id: true, invoiceNumber: true, invoiceDate: true },
@@ -63,7 +63,7 @@ export function createInvoice(data: Prisma.InvoiceUncheckedCreateInput, client: 
   return client.invoice.create({ data, select: { id: true, invoiceNumber: true, invoiceDate: true } });
 }
 
-export function findCompanyForInvoice(companyId: string, client: PrismaClientOrTx = prisma) {
+export function findCompanyForInvoice(companyId: number, client: PrismaClientOrTx = prisma) {
   return client.company.findUnique({
     where: { id: companyId },
     select: {

@@ -144,7 +144,7 @@ export default function RentalPersonListPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (personId: string) => rentService.deletePerson(personId),
+    mutationFn: (personId: number) => rentService.deletePerson(personId),
     onSuccess: () => {
       invalidate();
       showToast('Rental person deleted.');

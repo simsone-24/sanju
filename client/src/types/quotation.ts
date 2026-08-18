@@ -6,7 +6,7 @@ export type QuotationStatus = 'DRAFT' | 'SENT' | 'APPROVED' | 'REJECTED' | 'REVI
 export type QuotationSource = 'ENQUIRY' | 'CUSTOMER' | 'ORDER' | 'MANUAL';
 
 export interface QuotationItem {
-  id: string;
+  id: number;
   itemName: string;
   description: string | null;
   quantity: string;
@@ -27,9 +27,9 @@ export interface QuotationRecipient {
 }
 
 export interface QuotationLink {
-  enquiry: { id: string; enquiryNumber: string; status: EnquiryStatus } | null;
-  customer: { id: string; customerName: string } | null;
-  order: { id: string; orderNumber: string } | null;
+  enquiry: { id: number; enquiryNumber: string; status: EnquiryStatus } | null;
+  customer: { id: number; customerName: string } | null;
+  order: { id: number; orderNumber: string } | null;
 }
 
 // The event the quotation is priced for. Only an enquiry describes one, so Customer/Order/Manual
@@ -45,12 +45,12 @@ export interface QuotationEvent {
 
 /** Enquiry's assigned user, or the quotation's creator when there is no enquiry. */
 export interface QuotationOwner {
-  id: string;
+  id: number;
   fullName: string;
 }
 
 export interface QuotationListItem {
-  id: string;
+  id: number;
   source: QuotationSource;
   quotationNumber: string;
   version: number;
@@ -73,7 +73,7 @@ export interface QuotationListItem {
 }
 
 export interface QuotationImage {
-  id: string;
+  id: number;
   fileName: string;
   filePath: string;
   caption: string | null;
@@ -82,37 +82,37 @@ export interface QuotationImage {
 
 // One entry in the revision-history drawer on the quotation view page.
 export interface QuotationRevision {
-  id: string;
+  id: number;
   quotationNumber: string;
   version: number;
   quotationDate: string;
   totalAmount: string;
   status: QuotationStatus;
   createdAt: string;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
 }
 
 export interface QuotationDetail extends QuotationListItem {
   remarks: string | null;
   updatedAt: string;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
   whatsappNumber: string | null;
   items: QuotationItem[];
   images: QuotationImage[];
   /** Every revision raised against the same enquiry, newest first. Empty for standalone quotations. */
   revisions: QuotationRevision[];
   /** The order this quotation became, if it has already been converted. */
-  convertedOrder: { id: string; orderNumber: string; status: OrderStatus } | null;
+  convertedOrder: { id: number; orderNumber: string; status: OrderStatus } | null;
   /** The company's standing terms (Settings → Company Info), printed alongside the notes. */
   termsAndConditions: string | null;
 }
 
 export interface QuotationTimelineEntry {
-  id: string;
+  id: number;
   action: string;
   description: string | null;
   performedAt: string;
-  performedBy: { id: string; fullName: string } | null;
+  performedBy: { id: number; fullName: string } | null;
 }
 
 export interface QuotationItemInput {
@@ -140,9 +140,9 @@ export type CreatableQuotationStatus = Exclude<QuotationStatus, 'REVISED'>;
 export interface CreateQuotationInput {
   source: QuotationSource;
   status?: CreatableQuotationStatus;
-  enquiryId?: string;
-  customerId?: string;
-  orderId?: string;
+  enquiryId?: number;
+  customerId?: number;
+  orderId?: number;
   manualCustomer?: ManualCustomerInput;
   quotationDate?: string;
   discount?: number;
@@ -168,7 +168,7 @@ export interface UpdateQuotationInput {
 export interface QuotationEnquiryGroup {
   kind: 'ENQUIRY';
   enquiry: {
-    id: string;
+    id: number;
     enquiryNumber: string;
     customerName: string;
     customerMobile: string;
@@ -180,7 +180,7 @@ export interface QuotationEnquiryGroup {
   };
   quotationCount: number;
   latestQuotation: {
-    id: string;
+    id: number;
     quotationNumber: string;
     version: number;
     quotationDate: string;
@@ -204,11 +204,11 @@ export interface ListQuotationsParams {
   search?: string;
   source?: QuotationSource;
   status?: QuotationStatus;
-  enquiryId?: string;
-  customerId?: string;
-  orderId?: string;
+  enquiryId?: number;
+  customerId?: number;
+  orderId?: number;
   /** Enquiry's assigned user for enquiry-sourced quotations, creator for standalone ones. */
-  assignedUserId?: string;
+  assignedUserId?: number;
   dateFrom?: string;
   dateTo?: string;
 }

@@ -1,7 +1,7 @@
 export type EventTypeStatus = 'ACTIVE' | 'INACTIVE';
 
 export interface EventTypeDetail {
-  id: string;
+  id: number;
   eventName: string;
   colorCode: string | null;
   displayOrder: number;

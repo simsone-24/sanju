@@ -89,21 +89,21 @@ export function listRentPaymentsForReport(
   });
 }
 
-export function findRentPaymentById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findRentPaymentById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.rentPayment.findFirst({ where: { id, companyId, deletedAt: null }, select: rentPaymentSelect });
 }
 
 interface CreateRentPaymentData {
-  companyId: string;
+  companyId: number;
   paymentNo: string;
-  stockOutId: string;
-  rentalPersonId: string;
+  stockOutId: number;
+  rentalPersonId: number;
   paymentDate: Date;
   amount: number;
   paymentMode: Prisma.RentPaymentCreateInput['paymentMode'];
   referenceNo?: string;
   notes?: string;
-  receivedById: string;
+  receivedById: number;
 }
 
 export function createRentPayment(data: CreateRentPaymentData, client: PrismaClientOrTx = prisma) {
@@ -125,14 +125,14 @@ export function createRentPayment(data: CreateRentPaymentData, client: PrismaCli
 }
 
 export function updateRentPayment(
-  id: string,
+  id: number,
   data: Prisma.RentPaymentUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.rentPayment.update({ where: { id }, data, select: { id: true } });
 }
 
-export function softDeleteRentPayment(id: string, client: PrismaClientOrTx = prisma) {
+export function softDeleteRentPayment(id: number, client: PrismaClientOrTx = prisma) {
   return client.rentPayment.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
@@ -152,7 +152,7 @@ export interface RentPaymentSummaryTotals {
  * was billed, and pairing it with a received total read from the same records keeps the pending
  * figure internally consistent.
  */
-export async function getPaymentSummary(companyId: string): Promise<RentPaymentSummaryTotals> {
+export async function getPaymentSummary(companyId: number): Promise<RentPaymentSummaryTotals> {
   const where: Prisma.StockOutWhereInput = { companyId, deletedAt: null, status: StockOutStatus.ACTIVE };
 
   const [totals, grouped] = await Promise.all([

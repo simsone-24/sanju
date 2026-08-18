@@ -4,6 +4,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as paymentTrackerService from './service';
 import { UpdatePaymentTrackerSchema, listPaymentTrackerQuerySchema } from './validation';
 
@@ -59,7 +60,7 @@ export async function stats(req: Request, res: Response, next: NextFunction): Pr
 export async function getByOrderId(req: Request<{ orderId: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const record = await paymentTrackerService.getByOrderId(actor.companyId, req.params.orderId);
+    const record = await paymentTrackerService.getByOrderId(actor.companyId, parseId(req.params.orderId, 'orderId'));
     sendSuccess(res, record, 'Payment details retrieved successfully.');
   } catch (error) {
     next(error);
@@ -69,7 +70,7 @@ export async function getByOrderId(req: Request<{ orderId: string }>, res: Respo
 export async function getHistory(req: Request<{ orderId: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const payments = await paymentTrackerService.getHistory(actor.companyId, req.params.orderId);
+    const payments = await paymentTrackerService.getHistory(actor.companyId, parseId(req.params.orderId, 'orderId'));
     sendSuccess(res, payments, 'Payment history retrieved successfully.');
   } catch (error) {
     next(error);
@@ -83,7 +84,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const record = await paymentTrackerService.update(actor.companyId, actor.id, req.params.orderId, req.body);
+    const record = await paymentTrackerService.update(actor.companyId, actor.id, parseId(req.params.orderId, 'orderId'), req.body);
     sendSuccess(res, record, 'Payment details updated successfully.');
   } catch (error) {
     next(error);

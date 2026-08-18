@@ -24,9 +24,9 @@ export interface CreateQuotationInput {
   source: QuotationSource;
   /** Status to save the new quotation in; defaults to DRAFT. REVISED is not a valid starting state. */
   status?: Exclude<QuotationStatus, 'REVISED'>;
-  enquiryId?: string;
-  customerId?: string;
-  orderId?: string;
+  enquiryId?: number;
+  customerId?: number;
+  orderId?: number;
   manualCustomer?: ManualCustomerInput;
   quotationDate?: Date;
   discount?: number;
@@ -49,21 +49,21 @@ export interface UpdateQuotationInput {
 }
 
 export interface ListQuotationsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
   source?: QuotationSource;
   status?: QuotationStatus;
-  enquiryId?: string;
-  customerId?: string;
-  orderId?: string;
+  enquiryId?: number;
+  customerId?: number;
+  orderId?: number;
   /**
    * The user responsible for the quotation: the source enquiry's assigned user for ENQUIRY-sourced
    * quotations, and the creator for standalone (Customer/Order/Manual) ones, which have no enquiry
    * to carry an assignment. Only honoured by the grouped list.
    */
-  assignedUserId?: string;
+  assignedUserId?: number;
   dateFrom?: Date;
   dateTo?: Date;
 }

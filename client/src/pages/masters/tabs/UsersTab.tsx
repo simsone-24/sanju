@@ -4,7 +4,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../../components/DataTable';
@@ -12,7 +11,8 @@ import { SearchBar } from '../../../components/SearchBar';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { usePermission } from '../../../hooks/usePermission';
 import * as userService from '../../../services/userService';
-import type { ApiErrorResponse } from '../../../types/api';
+import { describeApiError } from '../../../utils/apiError';
+import { toId } from '../../../utils/ids';
 import type { CreateUserInput, UpdateUserInput, UserListItem } from '../../../types/user';
 import type { CreateUserFormValues, UpdateUserFormValues } from '../../../validation/userSchemas';
 import { UserFormDialog, type UserFormSubmitValues } from '../UserFormDialog';
@@ -35,7 +35,7 @@ export default function UsersTab() {
   const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<DialogMode | null>(null);
-  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -67,13 +67,12 @@ export default function UsersTab() {
   const saveMutation = useMutation({
     mutationFn: async ({ values, permissionOverrides, photo }: UserFormSubmitValues) => {
       const shared = {
-        employeeCode: optional(values.employeeCode),
         fullName: values.fullName,
         username: values.username,
         mobile: values.mobile,
         email: optional(values.email),
         city: optional(values.city),
-        userGroupId: values.userGroupId,
+        userGroupId: toId(values.userGroupId),
         isActive: values.isActive,
         permissionOverrides,
       };
@@ -107,16 +106,12 @@ export default function UsersTab() {
     try {
       await saveMutation.mutateAsync(submission);
     } catch (error) {
-      if (isAxiosError<ApiErrorResponse>(error) && error.response) {
-        setFormError(error.response.data.message);
-      } else {
-        setFormError('Unable to save the user. Please try again.');
-      }
+      setFormError(describeApiError(error, 'Unable to save the user. Please try again.'));
     }
   }
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => userService.remove(id),
+    mutationFn: (id: number) => userService.remove(id),
     onSuccess: () => {
       invalidateUsers();
       setDeletingUser(null);

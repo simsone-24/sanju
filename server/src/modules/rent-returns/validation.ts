@@ -1,5 +1,6 @@
 import { RentPaymentMode } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 /**
  * Money collected when the stock comes back — the balance settled at handover, which is when a
@@ -16,7 +17,7 @@ const collectionSchema = z.object({
 // zero is a legitimate value to post — it simply contributes nothing. The whole return is rejected
 // only if no line carries a quantity (below), which is what "nothing was returned" really means.
 const stockReturnItemSchema = z.object({
-  stockOutItemId: z.string().uuid(),
+  stockOutItemId: idSchema(),
   quantityReturned: z.coerce.number().min(0, 'Return quantity cannot be negative.'),
 });
 
@@ -36,8 +37,8 @@ export const listStockReturnsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
-  stockOutId: z.string().uuid().optional(),
-  rentalPersonId: z.string().uuid().optional(),
+  stockOutId: idSchema().optional(),
+  rentalPersonId: idSchema().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
 });

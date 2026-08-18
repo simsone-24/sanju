@@ -37,7 +37,7 @@ export async function getStats(params: OrderStatsParams) {
   return ordersRepository.getOrderStats(params);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const order = await ordersRepository.findOrderById(companyId, id);
   if (!order) throw new AppError(404, 'Order not found.');
   return order;
@@ -45,7 +45,7 @@ export async function getById(companyId: string, id: string) {
 
 // Confirmed enquiries not yet converted — feeds the Orders module's "Create Order" picker so
 // conversion doesn't have to start from the Quotations screen.
-export async function listEligibleEnquiries(companyId: string) {
+export async function listEligibleEnquiries(companyId: number) {
   const enquiries = await ordersRepository.listEligibleEnquiries(companyId);
   return enquiries
     .filter((enquiry) => enquiry.quotations.length > 0)
@@ -55,7 +55,7 @@ export async function listEligibleEnquiries(companyId: string) {
     }));
 }
 
-export async function getTimeline(companyId: string, id: string) {
+export async function getTimeline(companyId: number, id: number) {
   const order = await ordersRepository.findOrderById(companyId, id);
   if (!order) throw new AppError(404, 'Order not found.');
   return ordersRepository.getOrderActivityLog(id);
@@ -94,10 +94,10 @@ function resolveOpeningAdvance(advanceAmount: Prisma.Decimal | null, orderTotal:
 // Neither a quotation nor an event date is a pre-condition: an enquiry that reaches ORDER_CONFIRMED
 // belongs in Orders and the Payment Tracker, and both can be filled in on the order afterwards.
 async function buildOrderFromEnquiry(
-  companyId: string,
-  actorId: string,
+  companyId: number,
+  actorId: number,
   enquiry: {
-    id: string;
+    id: number;
     enquiryNumber: string;
     eventDate: Date | null;
     venue: string | null;
@@ -105,9 +105,9 @@ async function buildOrderFromEnquiry(
     finalBudgetAmount: Prisma.Decimal | null;
     estimatedBudget: Prisma.Decimal | null;
     advanceAmount: Prisma.Decimal | null;
-    customer: { id: string } | null;
+    customer: { id: number } | null;
   },
-  quotation: { id: string; quotationNumber: string; version: number; totalAmount: Prisma.Decimal } | null,
+  quotation: { id: number; quotationNumber: string; version: number; totalAmount: Prisma.Decimal } | null,
 ) {
   // ORDER_CONFIRMED materialises the customer (enquiries/service.ts), so a linked customer must exist.
   if (!enquiry.customer) {
@@ -207,7 +207,7 @@ async function buildOrderFromEnquiry(
   return order;
 }
 
-export async function convert(companyId: string, actorId: string, input: ConvertToOrderInput) {
+export async function convert(companyId: number, actorId: number, input: ConvertToOrderInput) {
   const enquiry = await enquiriesRepository.findEnquiryById(companyId, input.enquiryId);
   if (!enquiry) {
     throw new AppError(400, 'Selected enquiry does not exist.', [
@@ -247,7 +247,7 @@ export async function convert(companyId: string, actorId: string, input: Convert
 // quotation and otherwise takes its latest revision whatever state that is in, and raises the order
 // with no quotation at all when none exists. Still never throws — a status change must not fail
 // because the order behind it could not be built.
-export async function autoConvertFromEnquiry(companyId: string, actorId: string, enquiryId: string) {
+export async function autoConvertFromEnquiry(companyId: number, actorId: number, enquiryId: number) {
   const enquiry = await enquiriesRepository.findEnquiryById(companyId, enquiryId);
   if (!enquiry || enquiry.status !== EnquiryStatus.ORDER_CONFIRMED) return null;
 
@@ -281,7 +281,7 @@ export async function autoConvertFromEnquiry(companyId: string, actorId: string,
  *
  * No-ops (returns null) when the enquiry has no order — the ordinary case.
  */
-export async function syncOrderFromEnquiry(companyId: string, actorId: string, enquiryId: string) {
+export async function syncOrderFromEnquiry(companyId: number, actorId: number, enquiryId: number) {
   const order = await ordersRepository.findOrderByEnquiryId(companyId, enquiryId);
   if (!order) return null;
 
@@ -369,7 +369,7 @@ export async function syncOrderFromEnquiry(companyId: string, actorId: string, e
   return ordersRepository.findOrderById(companyId, order.id);
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateOrderInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateOrderInput) {
   const existing = await ordersRepository.findOrderById(companyId, id);
   if (!existing) throw new AppError(404, 'Order not found.');
 
@@ -419,7 +419,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return order;
 }
 
-export async function changeStatus(companyId: string, actorId: string, id: string, input: ChangeOrderStatusInput) {
+export async function changeStatus(companyId: number, actorId: number, id: number, input: ChangeOrderStatusInput) {
   const existing = await ordersRepository.findOrderById(companyId, id);
   if (!existing) throw new AppError(404, 'Order not found.');
 

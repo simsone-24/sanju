@@ -4,7 +4,7 @@ export type TaskItemStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 export type TaskGroupStatus = 'DRAFT' | 'PUBLISHED';
 
 export interface TaskItemDetail {
-  id: string;
+  id: number;
   taskName: string;
   status: TaskItemStatus;
   remarks: string | null;
@@ -15,7 +15,7 @@ export interface TaskItemDetail {
 }
 
 export interface TaskGroupDetail {
-  id: string;
+  id: number;
   title: string;
   description: string | null;
   status: TaskGroupStatus;

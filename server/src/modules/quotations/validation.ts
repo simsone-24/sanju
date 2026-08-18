@@ -1,5 +1,6 @@
 import { QuotationSource, QuotationStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 const quotationItemSchema = z.object({
   itemName: z.string().min(1, 'Item name is required.'),
@@ -28,9 +29,9 @@ export const createQuotationSchema = z
     //edited version has superseded this one" and is set by create() when a new revision is raised,
     // so it can never describe a document at the moment it is written.
     status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED']).optional(),
-    enquiryId: z.string().uuid().optional(),
-    customerId: z.string().uuid().optional(),
-    orderId: z.string().uuid().optional(),
+    enquiryId: idSchema().optional(),
+    customerId: idSchema().optional(),
+    orderId: idSchema().optional(),
     manualCustomer: manualCustomerSchema.optional(),
     quotationDate: z.coerce.date().optional(),
     discount: z.coerce.number().min(0).optional(),
@@ -84,10 +85,10 @@ export const listQuotationsQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   source: z.nativeEnum(QuotationSource).optional(),
   status: z.nativeEnum(QuotationStatus).optional(),
-  enquiryId: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
-  orderId: z.string().uuid().optional(),
-  assignedUserId: z.string().uuid().optional(),
+  enquiryId: idSchema().optional(),
+  customerId: idSchema().optional(),
+  orderId: idSchema().optional(),
+  assignedUserId: idSchema().optional(),
   // Filters on quotation_date (the document's own date), not created_at.
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),

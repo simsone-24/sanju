@@ -1,8 +1,8 @@
 import { OrderStatus } from '@prisma/client';
 
 export interface ConvertToOrderInput {
-  enquiryId: string;
-  quotationId: string;
+  enquiryId: number;
+  quotationId: number;
 }
 
 export interface UpdateOrderInput {
@@ -10,7 +10,7 @@ export interface UpdateOrderInput {
   venue?: string;
   notes?: string;
   remarks?: string;
-  coordinatorId?: string;
+  coordinatorId?: number;
 }
 
 export interface ChangeOrderStatusInput {
@@ -32,12 +32,12 @@ export interface OrderStatsResult {
 }
 
 export interface ListOrdersParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
   status?: OrderStatus;
-  customerId?: string;
+  customerId?: number;
   eventDateFrom?: Date;
   eventDateTo?: Date;
 }

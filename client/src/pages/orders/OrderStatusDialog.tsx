@@ -21,7 +21,7 @@ import { allowedOrderTransitions } from './orderStatusTransitions';
 
 interface OrderStatusDialogProps {
   open: boolean;
-  orderId: string;
+  orderId: number;
   currentStatus: OrderStatus;
   onClose: () => void;
 }

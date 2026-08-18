@@ -3,7 +3,7 @@ import { InlinePaymentInput } from '../rent-payments/inline';
 
 export interface StockOutItemInput {
   /** Null for a free-typed line whose item is not (yet) in the rental item master. */
-  rentalItemId?: string;
+  rentalItemId?: number;
   itemName: string;
   quantity: number;
   rate: number;
@@ -11,7 +11,7 @@ export interface StockOutItemInput {
 }
 
 export interface CreateStockOutInput {
-  rentalPersonId: string;
+  rentalPersonId: number;
   stockOutDate?: Date;
   expectedReturnDate?: Date;
   /** Percentage off the subtotal (0–100); the money amount is derived from it server-side. */
@@ -34,16 +34,16 @@ export interface UpdateStockOutInput {
 }
 
 export interface StockOutFilters {
-  companyId: string;
+  companyId: number;
   search?: string;
-  rentalPersonId?: string;
+  rentalPersonId?: number;
   returnStatus?: StockReturnStatus;
   paymentStatus?: RentPaymentStatus;
   /** Several statuses at once — the dashboard's "pending returns"/"pending payments" panels. */
   returnStatusIn?: StockReturnStatus[];
   paymentStatusIn?: RentPaymentStatus[];
   /** Restricts to stock outs carrying a line for this rental item (the report screens' Item filter). */
-  rentalItemId?: string;
+  rentalItemId?: number;
   /** Restricts to stock outs with at least one payment collected by this mode. */
   paymentMode?: RentPaymentMode;
   status?: StockOutStatus;

@@ -12,7 +12,7 @@ import { CreateCustomerInput, ListCustomersParams, UpdateCustomerInput } from '.
 // Accepts an optional transaction client so the caller (e.g. Enquiry creation) can wrap
 // customer creation and the record that references it in one atomic transaction — otherwise
 // a failure downstream would leave an orphaned customer row behind.
-export async function create(companyId: string, input: CreateCustomerInput, client: PrismaClientOrTx = prisma) {
+export async function create(companyId: number, input: CreateCustomerInput, client: PrismaClientOrTx = prisma) {
   const existing = await customersRepository.findCustomerByMobile(companyId, input.mobile, client);
   if (existing) {
     throw new AppError(409, `A customer with mobile number ${input.mobile} already exists.`, [
@@ -57,7 +57,7 @@ export async function list(params: ListCustomersParams) {
   return { records: enriched, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const customer = await customersRepository.findCustomerById(companyId, id);
   if (!customer) throw new AppError(404, 'Customer not found.');
 
@@ -71,7 +71,7 @@ export async function getById(companyId: string, id: string) {
 // its own (create() above), but once a customer is linked to an enquiry, correcting a typo'd name
 // or an outdated phone number has nowhere else to happen: the enquiry never duplicates these
 // fields onto itself ("never duplicate customer information").
-export async function update(companyId: string, actorId: string, id: string, input: UpdateCustomerInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateCustomerInput) {
   const existing = await customersRepository.findCustomerById(companyId, id);
   if (!existing) throw new AppError(404, 'Customer not found.');
 
@@ -104,7 +104,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return { ...customer, ...stats };
 }
 
-export async function getHistory(companyId: string, id: string) {
+export async function getHistory(companyId: number, id: number) {
   const customer = await customersRepository.findCustomerById(companyId, id);
   if (!customer) throw new AppError(404, 'Customer not found.');
 

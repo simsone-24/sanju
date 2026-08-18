@@ -161,7 +161,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('ALL');
   /** Cards are open by default, so only the closed ones need remembering. */
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set<string>());
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<number>>(() => new Set<number>());
 
   const taskPlanQueryKey = ['order-task-plan', order.id] as const;
 
@@ -197,7 +197,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
   // Matches inside a collapsed card would be invisible, so starting to filter opens everything
   // once. Individual cards can still be closed again while the filter stays on.
   useEffect(() => {
-    if (filtersActive) setCollapsedIds(new Set<string>());
+    if (filtersActive) setCollapsedIds(new Set<number>());
   }, [filtersActive]);
 
   function invalidate() {
@@ -238,7 +238,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
   });
 
   const deleteGroupMutation = useMutation({
-    mutationFn: (id: string) => taskPlanService.deleteGroup(id),
+    mutationFn: (id: number) => taskPlanService.deleteGroup(id),
     onSuccess: () => {
       invalidate();
       showToast(`"${deletingGroup?.title ?? 'Task group'}" deleted.`);
@@ -298,7 +298,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
     setGroupFormOpen(true);
   }
 
-  function toggleExpanded(groupId: string) {
+  function toggleExpanded(groupId: number) {
     setCollapsedIds((previous) => {
       const next = new Set(previous);
       if (next.has(groupId)) next.delete(groupId);
@@ -459,7 +459,7 @@ export default function OrderTaskPlanTab({ order }: OrderTaskPlanTabProps) {
                 size="small"
                 startIcon={<UnfoldMoreIcon />}
                 disabled={collapsedIds.size === 0}
-                onClick={() => setCollapsedIds(new Set<string>())}
+                onClick={() => setCollapsedIds(new Set<number>())}
               >
                 Expand all
               </Button>

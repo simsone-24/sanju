@@ -11,10 +11,11 @@ import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlin
 import { Box, Button, ListItemIcon, ListItemText, Menu, MenuItem, Skeleton, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppTabs } from '../../components/AppTabs';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as orderService from '../../services/orderService';
 import * as quotationService from '../../services/quotationService';
 import { useToast } from '../../store/ToastContext';
@@ -56,7 +57,7 @@ function DetailSkeleton() {
 // "md files/task plan/scope.md" ("Instead of maintaining separate Plan and Task modules…").
 // Timeline is the one addition beyond the documented list, an audit-trail view.
 export default function OrderDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
@@ -87,14 +88,14 @@ export default function OrderDetailPage() {
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', id],
-    queryFn: () => orderService.getById(id!),
+    queryFn: () => orderService.getById(id),
   });
 
   // The same query the Timeline tab reads, so the two share one request. It is the only source for
   // who raised the order and when it entered each stage — neither is a column on the Order table.
   const { data: timeline } = useQuery({
     queryKey: ['order-timeline', id],
-    queryFn: () => orderService.getTimeline(id!),
+    queryFn: () => orderService.getTimeline(id),
     enabled: Boolean(id),
   });
 

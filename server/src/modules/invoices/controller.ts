@@ -3,6 +3,7 @@ import { AuthenticatedUser } from '../auth/types';
 import { AppError } from '../../utils/AppError';
 import { logActivity } from '../../utils/activityLogger';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as invoicesService from './service';
 
 function requireUser(req: Request): AuthenticatedUser {
@@ -13,7 +14,7 @@ function requireUser(req: Request): AuthenticatedUser {
 export async function getForOrder(req: Request<{ orderId: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const invoice = await invoicesService.getForOrder(actor.companyId, actor.id, req.params.orderId);
+    const invoice = await invoicesService.getForOrder(actor.companyId, actor.id, parseId(req.params.orderId, 'orderId'));
     sendSuccess(res, invoice, 'Invoice retrieved successfully.');
   } catch (error) {
     next(error);
@@ -28,12 +29,12 @@ export async function downloadPdf(req: Request<{ orderId: string }>, res: Respon
     const { absolutePath, fileName } = await invoicesService.getPdfForDownload(
       actor.companyId,
       actor.id,
-      req.params.orderId,
+      parseId(req.params.orderId, 'orderId'),
     );
     await logActivity({
       companyId: actor.companyId,
       module: 'INVOICES',
-      referenceId: req.params.orderId,
+      referenceId: parseId(req.params.orderId, 'orderId'),
       action: 'PRINT',
       description: `Invoice PDF "${fileName}" downloaded.`,
       performedById: actor.id,

@@ -20,6 +20,7 @@ import { useToast } from '../../store/ToastContext';
 import { RENT_PAYMENT_MODES, type StockOutSummary } from '../../types/rent';
 import { describeApiError } from '../../utils/apiError';
 import { formatCurrency } from '../../utils/format';
+import { fromId, toId } from '../../utils/ids';
 import { rentPaymentFormSchema, type RentPaymentFormValues } from '../../validation/rentSchemas';
 
 interface RentPaymentDialogProps {
@@ -37,7 +38,7 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState(stockOut?.id ?? '');
+  const [selectedId, setSelectedId] = useState<string>(fromId(stockOut?.id));
 
   // Only transactions with something still owed are offered — paying a settled stock out is exactly
   // what the server refuses, so the picker never presents it as an option.
@@ -53,13 +54,13 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
   });
 
   const options = stockOut ? [stockOut] : [...(unsettled?.records ?? []), ...(partiallyPaid?.records ?? [])];
-  const target = options.find((option) => option.id === selectedId) ?? stockOut ?? null;
+  const target = options.find((option) => String(option.id) === selectedId) ?? stockOut ?? null;
   const maxAmount = target?.balanceAmount ?? 0;
 
   const form = useForm<RentPaymentFormValues>({
     resolver: zodResolver(rentPaymentFormSchema),
     defaultValues: {
-      stockOutId: stockOut?.id ?? '',
+      stockOutId: fromId(stockOut?.id),
       amount: '',
       paymentMode: 'CASH',
       paymentDate: dayjs().format('YYYY-MM-DD'),
@@ -71,9 +72,9 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
   useEffect(() => {
     if (!open) return;
     setServerError(null);
-    setSelectedId(stockOut?.id ?? '');
+    setSelectedId(fromId(stockOut?.id));
     form.reset({
-      stockOutId: stockOut?.id ?? '',
+      stockOutId: fromId(stockOut?.id),
       amount: '',
       paymentMode: 'CASH',
       paymentDate: dayjs().format('YYYY-MM-DD'),
@@ -87,7 +88,7 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
   const mutation = useMutation({
     mutationFn: (values: RentPaymentFormValues) =>
       rentService.createPayment({
-        stockOutId: values.stockOutId,
+        stockOutId: toId(values.stockOutId),
         rentalPersonId: target!.rentalPerson.id,
         amount: Number(values.amount),
         paymentMode: values.paymentMode,
@@ -164,7 +165,7 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
                   </MenuItem>
                 )}
                 {options.map((option) => (
-                  <MenuItem key={option.id} value={option.id}>
+                  <MenuItem key={option.id} value={fromId(option.id)}>
                     {option.rentNo} — {option.rentalPerson.name} ({formatCurrency(option.balanceAmount)} due)
                   </MenuItem>
                 ))}

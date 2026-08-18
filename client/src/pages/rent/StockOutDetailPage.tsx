@@ -26,11 +26,12 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { RecordHeaderCard } from '../../components/RecordHeaderCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as rentService from '../../services/rentService';
 import { useToast } from '../../store/ToastContext';
 import type { StockOutDetail } from '../../types/rent';
@@ -41,7 +42,7 @@ import { StockReturnDialog } from './StockReturnDialog';
 
 /** Stock Out view — "md files/Stock/stock.md" §12, §18, §25. */
 export default function StockOutDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -60,12 +61,12 @@ export default function StockOutDetailPage() {
 
   const { data: stockOut, isLoading } = useQuery({
     queryKey: ['rent-stock-out', id],
-    queryFn: () => rentService.getStockOut(id!),
+    queryFn: () => rentService.getStockOut(id),
     enabled: canView && Boolean(id),
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => rentService.cancelStockOut(id!),
+    mutationFn: () => rentService.cancelStockOut(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rent-stock-out', id] });
       queryClient.invalidateQueries({ queryKey: ['rent-stock-outs'] });
@@ -77,7 +78,7 @@ export default function StockOutDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => rentService.deleteStockOut(id!),
+    mutationFn: () => rentService.deleteStockOut(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rent-stock-outs'] });
       queryClient.invalidateQueries({ queryKey: ['rent-dashboard'] });

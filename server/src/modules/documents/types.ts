@@ -10,6 +10,6 @@ export interface UploadedFile {
 }
 
 export interface ListOrderDocumentsParams {
-  companyId: string;
-  orderId: string;
+  companyId: number;
+  orderId: number;
 }

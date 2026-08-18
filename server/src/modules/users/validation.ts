@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 import { permissionGrantsSchema } from '../user-groups/validation';
 
 // Usernames are typed at every login, so they are kept to an unambiguous character set and stored
@@ -25,7 +26,6 @@ const optionalEmail = z.union([z.string().trim().email('Enter a valid email addr
 
 export const createUserSchema = z
   .object({
-    employeeCode: optionalText.optional(),
     fullName: z.string().trim().min(1, 'Full name is required.'),
     username: usernameSchema,
     password: passwordSchema,
@@ -33,7 +33,7 @@ export const createUserSchema = z
     mobile: mobileSchema,
     email: optionalEmail.optional(),
     city: optionalText.optional(),
-    userGroupId: z.string().uuid('A valid user group is required.'),
+    userGroupId: idSchema('A valid user group is required.'),
     isActive: z.boolean().optional(),
     permissionOverrides: permissionGrantsSchema.optional(),
   })
@@ -44,7 +44,6 @@ export const createUserSchema = z
 
 export const updateUserSchema = z
   .object({
-    employeeCode: optionalText.optional(),
     fullName: z.string().trim().min(1, 'Full name is required.').optional(),
     username: usernameSchema.optional(),
     // Left out entirely means "keep the current password".
@@ -53,7 +52,7 @@ export const updateUserSchema = z
     mobile: mobileSchema.optional(),
     email: optionalEmail.optional(),
     city: optionalText.optional(),
-    userGroupId: z.string().uuid('A valid user group is required.').optional(),
+    userGroupId: idSchema('A valid user group is required.').optional(),
     isActive: z.boolean().optional(),
     permissionOverrides: permissionGrantsSchema.optional(),
   })
@@ -67,7 +66,7 @@ export const listUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
-  userGroupId: z.string().uuid().optional(),
+  userGroupId: idSchema().optional(),
   isActive: z.enum(['true', 'false']).optional(),
 });
 

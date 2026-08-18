@@ -30,11 +30,11 @@ export async function create(input: CreateEventTypeInput): Promise<EventTypeDeta
   return response.data.data;
 }
 
-export async function update(id: string, input: UpdateEventTypeInput): Promise<EventTypeDetail> {
+export async function update(id: number, input: UpdateEventTypeInput): Promise<EventTypeDetail> {
   const response = await apiClient.put<ApiSuccessResponse<EventTypeDetail>>(`/event-types/${id}`, input);
   return response.data.data;
 }
 
-export async function remove(id: string): Promise<void> {
+export async function remove(id: number): Promise<void> {
   await apiClient.delete(`/event-types/${id}`);
 }

@@ -1,7 +1,7 @@
 import { InlinePaymentInput } from '../rent-payments/inline';
 
 export interface StockReturnItemInput {
-  stockOutItemId: string;
+  stockOutItemId: number;
   quantityReturned: number;
 }
 
@@ -14,12 +14,12 @@ export interface CreateStockReturnInput {
 }
 
 export interface ListStockReturnsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
-  stockOutId?: string;
-  rentalPersonId?: string;
+  stockOutId?: number;
+  rentalPersonId?: number;
   dateFrom?: Date;
   dateTo?: Date;
 }

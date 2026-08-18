@@ -166,7 +166,7 @@ export default function OrderListPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (input: { id: string; status: OrderStatus; cancellationReason?: string }) =>
+    mutationFn: (input: { id: number; status: OrderStatus; cancellationReason?: string }) =>
       orderService.changeStatus(input.id, { status: input.status, cancellationReason: input.cancellationReason }),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });

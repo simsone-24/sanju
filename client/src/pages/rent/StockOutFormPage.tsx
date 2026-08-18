@@ -5,11 +5,12 @@ import { Alert, Autocomplete, Box, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DatePickerField } from '../../components/DatePickerField';
 import { FormPage } from '../../components/FormPage';
 import { FormSection } from '../../components/FormSection';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as rentService from '../../services/rentService';
 import { useToast } from '../../store/ToastContext';
 import type { CreateStockOutInput, RentalPerson, UpdateStockOutInput } from '../../types/rent';
@@ -36,7 +37,7 @@ const PERSON_PICKER_LIMIT = 100;
 
 /** Just enough of a rental person to identify one in the picker — the form needs nothing else. */
 interface PersonOption {
-  id: string;
+  id: number;
   name: string;
   phone: string;
 }
@@ -46,7 +47,7 @@ function toPersonOption(person: Pick<RentalPerson, 'id' | 'name' | 'phone'>): Pe
 }
 
 export default function StockOutFormPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -84,7 +85,7 @@ export default function StockOutFormPage() {
 
   const { data: existing, isLoading: loadingExisting } = useQuery({
     queryKey: ['rent-stock-out', id],
-    queryFn: () => rentService.getStockOut(id!),
+    queryFn: () => rentService.getStockOut(id),
     enabled: isEdit && allowed,
   });
 
@@ -113,7 +114,7 @@ export default function StockOutFormPage() {
     mutationFn: (input: CreateStockOutInput) => rentService.createStockOut(input),
   });
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateStockOutInput) => rentService.updateStockOut(id!, input),
+    mutationFn: (input: UpdateStockOutInput) => rentService.updateStockOut(id, input),
   });
   const saving = createMutation.isPending || updateMutation.isPending;
 

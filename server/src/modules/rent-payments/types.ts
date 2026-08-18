@@ -1,8 +1,8 @@
 import { RentPaymentMode } from '@prisma/client';
 
 export interface CreateRentPaymentInput {
-  stockOutId: string;
-  rentalPersonId: string;
+  stockOutId: number;
+  rentalPersonId: number;
   paymentDate?: Date;
   amount: number;
   paymentMode: RentPaymentMode;
@@ -19,12 +19,12 @@ export interface UpdateRentPaymentInput {
 }
 
 export interface ListRentPaymentsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
-  stockOutId?: string;
-  rentalPersonId?: string;
+  stockOutId?: number;
+  rentalPersonId?: number;
   paymentMode?: RentPaymentMode;
   dateFrom?: Date;
   dateTo?: Date;

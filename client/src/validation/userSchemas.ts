@@ -21,7 +21,6 @@ const optionalText = z.string().trim().max(191, 'This value is too long.').optio
 
 export const createUserSchema = z
   .object({
-    employeeCode: optionalText,
     fullName: z.string().trim().min(1, 'Full name is required.'),
     username,
     password: z.string().min(8, 'Password must be at least 8 characters.'),
@@ -41,7 +40,6 @@ export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 export const updateUserSchema = z
   .object({
-    employeeCode: optionalText,
     fullName: z.string().trim().min(1, 'Full name is required.'),
     username,
     // Left blank means "keep the current password" — cleared before the request is sent.

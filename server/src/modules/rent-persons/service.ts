@@ -46,7 +46,7 @@ export async function list(params: ListRentalPersonsParams) {
   return { records: summaries, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export async function getById(companyId: string, id: string): Promise<RentalPersonSummary> {
+export async function getById(companyId: number, id: number): Promise<RentalPersonSummary> {
   const person = await rentPersonsRepository.findRentalPersonById(companyId, id);
   if (!person) throw new AppError(404, 'Rental person not found.');
 
@@ -70,8 +70,8 @@ export async function getById(companyId: string, id: string): Promise<RentalPers
  * history stays fully accessible, so this guard belongs on the write path only and never on a read.
  */
 export async function assertSelectableForStockOut(
-  companyId: string,
-  rentalPersonId: string,
+  companyId: number,
+  rentalPersonId: number,
   client?: PrismaClientOrTx,
 ) {
   const person = await rentPersonsRepository.findRentalPersonById(companyId, rentalPersonId, client);
@@ -88,7 +88,7 @@ export async function assertSelectableForStockOut(
   return person;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateRentalPersonInput) {
+export async function create(companyId: number, actorId: number, input: CreateRentalPersonInput) {
   const duplicate = await rentPersonsRepository.findRentalPersonByPhone(companyId, input.phone);
   if (duplicate) {
     throw new AppError(409, `"${duplicate.name}" is already registered with this phone number.`, [
@@ -119,7 +119,7 @@ export async function create(companyId: string, actorId: string, input: CreateRe
   return person;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateRentalPersonInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateRentalPersonInput) {
   const existing = await rentPersonsRepository.findRentalPersonById(companyId, id);
   if (!existing) throw new AppError(404, 'Rental person not found.');
 
@@ -162,7 +162,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
  * name the UI can no longer resolve. Deactivating them (status = INACTIVE) is the supported way to
  * take someone out of circulation.
  */
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await rentPersonsRepository.findRentalPersonById(companyId, id);
   if (!existing) throw new AppError(404, 'Rental person not found.');
 

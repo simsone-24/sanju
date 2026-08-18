@@ -7,12 +7,13 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { Alert, Box, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { RecordHeaderCard } from '../../components/RecordHeaderCard';
 import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as rentService from '../../services/rentService';
 import type { RentPayment, StockOutSummary } from '../../types/rent';
 import { formatCurrency, formatDate } from '../../utils/format';
@@ -22,25 +23,25 @@ import { formatCurrency, formatDate } from '../../utils/format';
  * stock out and every payment behind them.
  */
 export default function RentalPersonDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const canView = usePermission('RENT', 'canView');
 
   const { data: person, isLoading } = useQuery({
     queryKey: ['rent-person', id],
-    queryFn: () => rentService.getPerson(id!),
+    queryFn: () => rentService.getPerson(id),
     enabled: canView && Boolean(id),
   });
 
   const { data: stockOuts, isLoading: loadingStockOuts } = useQuery({
     queryKey: ['rent-stock-outs', { rentalPersonId: id }],
-    queryFn: () => rentService.listStockOuts({ rentalPersonId: id!, limit: 50 }),
+    queryFn: () => rentService.listStockOuts({ rentalPersonId: id, limit: 50 }),
     enabled: canView && Boolean(id),
   });
 
   const { data: payments, isLoading: loadingPayments } = useQuery({
     queryKey: ['rent-payments', { rentalPersonId: id }],
-    queryFn: () => rentService.listPayments({ rentalPersonId: id!, limit: 50 }),
+    queryFn: () => rentService.listPayments({ rentalPersonId: id, limit: 50 }),
     enabled: canView && Boolean(id),
   });
 

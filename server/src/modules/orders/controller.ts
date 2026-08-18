@@ -4,6 +4,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as ordersService from './service';
 import {
   ChangeOrderStatusSchema,
@@ -61,7 +62,7 @@ export async function stats(req: Request, res: Response, next: NextFunction): Pr
 export async function getById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const order = await ordersService.getById(actor.companyId, req.params.id);
+    const order = await ordersService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, order, 'Order retrieved successfully.');
   } catch (error) {
     next(error);
@@ -71,7 +72,7 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
 export async function getTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const timeline = await ordersService.getTimeline(actor.companyId, req.params.id);
+    const timeline = await ordersService.getTimeline(actor.companyId, parseId(req.params.id));
     sendSuccess(res, timeline, 'Order timeline retrieved successfully.');
   } catch (error) {
     next(error);
@@ -109,7 +110,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const order = await ordersService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const order = await ordersService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, order, 'Order updated successfully.');
   } catch (error) {
     next(error);
@@ -123,7 +124,7 @@ export async function changeStatus(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const order = await ordersService.changeStatus(actor.companyId, actor.id, req.params.id, req.body);
+    const order = await ordersService.changeStatus(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, order, 'Order status updated successfully.');
   } catch (error) {
     next(error);

@@ -24,7 +24,7 @@ const taskGroupSelect = {
   },
 } satisfies Prisma.TaskGroupSelect;
 
-export function listGroupsForOrder(companyId: string, orderId: string) {
+export function listGroupsForOrder(companyId: number, orderId: number) {
   return prisma.taskGroup.findMany({
     where: { orderId, deletedAt: null, order: { companyId, deletedAt: null } },
     select: taskGroupSelect,
@@ -32,7 +32,7 @@ export function listGroupsForOrder(companyId: string, orderId: string) {
   });
 }
 
-export function findGroupById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findGroupById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.taskGroup.findFirst({
     where: { id, deletedAt: null, order: { companyId, deletedAt: null } },
     select: {
@@ -42,7 +42,7 @@ export function findGroupById(companyId: string, id: string, client: PrismaClien
   });
 }
 
-export function findItemById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findItemById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.taskItem.findFirst({
     where: { id, deletedAt: null, taskGroup: { deletedAt: null, order: { companyId, deletedAt: null } } },
     select: {
@@ -55,12 +55,12 @@ export function findItemById(companyId: string, id: string, client: PrismaClient
 }
 
 /** Next display order for a new group in an order — soft-deleted rows keep their slot. */
-export async function nextGroupDisplayOrder(orderId: string): Promise<number> {
+export async function nextGroupDisplayOrder(orderId: number): Promise<number> {
   const highest = await prisma.taskGroup.aggregate({ where: { orderId }, _max: { displayOrder: true } });
   return (highest._max.displayOrder ?? -1) + 1;
 }
 
-export async function nextItemDisplayOrder(taskGroupId: string): Promise<number> {
+export async function nextItemDisplayOrder(taskGroupId: number): Promise<number> {
   const highest = await prisma.taskItem.aggregate({ where: { taskGroupId }, _max: { displayOrder: true } });
   return (highest._max.displayOrder ?? -1) + 1;
 }
@@ -79,7 +79,7 @@ export function createGroup(
 }
 
 export function updateGroup(
-  id: string,
+  id: number,
   data: Prisma.TaskGroupUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
@@ -90,7 +90,7 @@ export function updateGroup(
  * Soft-deletes a group and every item inside it in one transaction — "Deleting a Task Group
  * deletes all its Task Items" (scope.md §Business Rules).
  */
-export function softDeleteGroupWithItems(id: string): Promise<void> {
+export function softDeleteGroupWithItems(id: number): Promise<void> {
   return prisma.$transaction(async (tx) => {
     const deletedAt = new Date();
     await tx.taskItem.updateMany({ where: { taskGroupId: id, deletedAt: null }, data: { deletedAt } });
@@ -103,13 +103,13 @@ export function createItem(data: Prisma.TaskItemUncheckedCreateInput, client: Pr
 }
 
 export function updateItem(
-  id: string,
+  id: number,
   data: Prisma.TaskItemUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.taskItem.update({ where: { id }, data, select: taskItemSelect });
 }
 
-export function softDeleteItem(id: string, client: PrismaClientOrTx = prisma) {
+export function softDeleteItem(id: number, client: PrismaClientOrTx = prisma) {
   return client.taskItem.update({ where: { id }, data: { deletedAt: new Date() }, select: { id: true } });
 }

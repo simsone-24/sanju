@@ -3,13 +3,13 @@ import { logActivity } from '../../utils/activityLogger';
 import * as settingsRepository from './repository';
 import { UpdateCompanyInput } from './types';
 
-export async function getCompany(companyId: string) {
+export async function getCompany(companyId: number) {
   const company = await settingsRepository.findCompanyById(companyId);
   if (!company) throw new AppError(404, 'Company not found.');
   return company;
 }
 
-export async function updateCompany(companyId: string, actorId: string, input: UpdateCompanyInput) {
+export async function updateCompany(companyId: number, actorId: number, input: UpdateCompanyInput) {
   const existing = await settingsRepository.findCompanyById(companyId);
   if (!existing) throw new AppError(404, 'Company not found.');
 
@@ -44,7 +44,7 @@ export async function updateCompany(companyId: string, actorId: string, input: U
   return company;
 }
 
-export async function updateLogo(companyId: string, actorId: string, logoPath: string) {
+export async function updateLogo(companyId: number, actorId: number, logoPath: string) {
   const existing = await settingsRepository.findCompanyById(companyId);
   if (!existing) throw new AppError(404, 'Company not found.');
 

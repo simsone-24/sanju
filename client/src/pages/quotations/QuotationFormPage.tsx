@@ -31,12 +31,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormPage } from '../../components/FormPage';
 import { FormSection } from '../../components/FormSection';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { SCROLL_ANCHORS } from '../../constants/scrollAnchors';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import QuotationPreview from './QuotationPreview';
 import * as customerService from '../../services/customerService';
 import * as enquiryService from '../../services/enquiryService';
@@ -51,6 +52,7 @@ import type {
   UpdateQuotationInput,
 } from '../../types/quotation';
 import { formatCurrency, formatDate, getPublicAssetUrl } from '../../utils/format';
+import { fromId, toId, toOptionalId } from '../../utils/ids';
 import {
   QUOTATION_CREATE_STATUSES,
   QUOTATION_EDIT_STATUSES,
@@ -79,7 +81,7 @@ const EMPTY_RECIPIENT: QuotationRecipient = {
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function QuotationFormPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const [searchParams] = useSearchParams();
   const prefillEnquiryId = searchParams.get('enquiryId');
   const prefillCustomerId = searchParams.get('customerId');
@@ -119,7 +121,7 @@ export default function QuotationFormPage() {
 
   const { data: existingQuotation } = useQuery({
     queryKey: ['quotation', id],
-    queryFn: () => quotationService.getById(id!),
+    queryFn: () => quotationService.getById(id),
     enabled: isEdit,
   });
 
@@ -200,7 +202,7 @@ export default function QuotationFormPage() {
   // dropdown selection immediately; the detail call enriches with address when available).
   const { data: selectedEnquiry } = useQuery({
     queryKey: ['enquiry-detail', selectedEnquiryId],
-    queryFn: () => enquiryService.getById(selectedEnquiryId!),
+    queryFn: () => enquiryService.getById(toId(selectedEnquiryId!)),
     enabled: !isEdit && source === 'ENQUIRY' && Boolean(selectedEnquiryId),
   });
 
@@ -208,7 +210,7 @@ export default function QuotationFormPage() {
   // detail call enriches the preview with email and address.
   const { data: selectedCustomer } = useQuery({
     queryKey: ['customer', selectedCustomerId],
-    queryFn: () => customerService.getById(selectedCustomerId!),
+    queryFn: () => customerService.getById(toId(selectedCustomerId!)),
     enabled: !isEdit && source === 'CUSTOMER' && Boolean(selectedCustomerId),
   });
 
@@ -224,8 +226,8 @@ export default function QuotationFormPage() {
           ? existingQuotation.source
           : 'ENQUIRY',
       status: existingQuotation.status,
-      enquiryId: existingQuotation.link.enquiry?.id ?? '',
-      customerId: existingQuotation.link.customer?.id ?? '',
+      enquiryId: fromId(existingQuotation.link.enquiry?.id),
+      customerId: fromId(existingQuotation.link.customer?.id),
       manualName: existingQuotation.recipient.name ?? '',
       manualPhone: existingQuotation.recipient.phone ?? '',
       manualWhatsapp: existingQuotation.recipient.whatsapp ?? '',
@@ -343,7 +345,7 @@ export default function QuotationFormPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateQuotationInput) => quotationService.update(id!, input),
+    mutationFn: (input: UpdateQuotationInput) => quotationService.update(id, input),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['quotation', id] });
@@ -360,7 +362,7 @@ export default function QuotationFormPage() {
   });
 
   const uploadImagesMutation = useMutation({
-    mutationFn: (files: File[]) => quotationService.uploadImages(id!, files),
+    mutationFn: (files: File[]) => quotationService.uploadImages(id, files),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotation', id] });
       showToast('Images added.');
@@ -368,7 +370,7 @@ export default function QuotationFormPage() {
   });
 
   const deleteImageMutation = useMutation({
-    mutationFn: (imageId: string) => quotationService.deleteImage(id!, imageId),
+    mutationFn: (imageId: number) => quotationService.deleteImage(id, imageId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', id] }),
   });
 
@@ -478,8 +480,8 @@ export default function QuotationFormPage() {
           // REVISED is not offered on create (see QUOTATION_CREATE_STATUSES), so the value here is
           // always one the API accepts on a new quotation.
           status: values.status === 'REVISED' ? undefined : values.status,
-          enquiryId: values.source === 'ENQUIRY' ? values.enquiryId : undefined,
-          customerId: values.source === 'CUSTOMER' ? values.customerId : undefined,
+          enquiryId: values.source === 'ENQUIRY' ? toOptionalId(values.enquiryId) : undefined,
+          customerId: values.source === 'CUSTOMER' ? toOptionalId(values.customerId) : undefined,
           manualCustomer,
           quotationDate: values.quotationDate || undefined,
           cgstPercent,
@@ -778,7 +780,7 @@ export default function QuotationFormPage() {
                 filterOptions={(options) => options}
                 onInputChange={(_event, value) => setEnquirySearch(value)}
                 onChange={(_event, value) => {
-                  setValue('enquiryId', value?.id ?? '', { shouldDirty: true });
+                  setValue('enquiryId', fromId(value?.id), { shouldDirty: true });
                   setPickedRecipient(
                     value
                       ? {
@@ -816,7 +818,7 @@ export default function QuotationFormPage() {
                 filterOptions={(options) => options}
                 onInputChange={(_event, value) => setCustomerSearch(value)}
                 onChange={(_event, value) => {
-                  setValue('customerId', value?.id ?? '', { shouldDirty: true });
+                  setValue('customerId', fromId(value?.id), { shouldDirty: true });
                   setPickedRecipient(
                     value
                       ? {

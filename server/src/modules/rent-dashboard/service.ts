@@ -23,7 +23,7 @@ export interface RentDashboardResponse {
  * Composed from the modules that own each figure rather than re-querying them here, so a counter on
  * this page can never disagree with the same counter on the module's own screen.
  */
-export async function getDashboard(companyId: string): Promise<RentDashboardResponse> {
+export async function getDashboard(companyId: number): Promise<RentDashboardResponse> {
   const pendingReturnStatuses = [StockReturnStatus.NOT_RETURNED, StockReturnStatus.PARTIAL_RETURNED];
   const pendingPaymentStatuses = [RentPaymentStatus.UNPAID, RentPaymentStatus.PARTIALLY_PAID];
 

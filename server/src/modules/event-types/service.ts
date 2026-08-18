@@ -9,13 +9,13 @@ export async function list(params: ListEventTypesParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const eventType = await eventTypesRepository.findEventTypeById(companyId, id);
   if (!eventType) throw new AppError(404, 'Event type not found.');
   return eventType;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateEventTypeInput) {
+export async function create(companyId: number, actorId: number, input: CreateEventTypeInput) {
   const existing = await eventTypesRepository.findEventTypeByName(companyId, input.eventName);
   if (existing) {
     throw new AppError(409, 'An event type with this name already exists.', [
@@ -43,7 +43,7 @@ export async function create(companyId: string, actorId: string, input: CreateEv
   return eventType;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateEventTypeInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateEventTypeInput) {
   const existingEventType = await eventTypesRepository.findEventTypeById(companyId, id);
   if (!existingEventType) throw new AppError(404, 'Event type not found.');
 
@@ -75,7 +75,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return eventType;
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existingEventType = await eventTypesRepository.findEventTypeById(companyId, id);
   if (!existingEventType) throw new AppError(404, 'Event type not found.');
 

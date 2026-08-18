@@ -53,7 +53,7 @@ export function listPersons(params: ListRentalPersonsParams): Promise<PaginatedR
   return getPaginated<RentalPerson>('/rent/persons', params);
 }
 
-export function getPerson(id: string): Promise<RentalPerson> {
+export function getPerson(id: number): Promise<RentalPerson> {
   return get<RentalPerson>(`/rent/persons/${id}`);
 }
 
@@ -62,12 +62,12 @@ export async function createPerson(input: CreateRentalPersonInput): Promise<Rent
   return response.data.data;
 }
 
-export async function updatePerson(id: string, input: UpdateRentalPersonInput): Promise<RentalPerson> {
+export async function updatePerson(id: number, input: UpdateRentalPersonInput): Promise<RentalPerson> {
   const response = await apiClient.put<ApiSuccessResponse<RentalPerson>>(`/rent/persons/${id}`, input);
   return response.data.data;
 }
 
-export async function deletePerson(id: string): Promise<void> {
+export async function deletePerson(id: number): Promise<void> {
   await apiClient.delete(`/rent/persons/${id}`);
 }
 
@@ -86,12 +86,12 @@ export async function createItem(input: CreateRentalItemInput): Promise<RentalIt
   return response.data.data;
 }
 
-export async function updateItem(id: string, input: UpdateRentalItemInput): Promise<RentalItem> {
+export async function updateItem(id: number, input: UpdateRentalItemInput): Promise<RentalItem> {
   const response = await apiClient.put<ApiSuccessResponse<RentalItem>>(`/rent/items/${id}`, input);
   return response.data.data;
 }
 
-export async function deleteItem(id: string): Promise<void> {
+export async function deleteItem(id: number): Promise<void> {
   await apiClient.delete(`/rent/items/${id}`);
 }
 
@@ -101,7 +101,7 @@ export function listStockOuts(params: ListStockOutsParams): Promise<PaginatedRes
   return getPaginated<StockOutSummary>('/rent/stock-outs', params);
 }
 
-export function getStockOut(id: string): Promise<StockOutDetail> {
+export function getStockOut(id: number): Promise<StockOutDetail> {
   return get<StockOutDetail>(`/rent/stock-outs/${id}`);
 }
 
@@ -110,19 +110,19 @@ export async function createStockOut(input: CreateStockOutInput): Promise<StockO
   return response.data.data;
 }
 
-export async function updateStockOut(id: string, input: UpdateStockOutInput): Promise<StockOutDetail> {
+export async function updateStockOut(id: number, input: UpdateStockOutInput): Promise<StockOutDetail> {
   const response = await apiClient.put<ApiSuccessResponse<StockOutDetail>>(`/rent/stock-outs/${id}`, input);
   return response.data.data;
 }
 
-export async function cancelStockOut(id: string, reason?: string): Promise<StockOutDetail> {
+export async function cancelStockOut(id: number, reason?: string): Promise<StockOutDetail> {
   const response = await apiClient.patch<ApiSuccessResponse<StockOutDetail>>(`/rent/stock-outs/${id}/cancel`, {
     reason,
   });
   return response.data.data;
 }
 
-export async function deleteStockOut(id: string): Promise<void> {
+export async function deleteStockOut(id: number): Promise<void> {
   await apiClient.delete(`/rent/stock-outs/${id}`);
 }
 
@@ -132,7 +132,7 @@ export function listReturns(params: ListStockReturnsParams): Promise<PaginatedRe
   return getPaginated<StockReturn>('/rent/returns', params);
 }
 
-export function getReturn(id: string): Promise<StockReturn> {
+export function getReturn(id: number): Promise<StockReturn> {
   return get<StockReturn>(`/rent/returns/${id}`);
 }
 
@@ -140,7 +140,7 @@ export function getReturnSummary(): Promise<ReturnSummary> {
   return get<ReturnSummary>('/rent/returns/summary');
 }
 
-export async function createReturn(stockOutId: string, input: CreateStockReturnInput): Promise<StockReturn> {
+export async function createReturn(stockOutId: number, input: CreateStockReturnInput): Promise<StockReturn> {
   const response = await apiClient.post<ApiSuccessResponse<StockReturn>>(
     `/rent/stock-outs/${stockOutId}/returns`,
     input,
@@ -163,12 +163,12 @@ export async function createPayment(input: CreateRentPaymentInput): Promise<Rent
   return response.data.data;
 }
 
-export async function updatePayment(id: string, input: UpdateRentPaymentInput): Promise<RentPayment> {
+export async function updatePayment(id: number, input: UpdateRentPaymentInput): Promise<RentPayment> {
   const response = await apiClient.put<ApiSuccessResponse<RentPayment>>(`/rent/payments/${id}`, input);
   return response.data.data;
 }
 
-export async function deletePayment(id: string): Promise<void> {
+export async function deletePayment(id: number): Promise<void> {
   await apiClient.delete(`/rent/payments/${id}`);
 }
 

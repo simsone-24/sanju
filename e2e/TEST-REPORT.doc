@@ -1,0 +1,217 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8' /><title>E2E Test Report - Event Management ERP</title><style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 2cm; }
+h1 { font-size: 22pt; color: #14304f; margin: 0 0 4pt; }
+h2 { font-size: 15pt; color: #14304f; border-bottom: 1px solid #c9d4de; padding-bottom: 4pt;
+     margin-top: 22pt; }
+h3 { font-size: 12.5pt; color: #2c5578; margin-top: 16pt; }
+table { border-collapse: collapse; width: 100%; margin: 8pt 0 14pt; font-size: 10pt; }
+th { background: #14304f; color: #ffffff; text-align: left; padding: 5pt 7pt;
+     border: 1px solid #14304f; }
+td { border: 1px solid #c9d4de; padding: 4pt 7pt; vertical-align: top; }
+tr:nth-child(even) td { background: #f4f7fa; }
+code { font-family: Consolas, monospace; font-size: 9.5pt; background: #eef2f6; padding: 0 2pt; }
+pre { font-family: Consolas, monospace; font-size: 9.5pt; background: #f4f7fa;
+      border-left: 3px solid #14304f; padding: 8pt 10pt; }
+hr { border: 0; border-top: 1px solid #c9d4de; margin: 18pt 0; }
+li { margin-bottom: 3pt; }
+</style></head><body><h1>End-to-End Test Report</h1>
+<h2>Event Management ERP</h2>
+<table><tr><th></th><th></th></tr>
+<tr><td><strong>Project</strong></td><td>Event Management ERP (<code>D:\simsone\sanju</code>)</td></tr>
+<tr><td><strong>Test type</strong></td><td>End-to-end (browser-driven, full stack)</td></tr>
+<tr><td><strong>Framework</strong></td><td>Playwright 1.62.1</td></tr>
+<tr><td><strong>Run date</strong></td><td>18 August 2026, 21:13 IST (15:43 UTC)</td></tr>
+<tr><td><strong>Branch / commit</strong></td><td><code>main</code> @ <code>1e3e408</code> + uncommitted working tree</td></tr>
+<tr><td><strong>Result</strong></td><td><strong>PASSED — 61 / 61</strong></td></tr>
+</table>
+<hr />
+<h2>1. Executive summary</h2>
+<p>The full end-to-end suite was executed against a live stack (Vite client, Express/Prisma API, MySQL). <strong>All 61 tests passed</strong>, with no failures, no flaky retries and no skipped tests. Total wall-clock time was <strong>4 minutes 39 seconds</strong> on a single worker.</p>
+<p>The run covers authentication, routing, and the Enquiries, Quotations, Orders, Payment Tracker, Customers, Calendar, Dashboard, Reports and Masters modules — including the create/edit/delete paths and their validation rules. The <strong>Rent module is deliberately excluded</strong> from this scope.</p>
+<table><tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Tests executed</td><td>61</td></tr>
+<tr><td>Passed</td><td>61</td></tr>
+<tr><td>Failed</td><td>0</td></tr>
+<tr><td>Flaky</td><td>0</td></tr>
+<tr><td>Skipped</td><td>0</td></tr>
+<tr><td>Duration</td><td>278.8 s (4 m 39 s)</td></tr>
+<tr><td>Workers</td><td>1 (serial, by design)</td></tr>
+<tr><td>Retries used</td><td>0</td></tr>
+</table>
+<hr />
+<h2>2. Environment</h2>
+<table><tr><th>Component</th><th>Detail</th></tr>
+<tr><td>Client</td><td>Vite dev server, <code>http://localhost:5173</code></td></tr>
+<tr><td>API</td><td>Express + Prisma, <code>http://localhost:5000/api/v1</code></td></tr>
+<tr><td>Database</td><td>MySQL (shared dev database, seeded)</td></tr>
+<tr><td>Browser</td><td>Chromium — Desktop Chrome device profile</td></tr>
+<tr><td>Node.js</td><td>v22.21.0</td></tr>
+<tr><td>OS</td><td>Windows 11</td></tr>
+<tr><td>Credentials</td><td><code>SEED_ADMIN_USERNAME</code> / <code>SEED_ADMIN_PASSWORD</code> read from <code>server/.env</code> — nothing hardcoded in the suite</td></tr>
+<tr><td>Auth strategy</td><td>One real login through the UI in <code>auth.setup.ts</code>; session stored in <code>.auth/admin.json</code> and reused by every spec</td></tr>
+</table>
+<p><strong>Why one worker:</strong> all specs drive a single shared MySQL database. Running them concurrently would let one spec&#x27;s rows appear in another spec&#x27;s list assertions, so the suite is configured <code>fullyParallel: false, workers: 1</code> for deterministic results.</p>
+<hr />
+<h2>3. Results by module</h2>
+<table><tr><th>Spec file</th><th>Area</th><th>Tests</th><th>Passed</th><th>Duration</th></tr>
+<tr><td><code>auth.setup.ts</code></td><td>Session bootstrap</td><td>1</td><td>1</td><td>3.6 s</td></tr>
+<tr><td><code>auth.spec.ts</code></td><td>Authentication</td><td>5</td><td>5</td><td>14.2 s</td></tr>
+<tr><td><code>navigation.spec.ts</code></td><td>Routing / sidebar</td><td>11</td><td>11</td><td>35.0 s</td></tr>
+<tr><td><code>enquiries.spec.ts</code></td><td>Enquiries</td><td>12</td><td>12</td><td>88.2 s</td></tr>
+<tr><td><code>masters.spec.ts</code></td><td>Masters (Event Types, Users, User Groups)</td><td>11</td><td>11</td><td>63.7 s</td></tr>
+<tr><td><code>quotations.spec.ts</code></td><td>Quotations</td><td>6</td><td>6</td><td>20.0 s</td></tr>
+<tr><td><code>orders.spec.ts</code></td><td>Orders + Payment Tracker</td><td>5</td><td>5</td><td>15.3 s</td></tr>
+<tr><td><code>customers-calendar-dashboard.spec.ts</code></td><td>Customers, Calendar, Dashboard</td><td>5</td><td>5</td><td>14.9 s</td></tr>
+<tr><td><code>reports.spec.ts</code></td><td>Reports</td><td>5</td><td>5</td><td>18.5 s</td></tr>
+<tr><td><strong>Total</strong></td><td></td><td><strong>61</strong></td><td><strong>61</strong></td><td><strong>278.8 s</strong></td></tr>
+</table>
+<hr />
+<h2>4. Detailed test log</h2>
+<p>All entries below completed with status <strong>passed</strong>.</p>
+<h3>4.1 Authentication — 5 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>redirects an anonymous visitor to the login screen</td><td>2.4 s</td></tr>
+<tr><td>2</td><td>requires both username and password</td><td>2.7 s</td></tr>
+<tr><td>3</td><td>rejects a wrong password without revealing which field was wrong</td><td>3.0 s</td></tr>
+<tr><td>4</td><td>rejects an unknown username</td><td>2.7 s</td></tr>
+<tr><td>5</td><td>signs in with the seeded Super Admin and lands on the dashboard</td><td>3.3 s</td></tr>
+</table>
+<h3>4.2 Navigation — 11 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>Dashboard renders at <code>/</code></td><td>3.0 s</td></tr>
+<tr><td>2</td><td>Enquiries renders at <code>/enquiries</code></td><td>3.3 s</td></tr>
+<tr><td>3</td><td>Quotations renders at <code>/quotations</code></td><td>3.2 s</td></tr>
+<tr><td>4</td><td>Orders renders at <code>/orders</code></td><td>3.3 s</td></tr>
+<tr><td>5</td><td>Payment Tracker renders at <code>/payment-tracker</code></td><td>3.2 s</td></tr>
+<tr><td>6</td><td>Calendar renders at <code>/calendar</code></td><td>3.0 s</td></tr>
+<tr><td>7</td><td>Customers renders at <code>/customers</code></td><td>2.9 s</td></tr>
+<tr><td>8</td><td>Reports renders at <code>/reports</code></td><td>3.2 s</td></tr>
+<tr><td>9</td><td>Masters renders at <code>/masters</code></td><td>2.8 s</td></tr>
+<tr><td>10</td><td>an unknown route falls back to the dashboard</td><td>2.9 s</td></tr>
+<tr><td>11</td><td>the sidebar reaches every module</td><td>4.1 s</td></tr>
+</table>
+<h3>4.3 Enquiries — 12 tests</h3>
+<p><strong>List</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>renders the grid with its toolbar</td><td>3.4 s</td></tr>
+<tr><td>2</td><td>the status filter narrows the grid through the URL</td><td>13.2 s</td></tr>
+<tr><td>3</td><td>an impossible filter shows the empty state</td><td>3.3 s</td></tr>
+</table>
+<p><strong>Create</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>4</td><td>creates an enquiry for a new customer</td><td>8.6 s</td></tr>
+<tr><td>5</td><td>rejects an enquiry with no customer name, mobile, event type or date</td><td>4.2 s</td></tr>
+<tr><td>6</td><td>rejects a malformed mobile number</td><td>7.8 s</td></tr>
+<tr><td>7</td><td>requires an event type</td><td>6.8 s</td></tr>
+<tr><td>8</td><td>requires an event date</td><td>5.6 s</td></tr>
+<tr><td>9</td><td>cancelling returns to the list without creating anything</td><td>3.8 s</td></tr>
+</table>
+<p><strong>Detail and edit</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>10</td><td>opens the detail page from the list</td><td>9.1 s</td></tr>
+<tr><td>11</td><td>edits an enquiry from the list</td><td>12.8 s</td></tr>
+<tr><td>12</td><td>deletes an enquiry from the list</td><td>9.5 s</td></tr>
+</table>
+<h3>4.4 Masters — 11 tests</h3>
+<p><strong>Event Types</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>creates, searches, edits and deletes an event type</td><td>6.1 s</td></tr>
+<tr><td>2</td><td>rejects an event type with no name</td><td>3.7 s</td></tr>
+</table>
+<p><strong>Users</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>3</td><td>creates a user with a group</td><td>6.7 s</td></tr>
+<tr><td>4</td><td>creates a user with an email and city</td><td>6.8 s</td></tr>
+<tr><td>5</td><td>blocks a user whose passwords do not match</td><td>5.7 s</td></tr>
+<tr><td>6</td><td>requires a user group</td><td>4.8 s</td></tr>
+<tr><td>7</td><td>rejects a password under 8 characters</td><td>5.9 s</td></tr>
+<tr><td>8</td><td>rejects a duplicate username</td><td>9.4 s</td></tr>
+<tr><td>9</td><td>opens a user read-only from the View action</td><td>4.6 s</td></tr>
+</table>
+<p><strong>User Groups</strong></p>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>10</td><td>creates a user group with permissions</td><td>5.7 s</td></tr>
+<tr><td>11</td><td>requires a group name</td><td>4.2 s</td></tr>
+</table>
+<h3>4.5 Quotations — 6 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>the list renders with its search box</td><td>3.1 s</td></tr>
+<tr><td>2</td><td>a search with no matches shows the empty state</td><td>3.2 s</td></tr>
+<tr><td>3</td><td>the new-quotation form renders its source choice</td><td>3.4 s</td></tr>
+<tr><td>4</td><td>saving an empty quotation is refused</td><td>3.8 s</td></tr>
+<tr><td>5</td><td>cancelling returns to the list</td><td>3.7 s</td></tr>
+<tr><td>6</td><td>an unknown quotation id does not crash the app</td><td>2.8 s</td></tr>
+</table>
+<h3>4.6 Orders and Payment Tracker — 5 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>Orders — the list renders</td><td>3.3 s</td></tr>
+<tr><td>2</td><td>Orders — a status filter applied through the URL is accepted</td><td>3.2 s</td></tr>
+<tr><td>3</td><td>Orders — an unknown order id does not crash the app</td><td>2.8 s</td></tr>
+<tr><td>4</td><td>Payment Tracker — the list renders</td><td>3.2 s</td></tr>
+<tr><td>5</td><td>Payment Tracker — an unknown tracker id does not crash the app</td><td>2.8 s</td></tr>
+</table>
+<h3>4.7 Customers, Calendar, Dashboard — 5 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>Customers — the list renders with its search box</td><td>3.0 s</td></tr>
+<tr><td>2</td><td>Customers — a search with no matches shows the empty state</td><td>3.0 s</td></tr>
+<tr><td>3</td><td>Customers — an unknown customer id does not crash the app</td><td>2.8 s</td></tr>
+<tr><td>4</td><td>Calendar — renders the month view</td><td>3.1 s</td></tr>
+<tr><td>5</td><td>Dashboard — renders its summary widgets for the signed-in user</td><td>3.0 s</td></tr>
+</table>
+<h3>4.8 Reports — 5 tests</h3>
+<table><tr><th>#</th><th>Test</th><th>Duration</th></tr>
+<tr><td>1</td><td>lands on the Reports page with its tab strip</td><td>3.3 s</td></tr>
+<tr><td>2</td><td>the Revenue tab renders without a client error</td><td>3.5 s</td></tr>
+<tr><td>3</td><td>the Outstanding tab renders without a client error</td><td>3.9 s</td></tr>
+<tr><td>4</td><td>the Customers tab renders without a client error</td><td>3.8 s</td></tr>
+<tr><td>5</td><td>the Events tab renders without a client error</td><td>4.0 s</td></tr>
+</table>
+<hr />
+<h2>5. Coverage assessment</h2>
+<p><strong>Covered</strong></p>
+<ul>
+<li>Authentication: anonymous redirect, empty-field validation, wrong password, unknown username, successful sign-in. Error messages were checked for not leaking which field was wrong.</li>
+<li>Routing: every sidebar destination, plus the unknown-route fallback.</li>
+<li>Full CRUD with validation: Enquiries (create/edit/delete), Masters — Event Types, Users, User Groups.</li>
+<li>Read paths and empty states: Quotations, Orders, Payment Tracker, Customers, Calendar, Dashboard, Reports.</li>
+<li>Invalid-identifier handling on the detail routes of Enquiries, Quotations, Orders, Payment Tracker and Customers — direct verification that the string-to-integer primary-key migration does not produce a client crash or a 500.</li>
+</ul>
+<p><strong>Not covered in this run</strong></p>
+<ul>
+<li><strong>Rent module</strong> — excluded from scope by request.</li>
+<li>Order lifecycle transitions (status changes, task plans, documents), quotation-to-order conversion, and invoice/payment recording beyond list rendering.</li>
+<li>Role-based access control from a non-Super-Admin account; every spec runs as the seeded Super Admin.</li>
+<li>File upload paths (Multer), PDF/print output, and email/notification side effects.</li>
+<li>Cross-browser: Chromium only. No Firefox, WebKit or mobile viewport run.</li>
+</ul>
+<hr />
+<h2>6. Test data and cleanup</h2>
+<p>Records created by the suite are prefixed <code>E2E </code> (usernames <code>e2e_</code>) and carry a run-unique suffix, so repeated runs never collide on a unique constraint and any leftovers are identifiable at a glance. <code>node scripts/cleanup.mjs</code> removes them through the REST API, which means the application&#x27;s own soft-delete rules apply rather than raw SQL deletion.</p>
+<hr />
+<h2>7. Reproducing this run</h2>
+<pre>
+cd e2e
+npm install
+npx playwright install chromium   # once
+npm test                          # full suite
+npm run report                    # open the HTML report
+node scripts/cleanup.mjs          # remove records this run created
+</pre>
+<p>Both dev servers must be reachable; Playwright starts them if they are not (<code>reuseExistingServer: true</code>). Artefacts from the run:</p>
+<table><tr><th>Artefact</th><th>Path</th></tr>
+<tr><td>HTML report</td><td><code>e2e/playwright-report/index.html</code></td></tr>
+<tr><td>JSON results</td><td><code>e2e/test-results/results.json</code></td></tr>
+<tr><td>Saved session</td><td><code>e2e/.auth/admin.json</code></td></tr>
+</table>
+<p>Traces, screenshots and video are captured <strong>only on failure</strong>; this run produced none.</p>
+<hr />
+<h2>8. Conclusion and recommendations</h2>
+<p>The application passes every scenario in scope. No defects were raised by this run.</p>
+<p>Recommended next steps, in priority order:</p>
+<ol>
+<li><strong>Extend to the order lifecycle</strong> — status transitions, quotation-to-order conversion and payment recording are the highest-value business flows still untested.</li>
+<li><strong>Add a non-admin role run</strong> to prove RBAC is enforced server-side, not only hidden in the UI.</li>
+<li><strong>Bring the Rent module into scope</strong> once its feature work settles.</li>
+<li><strong>Wire the suite into CI</strong> — the config already sets <code>forbidOnly</code> and one retry under <code>CI</code>.</li>
+<li><strong>Add a seeded, isolated test database</strong> so the suite can drop <code>workers: 1</code> and run in parallel.</li>
+</ol></body></html>

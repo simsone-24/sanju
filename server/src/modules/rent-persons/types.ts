@@ -20,7 +20,7 @@ export interface UpdateRentalPersonInput {
 }
 
 export interface ListRentalPersonsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

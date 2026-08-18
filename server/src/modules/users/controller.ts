@@ -5,6 +5,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import { AuthenticatedUser } from '../auth/types';
 import * as usersService from './service';
 import { CreateUserSchema, UpdateUserSchema, listUsersQuerySchema } from './validation';
@@ -47,7 +48,7 @@ export async function listOptions(req: Request, res: Response, next: NextFunctio
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const user = await usersService.getById(actor.companyId, req.params.id);
+    const user = await usersService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, user, 'User retrieved successfully.');
   } catch (error) {
     next(error);
@@ -75,7 +76,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const user = await usersService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const user = await usersService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, user, 'User updated successfully.');
   } catch (error) {
     next(error);
@@ -96,7 +97,7 @@ export async function uploadProfilePhoto(
     }
 
     const relativePath = path.relative(env.uploadPath, req.file.path).split(path.sep).join('/');
-    const user = await usersService.updateProfilePhoto(actor.companyId, actor.id, req.params.id, relativePath);
+    const user = await usersService.updateProfilePhoto(actor.companyId, actor.id, parseId(req.params.id), relativePath);
     sendSuccess(res, user, 'Profile photo updated successfully.');
   } catch (error) {
     next(error);
@@ -110,7 +111,7 @@ export async function getProfilePhoto(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const relativePath = await usersService.getProfilePhotoPath(actor.companyId, req.params.id);
+    const relativePath = await usersService.getProfilePhotoPath(actor.companyId, parseId(req.params.id));
     res.sendFile(path.resolve(env.uploadPath, relativePath), (error) => {
       if (error) next(error);
     });
@@ -122,7 +123,7 @@ export async function getProfilePhoto(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await usersService.remove(actor.companyId, actor.id, req.params.id);
+    await usersService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'User deleted successfully.');
   } catch (error) {
     next(error);

@@ -4,6 +4,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as eventTypesService from './service';
 import { CreateEventTypeSchema, UpdateEventTypeSchema, listEventTypesQuerySchema } from './validation';
 
@@ -36,7 +37,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function getById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const eventType = await eventTypesService.getById(actor.companyId, req.params.id);
+    const eventType = await eventTypesService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, eventType, 'Event type retrieved successfully.');
   } catch (error) {
     next(error);
@@ -64,7 +65,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const eventType = await eventTypesService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const eventType = await eventTypesService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, eventType, 'Event type updated successfully.');
   } catch (error) {
     next(error);
@@ -74,7 +75,7 @@ export async function update(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await eventTypesService.remove(actor.companyId, actor.id, req.params.id);
+    await eventTypesService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Event type deleted successfully.');
   } catch (error) {
     next(error);

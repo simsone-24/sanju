@@ -34,7 +34,7 @@ export async function listTaskTemplates(params: ListTaskTemplatesParams) {
   return { records, totalRecords };
 }
 
-export function findTaskTemplateById(companyId: string, id: string) {
+export function findTaskTemplateById(companyId: number, id: number) {
   return prisma.taskTemplate.findFirst({
     where: { id, companyId, deletedAt: null },
     select: taskTemplateSelect,
@@ -45,10 +45,10 @@ export function createTaskTemplate(data: Prisma.TaskTemplateUncheckedCreateInput
   return prisma.taskTemplate.create({ data, select: taskTemplateSelect });
 }
 
-export function updateTaskTemplate(id: string, data: Prisma.TaskTemplateUpdateInput) {
+export function updateTaskTemplate(id: number, data: Prisma.TaskTemplateUpdateInput) {
   return prisma.taskTemplate.update({ where: { id }, data, select: taskTemplateSelect });
 }
 
-export function softDeleteTaskTemplate(id: string) {
+export function softDeleteTaskTemplate(id: number) {
   return prisma.taskTemplate.update({ where: { id }, data: { deletedAt: new Date() } });
 }

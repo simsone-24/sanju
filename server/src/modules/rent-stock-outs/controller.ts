@@ -3,6 +3,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import { AuthenticatedUser } from '../auth/types';
 import * as stockOutsService from './service';
 import {
@@ -44,7 +45,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const stockOut = await stockOutsService.getById(actor.companyId, req.params.id);
+    const stockOut = await stockOutsService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, stockOut, 'Stock out retrieved successfully.');
   } catch (error) {
     next(error);
@@ -72,7 +73,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const stockOut = await stockOutsService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const stockOut = await stockOutsService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, stockOut, 'Stock out updated successfully.');
   } catch (error) {
     next(error);
@@ -86,7 +87,7 @@ export async function cancel(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const stockOut = await stockOutsService.cancel(actor.companyId, actor.id, req.params.id, req.body.reason);
+    const stockOut = await stockOutsService.cancel(actor.companyId, actor.id, parseId(req.params.id), req.body.reason);
     sendSuccess(res, stockOut, 'Stock out cancelled successfully.');
   } catch (error) {
     next(error);
@@ -96,7 +97,7 @@ export async function cancel(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await stockOutsService.remove(actor.companyId, actor.id, req.params.id);
+    await stockOutsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Stock out deleted successfully.');
   } catch (error) {
     next(error);

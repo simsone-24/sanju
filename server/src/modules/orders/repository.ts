@@ -188,17 +188,17 @@ export async function getOrderStats(params: OrderStatsParams) {
   return { total, todayEvents, tomorrowEvents, thisWeekEvents, thisMonthEvents, closed };
 }
 
-export function findOrderById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findOrderById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({ where: { id, companyId, deletedAt: null }, select: orderDetailSelect });
 }
 
-export function findOrderByEnquiryId(companyId: string, enquiryId: string, client: PrismaClientOrTx = prisma) {
+export function findOrderByEnquiryId(companyId: number, enquiryId: number, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({ where: { enquiryId, companyId, deletedAt: null } });
 }
 
 // The order raised from a given quotation, if one exists. Used when that quotation is edited after
 // approval so the order's stored totals can follow it (quotations/service.ts `update`).
-export function findOrderByQuotationId(companyId: string, quotationId: string, client: PrismaClientOrTx = prisma) {
+export function findOrderByQuotationId(companyId: number, quotationId: number, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({
     where: { quotationId, companyId, deletedAt: null },
     select: { id: true, orderNumber: true, status: true, paidAmount: true },
@@ -208,7 +208,7 @@ export function findOrderByQuotationId(companyId: string, quotationId: string, c
 // Enquiries ready to convert (docs/02_BUSINESS_WORKFLOW.md §6: ORDER_CONFIRMED + not yet converted).
 // Approving a quotation is the only way an enquiry reaches ORDER_CONFIRMED (quotations/service.ts
 // `approve`), so each of these has exactly one approved quotation.
-export function listEligibleEnquiries(companyId: string) {
+export function listEligibleEnquiries(companyId: number) {
   return prisma.enquiry.findMany({
     where: {
       companyId,
@@ -235,11 +235,11 @@ export function createOrder(data: Prisma.OrderUncheckedCreateInput, client: Pris
   return client.order.create({ data, select: orderDetailSelect });
 }
 
-export function updateOrder(id: string, data: Prisma.OrderUncheckedUpdateInput, client: PrismaClientOrTx = prisma) {
+export function updateOrder(id: number, data: Prisma.OrderUncheckedUpdateInput, client: PrismaClientOrTx = prisma) {
   return client.order.update({ where: { id }, data, select: orderDetailSelect });
 }
 
-export async function seedOrderTasksFromTemplates(companyId: string, orderId: string, client: PrismaClientOrTx = prisma) {
+export async function seedOrderTasksFromTemplates(companyId: number, orderId: number, client: PrismaClientOrTx = prisma) {
   const templates = await client.taskTemplate.findMany({
     where: { companyId, deletedAt: null },
     orderBy: [{ taskCategory: 'asc' }, { displayOrder: 'asc' }],
@@ -257,7 +257,7 @@ export async function seedOrderTasksFromTemplates(companyId: string, orderId: st
   });
 }
 
-export function getOrderActivityLog(id: string, client: PrismaClientOrTx = prisma) {
+export function getOrderActivityLog(id: number, client: PrismaClientOrTx = prisma) {
   return client.activityLog.findMany({
     where: { module: 'ORDERS', referenceId: id },
     orderBy: { performedAt: 'asc' },

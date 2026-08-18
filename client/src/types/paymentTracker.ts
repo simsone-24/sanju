@@ -9,7 +9,7 @@ export type PaymentTrackerStatus = 'PENDING' | 'ADVANCE_PAID' | 'PARTIAL_PAYMENT
 export type PaymentTrackerStatusGroup = 'PENDING' | 'PARTIAL' | 'PAID';
 
 export interface PaymentTrackerStatusInfo {
-  id: string;
+  id: number;
   paymentStatus: PaymentTrackerStatus;
   /** True while the status is pinned by hand and no longer follows the payments. */
   statusManual: boolean;
@@ -18,7 +18,7 @@ export interface PaymentTrackerStatusInfo {
 
 export interface PaymentTrackerRecord {
   /** The order's id — the tracker deliberately reuses it rather than exposing an id of its own. */
-  id: string;
+  id: number;
   orderNumber: string;
   /** Null while the order's event date is still unknown — see OrderListItem.eventDate. */
   eventDate: string | null;
@@ -30,13 +30,13 @@ export interface PaymentTrackerRecord {
   paidAmount: string;
   /** Balance = budget − collected, maintained server-side. */
   pendingAmount: string;
-  customer: { id: string; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string };
   enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
   paymentTracker: PaymentTrackerStatusInfo | null;
 }
 
 export interface PaymentTrackerPayment {
-  id: string;
+  id: number;
   paymentDate: string;
   paymentType: PaymentType;
   amount: string;
@@ -44,7 +44,7 @@ export interface PaymentTrackerPayment {
   receiptNumber: string;
   referenceNumber: string | null;
   remarks: string | null;
-  receivedBy: { id: string; fullName: string } | null;
+  receivedBy: { id: number; fullName: string } | null;
 }
 
 export interface PaymentTrackerDetail extends PaymentTrackerRecord {
@@ -52,8 +52,8 @@ export interface PaymentTrackerDetail extends PaymentTrackerRecord {
   updatedAt: string;
   // Widens PaymentTrackerRecord's customer rather than replacing it — the detail endpoint returns
   // a superset (see trackerDetailSelect).
-  customer: { id: string; customerName: string; mobile: string; email: string | null };
-  coordinator: { id: string; fullName: string } | null;
+  customer: { id: number; customerName: string; mobile: string; email: string | null };
+  coordinator: { id: number; fullName: string } | null;
   payments: PaymentTrackerPayment[];
   /** Sum of the ADVANCE receipts, for §Financial Summary. */
   advanceAmount: number;
@@ -75,7 +75,7 @@ export interface ListPaymentTrackerParams {
   page: number;
   limit: number;
   search?: string;
-  customerId?: string;
+  customerId?: number;
   paymentStatus?: PaymentTrackerStatus;
   statusGroup?: PaymentTrackerStatusGroup;
   orderStatus?: OrderStatus;

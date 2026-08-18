@@ -1,5 +1,6 @@
 import { AppointmentStatus, EnquiryStatus, EventTime } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 const mobileSchema = z.string().regex(/^[6-9]\d{9}$/, 'Mobile number must be a valid 10-digit number.');
 
@@ -15,14 +16,14 @@ const newCustomerSchema = z.object({
 
 const existingCustomerSchema = z.object({
   type: z.literal('EXISTING'),
-  customerId: z.string().uuid('A valid customer is required.'),
+  customerId: idSchema('A valid customer is required.'),
 });
 
 const customerInputSchema = z.discriminatedUnion('type', [newCustomerSchema, existingCustomerSchema]);
 
 export const createEnquirySchema = z.object({
   customer: customerInputSchema,
-  eventTypeId: z.string().uuid('A valid event type is required.'),
+  eventTypeId: idSchema('A valid event type is required.'),
   eventName: z.string().min(1).optional(),
   eventDate: z.coerce.date({ required_error: 'Event date is required.' }),
   eventTime: z.nativeEnum(EventTime).optional(),
@@ -40,7 +41,7 @@ export const createEnquirySchema = z.object({
   meetingLocation: z.string().min(1).optional(),
   appointmentNotes: z.string().min(1).optional(),
   appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
-  assignedUserId: z.string().uuid().optional(),
+  assignedUserId: idSchema().optional(),
   // When the customer should next be contacted — the optional Follow-up step of the workflow.
   followUpDate: z.coerce.date().optional(),
   status: z.nativeEnum(EnquiryStatus).optional(),
@@ -48,7 +49,7 @@ export const createEnquirySchema = z.object({
 
 export const updateEnquirySchema = z
   .object({
-    eventTypeId: z.string().uuid().optional(),
+    eventTypeId: idSchema().optional(),
     eventName: z.string().min(1).optional(),
     eventDate: z.coerce.date().optional(),
     eventTime: z.nativeEnum(EventTime).optional(),
@@ -63,7 +64,7 @@ export const updateEnquirySchema = z
     meetingLocation: z.string().min(1).optional(),
     appointmentNotes: z.string().min(1).optional(),
     appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
-    assignedUserId: z.string().uuid().optional(),
+    assignedUserId: idSchema().optional(),
     // Nullable, unlike on create: clearing the date is how a user says the follow-up is no longer
     // owed, and an omitted field means "leave as it is".
     followUpDate: z.coerce.date().nullable().optional(),
@@ -104,9 +105,9 @@ export const listEnquiriesQuerySchema = z.object({
     .transform((value) => value.split(',').filter(Boolean))
     .pipe(z.array(enquiryStatusGroupSchema))
     .optional(),
-  eventTypeId: z.string().uuid().optional(),
-  assignedUserId: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
+  eventTypeId: idSchema().optional(),
+  assignedUserId: idSchema().optional(),
+  customerId: idSchema().optional(),
   eventDateFrom: z.coerce.date().optional(),
   eventDateTo: z.coerce.date().optional(),
   appointmentDateFrom: z.coerce.date().optional(),

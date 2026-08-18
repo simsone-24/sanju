@@ -52,9 +52,9 @@ export async function listCustomers(params: ListCustomersParams) {
   return { records, totalRecords };
 }
 
-export async function getOrderStatsForCustomers(customerIds: string[], asOf: Date) {
+export async function getOrderStatsForCustomers(customerIds: number[], asOf: Date) {
   if (customerIds.length === 0) {
-    return new Map<string, { totalEvents: number; lastEvent: Date | null; outstandingAmount: Prisma.Decimal }>();
+    return new Map<number, { totalEvents: number; lastEvent: Date | null; outstandingAmount: Prisma.Decimal }>();
   }
 
   const [totalEventsStats, lastEventStats, outstandingStats] = await Promise.all([
@@ -84,7 +84,7 @@ export async function getOrderStatsForCustomers(customerIds: string[], asOf: Dat
   const lastEventMap = new Map(lastEventStats.map((stat) => [stat.customerId, stat._max.eventDate]));
   const outstandingMap = new Map(outstandingStats.map((stat) => [stat.customerId, stat._sum.pendingAmount]));
 
-  const result = new Map<string, { totalEvents: number; lastEvent: Date | null; outstandingAmount: Prisma.Decimal }>();
+  const result = new Map<number, { totalEvents: number; lastEvent: Date | null; outstandingAmount: Prisma.Decimal }>();
   for (const id of customerIds) {
     result.set(id, {
       totalEvents: totalEventsMap.get(id) ?? 0,
@@ -95,14 +95,14 @@ export async function getOrderStatsForCustomers(customerIds: string[], asOf: Dat
   return result;
 }
 
-export function findCustomerById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findCustomerById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.customer.findFirst({
     where: { id, companyId, deletedAt: null },
     select: customerDetailSelect,
   });
 }
 
-export function findCustomerByMobile(companyId: string, mobile: string, client: PrismaClientOrTx = prisma) {
+export function findCustomerByMobile(companyId: number, mobile: string, client: PrismaClientOrTx = prisma) {
   return client.customer.findFirst({ where: { companyId, mobile, deletedAt: null } });
 }
 
@@ -111,14 +111,14 @@ export function createCustomer(data: Prisma.CustomerUncheckedCreateInput, client
 }
 
 export function updateCustomer(
-  id: string,
+  id: number,
   data: Prisma.CustomerUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.customer.update({ where: { id }, data, select: customerDetailSelect });
 }
 
-export function getCustomerOrders(customerId: string) {
+export function getCustomerOrders(customerId: number) {
   return prisma.order.findMany({
     where: { customerId, deletedAt: null },
     select: {
@@ -136,7 +136,7 @@ export function getCustomerOrders(customerId: string) {
   });
 }
 
-export function getCustomerPayments(customerId: string) {
+export function getCustomerPayments(customerId: number) {
   return prisma.payment.findMany({
     where: { order: { customerId, deletedAt: null }, deletedAt: null },
     select: {

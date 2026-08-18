@@ -27,19 +27,19 @@ export async function getStats(params: PaymentTrackerStatsParams): Promise<Payme
   return response.data.data;
 }
 
-export async function getByOrderId(orderId: string): Promise<PaymentTrackerDetail> {
+export async function getByOrderId(orderId: number): Promise<PaymentTrackerDetail> {
   const response = await apiClient.get<ApiSuccessResponse<PaymentTrackerDetail>>(`/payment-tracker/${orderId}`);
   return response.data.data;
 }
 
-export async function getHistory(orderId: string): Promise<PaymentTrackerPayment[]> {
+export async function getHistory(orderId: number): Promise<PaymentTrackerPayment[]> {
   const response = await apiClient.get<ApiSuccessResponse<PaymentTrackerPayment[]>>(
     `/payment-tracker/${orderId}/history`,
   );
   return response.data.data;
 }
 
-export async function update(orderId: string, input: UpdatePaymentTrackerInput): Promise<PaymentTrackerDetail> {
+export async function update(orderId: number, input: UpdatePaymentTrackerInput): Promise<PaymentTrackerDetail> {
   const response = await apiClient.put<ApiSuccessResponse<PaymentTrackerDetail>>(
     `/payment-tracker/${orderId}`,
     input,

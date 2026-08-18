@@ -38,7 +38,7 @@ export interface InlinePaymentInput {
  */
 export async function assertWithinBalance(
   tx: PrismaClientOrTx,
-  stockOutId: string,
+  stockOutId: number,
   rentNo: string,
   amount: number,
   excludeAmount = 0,
@@ -59,11 +59,11 @@ export async function assertWithinBalance(
 }
 
 interface WritePaymentParams {
-  companyId: string;
-  stockOutId: string;
-  rentalPersonId: string;
+  companyId: number;
+  stockOutId: number;
+  rentalPersonId: number;
   rentNo: string;
-  actorId: string;
+  actorId: number;
   /** Allocated by the caller outside the transaction — see generateDocumentNumber. */
   paymentNo: string;
   input: InlinePaymentInput;
@@ -74,7 +74,7 @@ interface WritePaymentParams {
  * caller decides when to do that, so a transaction writing several things recalculates once at the
  * end rather than after each step.
  */
-export async function writePayment(tx: PrismaClientOrTx, params: WritePaymentParams): Promise<string> {
+export async function writePayment(tx: PrismaClientOrTx, params: WritePaymentParams): Promise<number> {
   const amount = roundCurrency(params.input.amount);
   await assertWithinBalance(tx, params.stockOutId, params.rentNo, amount);
 

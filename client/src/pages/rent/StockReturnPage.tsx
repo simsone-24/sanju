@@ -28,6 +28,7 @@ import { usePermission } from '../../hooks/usePermission';
 import * as rentService from '../../services/rentService';
 import type { StockOutDetail, StockOutSummary, StockReturnStatus } from '../../types/rent';
 import { formatDate } from '../../utils/format';
+import { toOptionalId } from '../../utils/ids';
 import { StockReturnDialog } from './StockReturnDialog';
 
 /**
@@ -48,7 +49,7 @@ export default function StockReturnPage() {
   const [returnStatus, setReturnStatus] = useState<StockReturnStatus | ''>('');
   const [rentalPersonId, setRentalPersonId] = useState('');
   const [returningStockOut, setReturningStockOut] = useState<StockOutDetail | null>(null);
-  const [loadingReturnFor, setLoadingReturnFor] = useState<string | null>(null);
+  const [loadingReturnFor, setLoadingReturnFor] = useState<number | null>(null);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['rent-return-summary'],
@@ -70,7 +71,7 @@ export default function StockReturnPage() {
         limit,
         search: search || undefined,
         returnStatus: returnStatus || undefined,
-        rentalPersonId: rentalPersonId || undefined,
+        rentalPersonId: toOptionalId(rentalPersonId),
       }),
     placeholderData: keepPreviousData,
     enabled: canView,

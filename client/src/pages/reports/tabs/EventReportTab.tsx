@@ -16,6 +16,7 @@ import * as reportService from '../../../services/reportService';
 import type { OrderStatus } from '../../../types/order';
 import type { EventReportRow } from '../../../types/report';
 import { formatCurrency, formatDate } from '../../../utils/format';
+import { toOptionalId } from '../../../utils/ids';
 import { BreakdownBarList } from '../BreakdownBarList';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { ReportPanel } from '../ReportPanel';
@@ -81,7 +82,7 @@ export default function EventReportTab() {
         limit,
         dateFrom: dateFrom ? dateFrom.format('YYYY-MM-DD') : undefined,
         dateTo: dateTo ? dateTo.format('YYYY-MM-DD') : undefined,
-        eventTypeId: eventTypeId || undefined,
+        eventTypeId: toOptionalId(eventTypeId),
         status: status || undefined,
       }),
     placeholderData: keepPreviousData,

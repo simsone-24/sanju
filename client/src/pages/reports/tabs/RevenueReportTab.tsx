@@ -18,6 +18,7 @@ import * as eventTypeService from '../../../services/eventTypeService';
 import * as reportService from '../../../services/reportService';
 import type { RevenuePaymentRow } from '../../../types/report';
 import { formatCurrency, formatDate } from '../../../utils/format';
+import { toOptionalId } from '../../../utils/ids';
 import { BreakdownBarList } from '../BreakdownBarList';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { ReportPanel } from '../ReportPanel';
@@ -56,7 +57,7 @@ export default function RevenueReportTab() {
         limit,
         dateFrom: dateFrom ? dateFrom.format('YYYY-MM-DD') : undefined,
         dateTo: dateTo ? dateTo.format('YYYY-MM-DD') : undefined,
-        eventTypeId: eventTypeId || undefined,
+        eventTypeId: toOptionalId(eventTypeId),
       }),
     placeholderData: keepPreviousData,
   });

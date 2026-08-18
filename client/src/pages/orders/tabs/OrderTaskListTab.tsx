@@ -37,6 +37,7 @@ import type { ApiErrorResponse } from '../../../types/api';
 import type { OrderDetail } from '../../../types/order';
 import type { OrderTaskDetail, TaskCategory, TaskStatus, UpdateTaskInput } from '../../../types/task';
 import { formatDate } from '../../../utils/format';
+import { fromId, toOptionalId } from '../../../utils/ids';
 import { createTaskSchema, updateTaskSchema, type CreateTaskFormValues, type UpdateTaskFormValues } from '../../../validation/taskSchemas';
 import { TASK_STATUS_TRANSITIONS } from '../taskStatusTransitions';
 
@@ -120,7 +121,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
       taskService.create(order.id, {
         taskName: values.taskName,
         taskCategory,
-        assignedToId: values.assignedToId || undefined,
+        assignedToId: toOptionalId(values.assignedToId),
         dueDate: values.dueDate || undefined,
       }),
     onSuccess: () => {
@@ -144,7 +145,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; data: UpdateTaskInput }) => taskService.update(input.id, input.data),
+    mutationFn: (input: { id: number; data: UpdateTaskInput }) => taskService.update(input.id, input.data),
     onSuccess: () => invalidateTasks(),
   });
 
@@ -181,7 +182,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
     if (editingTask) {
       editForm.reset({
         status: editingTask.status,
-        assignedToId: editingTask.assignedTo?.id ?? '',
+        assignedToId: fromId(editingTask.assignedTo?.id),
         dueDate: editingTask.dueDate ?? '',
         remarks: editingTask.remarks ?? '',
       });
@@ -192,7 +193,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
     if (!editingTask) return;
     setFormError(null);
     const payload: UpdateTaskInput = {
-      assignedToId: values.assignedToId || undefined,
+      assignedToId: toOptionalId(values.assignedToId),
       dueDate: values.dueDate || undefined,
       remarks: values.remarks || undefined,
     };
@@ -366,7 +367,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
         <TextField select label="Assigned To" fullWidth margin="normal" {...createForm.register('assignedToId')}>
           <MenuItem value="">Unassigned</MenuItem>
           {users?.map((user) => (
-            <MenuItem key={user.id} value={user.id}>
+            <MenuItem key={user.id} value={fromId(user.id)}>
               {user.fullName}
             </MenuItem>
           ))}
@@ -416,7 +417,7 @@ export default function OrderTaskListTab({ order, taskCategory, title }: OrderTa
             <TextField select label="Assigned To" fullWidth margin="normal" {...editForm.register('assignedToId')}>
               <MenuItem value="">Unassigned</MenuItem>
               {users?.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
+                <MenuItem key={user.id} value={fromId(user.id)}>
                   {user.fullName}
                 </MenuItem>
               ))}

@@ -41,7 +41,7 @@ export interface InvoiceResult {
   invoiceDate: Date;
   company: InvoiceCompany;
   order: {
-    id: string;
+    id: number;
     orderNumber: string;
     /** Null until an event date is set on an order confirmed before one was known. */
     eventDate: Date | null;

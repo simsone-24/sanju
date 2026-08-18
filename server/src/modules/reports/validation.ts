@@ -1,12 +1,13 @@
 import { OrderStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 export const revenueReportQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
-  eventTypeId: z.string().uuid().optional(),
+  eventTypeId: idSchema().optional(),
 });
 
 export const outstandingReportQuerySchema = z.object({
@@ -14,8 +15,8 @@ export const outstandingReportQuerySchema = z.object({
   limit: z.coerce.number().int().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
-  eventTypeId: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
+  eventTypeId: idSchema().optional(),
+  customerId: idSchema().optional(),
 });
 
 export const customerReportQuerySchema = z.object({
@@ -29,7 +30,7 @@ export const eventReportQuerySchema = z.object({
   limit: z.coerce.number().int().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
-  eventTypeId: z.string().uuid().optional(),
+  eventTypeId: idSchema().optional(),
   status: z.nativeEnum(OrderStatus).optional(),
 });
 

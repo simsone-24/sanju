@@ -26,6 +26,7 @@ import * as rentService from '../../services/rentService';
 import type { RentPaymentStatus, StockOutSummary, StockReturnStatus } from '../../types/rent';
 import { DATE_RANGE_LABELS, dateRangeParams, TRANSACTION_DATE_PRESETS } from '../../utils/dateRange';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { toOptionalId } from '../../utils/ids';
 
 // The row accent restates the return status for scanning: still fully out reads red, part-returned
 // amber, settled has no accent at all — a finished transaction needs no attention.
@@ -106,7 +107,7 @@ export default function StockOutListPage() {
         search: search || undefined,
         returnStatus: returnStatus || undefined,
         paymentStatus: paymentStatus || undefined,
-        rentalPersonId: rentalPersonId || undefined,
+        rentalPersonId: toOptionalId(rentalPersonId),
         dateFrom: effectiveFrom || undefined,
         dateTo: effectiveTo || undefined,
       }),
@@ -133,7 +134,7 @@ export default function StockOutListPage() {
   if (rentalPersonId) {
     activeFilters.push({
       key: 'person',
-      label: `Person: ${persons?.records.find((p) => p.id === rentalPersonId)?.name ?? 'Selected'}`,
+      label: `Person: ${persons?.records.find((p) => String(p.id) === rentalPersonId)?.name ?? 'Selected'}`,
       onClear: () => setRentalPersonId(''),
     });
   }

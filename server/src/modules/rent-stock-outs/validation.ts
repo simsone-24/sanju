@@ -1,5 +1,6 @@
 import { RentPaymentMode, RentPaymentStatus, StockOutStatus, StockReturnStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 /**
  * Money taken at the moment the stock goes out — the advance a rental person pays up front.
@@ -16,7 +17,7 @@ const initialPaymentSchema = z.object({
 });
 
 const stockOutItemSchema = z.object({
-  rentalItemId: z.string().uuid().optional(),
+  rentalItemId: idSchema().optional(),
   itemName: z.string().trim().min(1, 'Item name is required.'),
   quantity: z.coerce.number().positive('Quantity must be greater than zero.'),
   rate: z.coerce.number().min(0, 'Rate cannot be negative.'),
@@ -24,7 +25,7 @@ const stockOutItemSchema = z.object({
 });
 
 export const createStockOutSchema = z.object({
-  rentalPersonId: z.string().uuid('Select a rental person.'),
+  rentalPersonId: idSchema('Select a rental person.'),
   stockOutDate: z.coerce.date().optional(),
   expectedReturnDate: z.coerce.date().optional(),
   discountPercent: z.coerce
@@ -59,7 +60,7 @@ export const listStockOutsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
-  rentalPersonId: z.string().uuid().optional(),
+  rentalPersonId: idSchema().optional(),
   returnStatus: z.nativeEnum(StockReturnStatus).optional(),
   paymentStatus: z.nativeEnum(RentPaymentStatus).optional(),
   status: z.nativeEnum(StockOutStatus).optional(),

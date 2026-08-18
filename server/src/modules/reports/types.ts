@@ -1,37 +1,37 @@
 import { OrderStatus } from '@prisma/client';
 
 export interface RevenueReportParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   dateFrom?: Date;
   dateTo?: Date;
-  eventTypeId?: string;
+  eventTypeId?: number;
 }
 
 export interface OutstandingReportParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   dateFrom?: Date;
   dateTo?: Date;
-  eventTypeId?: string;
-  customerId?: string;
+  eventTypeId?: number;
+  customerId?: number;
 }
 
 export interface CustomerReportParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   city?: string;
 }
 
 export interface EventReportParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   dateFrom?: Date;
   dateTo?: Date;
-  eventTypeId?: string;
+  eventTypeId?: number;
   status?: OrderStatus;
 }

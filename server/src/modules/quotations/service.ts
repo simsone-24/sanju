@@ -132,20 +132,20 @@ interface QuotationDetailExtras {
   /** Every revision raised against the same enquiry; empty for standalone quotations. */
   revisions?: QuotationRevisionSummary[];
   /** The order this quotation was converted into, if any. */
-  convertedOrder?: { id: string; orderNumber: string; status: OrderStatus } | null;
+  convertedOrder?: { id: number; orderNumber: string; status: OrderStatus } | null;
   /** The company's standing Terms & Conditions (Settings), shown alongside the quotation's notes. */
   termsAndConditions?: string | null;
 }
 
 interface QuotationRevisionSummary {
-  id: string;
+  id: number;
   quotationNumber: string;
   version: number;
   quotationDate: Date;
   totalAmount: Prisma.Decimal;
   status: QuotationStatus;
   createdAt: Date;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
 }
 
 function mapDetail(record: QuotationDetailRecord, extras: QuotationDetailExtras = {}) {
@@ -166,7 +166,7 @@ function mapDetail(record: QuotationDetailRecord, extras: QuotationDetailExtras 
 
 // Renders (or re-renders) the PDF and persists its path. Isolated so a PDF failure never rolls back
 // a successfully-saved quotation — the download route can regenerate on demand.
-async function regeneratePdf(companyId: string, record: QuotationDetailRecord): Promise<string | null> {
+async function regeneratePdf(companyId: number, record: QuotationDetailRecord): Promise<string | null> {
   const company = await settingsRepository.findCompanyById(companyId);
   if (!company) return null;
 
@@ -289,14 +289,14 @@ export async function listGrouped(params: ListQuotationsParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export async function getStats(companyId: string) {
+export async function getStats(companyId: number) {
   return quotationsRepository.getQuotationStats(companyId);
 }
 
 // The quotation view page is a workspace, not just the document: alongside the quotation it needs
 // its sibling revisions, whether it has already become an order, and the standing terms it prints.
 // Gathered here so the page is one request rather than four.
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const quotation = await quotationsRepository.findQuotationById(companyId, id);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
 
@@ -320,7 +320,7 @@ export async function getById(companyId: string, id: string) {
 // Audit trail for one quotation (created, edited, sent, approved, PDF downloaded, ...), rendered
 // on the view page's activity timeline. Existence-checked first so a bad id 404s instead of
 // returning an empty list that reads as "no activity".
-export async function getTimeline(companyId: string, id: string) {
+export async function getTimeline(companyId: number, id: number) {
   const quotation = await quotationsRepository.findQuotationById(companyId, id);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
   return quotationsRepository.getQuotationActivityLog(id);
@@ -328,7 +328,7 @@ export async function getTimeline(companyId: string, id: string) {
 
 // Company letterhead + banking block used to render the quotation live preview / PDF. Exposed to
 // any user who can view quotations (not just Settings admins) since it's the quotation's own header.
-export async function getBranding(companyId: string) {
+export async function getBranding(companyId: number) {
   const company = await settingsRepository.findCompanyById(companyId);
   if (!company) throw new AppError(404, 'Company not found.');
   return company;
@@ -336,7 +336,7 @@ export async function getBranding(companyId: string) {
 
 // Validates the chosen source and returns the resolved link columns to persist. Never invents a
 // source combination — the required id per source is documented in "md files/Quotation/quotation.md".
-async function resolveSource(companyId: string, input: CreateQuotationInput) {
+async function resolveSource(companyId: number, input: CreateQuotationInput) {
   switch (input.source) {
     case QuotationSource.ENQUIRY: {
       const enquiry = await enquiriesRepository.findEnquiryById(companyId, input.enquiryId!);
@@ -385,9 +385,9 @@ async function resolveSource(companyId: string, input: CreateQuotationInput) {
  * Order / Manual quotations have no enquiry to confirm, so for them APPROVED is just a label.
  */
 async function applyFormStatus(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   status: QuotationStatus,
   source: QuotationSource,
 ) {
@@ -409,7 +409,7 @@ async function applyFormStatus(
   return mapDetail(updated);
 }
 
-export async function create(companyId: string, actorId: string, input: CreateQuotationInput) {
+export async function create(companyId: number, actorId: number, input: CreateQuotationInput) {
   const resolved = await resolveSource(companyId, input);
 
   const itemsWithAmount = computeItemsWithAmount(input.items);
@@ -508,7 +508,7 @@ export async function create(companyId: string, actorId: string, input: CreateQu
   return mapDetail(refreshed ?? created);
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateQuotationInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateQuotationInput) {
   const existing = await quotationsRepository.findQuotationById(companyId, id);
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
@@ -648,9 +648,9 @@ export async function update(companyId: string, actorId: string, id: string, inp
 // automatically when a new version supersedes this one (see create()). No current-status check:
 // callers may mark any quotation SENT or REJECTED regardless of its existing status.
 export async function changeStatus(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   targetStatus: 'SENT' | 'REJECTED',
   remarks?: string,
 ) {
@@ -684,7 +684,7 @@ export async function changeStatus(
  * row. Other quotations are left exactly as they are, available as history (§5), and any number of
  * them may be confirmed (§2) — the enquiry's committed figure is their combined total.
  */
-export async function approve(companyId: string, actorId: string, id: string) {
+export async function approve(companyId: number, actorId: number, id: number) {
   const existing = await quotationsRepository.findQuotationById(companyId, id);
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
@@ -770,9 +770,9 @@ const MAX_QUOTATION_IMAGES = 12;
 // Attaches sample decor images to a quotation and regenerates the PDF so they appear on its gallery
 // page. `files` carry the already-stored relative path + original name.
 export async function addImages(
-  companyId: string,
-  actorId: string,
-  quotationId: string,
+  companyId: number,
+  actorId: number,
+  quotationId: number,
   files: { fileName: string; filePath: string }[],
 ) {
   const quotation = await quotationsRepository.findQuotationById(companyId, quotationId);
@@ -807,7 +807,7 @@ export async function addImages(
   return mapDetail(refreshed ?? quotation);
 }
 
-export async function removeImage(companyId: string, actorId: string, quotationId: string, imageId: string) {
+export async function removeImage(companyId: number, actorId: number, quotationId: number, imageId: number) {
   const quotation = await quotationsRepository.findQuotationById(companyId, quotationId);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
 
@@ -833,7 +833,7 @@ export async function removeImage(companyId: string, actorId: string, quotationI
 
 // Returns an absolute filesystem path to the PDF, generating it on demand if it was never rendered
 // or the file is missing (e.g. after a storage reset). Used by the authenticated download route.
-export async function getPdfForDownload(companyId: string, id: string) {
+export async function getPdfForDownload(companyId: number, id: number) {
   const quotation = await quotationsRepository.findQuotationById(companyId, id);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
 

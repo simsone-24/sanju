@@ -76,7 +76,7 @@ const MUTED = '#555555';
 // download — unlike a quotation, the money on an invoice (paid/balance, receipts) can change after
 // it is first opened, so nothing here is cached to disk between requests.
 export async function generateInvoicePdf(
-  orderId: string,
+  orderId: number,
   data: InvoicePdfData,
   company: InvoiceCompanyPdfData,
 ): Promise<string> {

@@ -16,10 +16,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as rentService from '../../services/rentService';
 import { formatDate, getPublicAssetUrl } from '../../utils/format';
 
@@ -44,14 +45,14 @@ const RETURN_STATUS_LABEL: Record<string, string> = {
  * carrying its own stylesheet, so both documents obey one set of page rules.
  */
 export default function StockOutPrintPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const { user } = useAuth();
   const canPrint = usePermission('RENT', 'canPrint');
 
   const { data: stockOut, isLoading } = useQuery({
     queryKey: ['rent-stock-out', id],
-    queryFn: () => rentService.getStockOut(id!),
+    queryFn: () => rentService.getStockOut(id),
     enabled: canPrint && Boolean(id),
   });
 

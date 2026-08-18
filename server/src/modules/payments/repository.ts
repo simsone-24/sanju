@@ -21,7 +21,7 @@ const paymentDetailSelect = {
   },
 } satisfies Prisma.PaymentSelect;
 
-export function listPaymentsForOrder(companyId: string, orderId: string) {
+export function listPaymentsForOrder(companyId: number, orderId: number) {
   return prisma.payment.findMany({
     where: { orderId, deletedAt: null, order: { companyId } },
     select: paymentSelect,
@@ -29,7 +29,7 @@ export function listPaymentsForOrder(companyId: string, orderId: string) {
   });
 }
 
-export function findPaymentById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findPaymentById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.payment.findFirst({
     where: { id, deletedAt: null, order: { companyId } },
     select: paymentDetailSelect,
@@ -42,7 +42,7 @@ export function createPayment(data: Prisma.PaymentUncheckedCreateInput, client: 
 
 /** Whether an order already has its opening advance — the guard that keeps the enquiry's advance
  *  from being carried across a second time (orders/service.ts syncOrderFromEnquiry). */
-export function countAdvancePayments(orderId: string, client: PrismaClientOrTx = prisma) {
+export function countAdvancePayments(orderId: number, client: PrismaClientOrTx = prisma) {
   return client.payment.count({
     where: { orderId, deletedAt: null, paymentType: PaymentType.ADVANCE },
   });

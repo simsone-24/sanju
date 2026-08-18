@@ -33,12 +33,13 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { CardSection, DetailRow } from '../../components/DetailRow';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as customerService from '../../services/customerService';
 import * as enquiryService from '../../services/enquiryService';
 import * as quotationService from '../../services/quotationService';
@@ -65,7 +66,7 @@ function DetailSkeleton() {
 const CARD_SX = { borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0 } as const;
 
 export default function EnquiryDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const canEdit = usePermission('ENQUIRIES', 'canEdit');
@@ -80,13 +81,13 @@ export default function EnquiryDetailPage() {
 
   const { data: enquiry, isLoading } = useQuery({
     queryKey: ['enquiry', id],
-    queryFn: () => enquiryService.getById(id!),
+    queryFn: () => enquiryService.getById(id),
     enabled: Boolean(id),
   });
 
   const { data: quotations } = useQuery({
     queryKey: ['quotations', { enquiryId: id }],
-    queryFn: () => quotationService.list({ page: 1, limit: 50, enquiryId: id! }),
+    queryFn: () => quotationService.list({ page: 1, limit: 50, enquiryId: id }),
     enabled: Boolean(id),
   });
 
@@ -466,7 +467,8 @@ export default function EnquiryDetailPage() {
         onClose={() => setStatusDialogOpen(false)}
       />
 
-      {/* flow.md §2.3: saving the quotation returns the user to the Enquiry List. */}
+      {/* flow.md §2.3: raised in place — saving keeps the user on the enquiry, whose Quotation table
+          is refreshed by the dialog's own invalidation. */}
       <EnquiryQuotationDialog
         open={quotationDialogOpen}
         enquiry={{
@@ -479,10 +481,7 @@ export default function EnquiryDetailPage() {
           address: enquiry.prospect?.address ?? null,
         }}
         onClose={() => setQuotationDialogOpen(false)}
-        onSaved={() => {
-          setQuotationDialogOpen(false);
-          navigate('/enquiries', { state: { highlightId: enquiry.id } });
-        }}
+        onSaved={() => setQuotationDialogOpen(false)}
       />
     </Box>
   );

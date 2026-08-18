@@ -15,7 +15,7 @@ const calendarSelect = {
 // soft-deleted" — deletedAt: null, same base filter used by every other module — since §9's
 // own color legend includes Grey for Cancelled, implying cancelled orders still appear
 // (greyed out) rather than being hidden outright.
-export function findOrdersInRange(companyId: string, startDate: Date, endDate: Date) {
+export function findOrdersInRange(companyId: number, startDate: Date, endDate: Date) {
   return prisma.order.findMany({
     where: {
       companyId,

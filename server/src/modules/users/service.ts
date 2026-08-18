@@ -9,7 +9,7 @@ import { CreateUserInput, ListUsersParams, UpdateUserInput } from './types';
 const SALT_ROUNDS = 10;
 const ACTIVITY_MODULE = 'USERS';
 
-async function assertUsernameIsFree(username: string, exceptId?: string): Promise<void> {
+async function assertUsernameIsFree(username: string, exceptId?: number): Promise<void> {
   const owner = await usersRepository.findUserByUsername(username);
   if (owner && owner.id !== exceptId) {
     throw new AppError(409, 'A user with this username already exists.', [
@@ -18,7 +18,7 @@ async function assertUsernameIsFree(username: string, exceptId?: string): Promis
   }
 }
 
-async function assertEmailIsFree(email: string, exceptId?: string): Promise<void> {
+async function assertEmailIsFree(email: string, exceptId?: number): Promise<void> {
   const owner = await usersRepository.findUserByEmail(email);
   if (owner && owner.id !== exceptId) {
     throw new AppError(409, 'A user with this email already exists.', [
@@ -33,7 +33,7 @@ async function assertEmailIsFree(email: string, exceptId?: string): Promise<void
  * group is the same act. A user already sitting in a group that was later deactivated keeps it
  * until an administrator moves them.
  */
-async function resolveUserGroup(companyId: string, userGroupId: string) {
+async function resolveUserGroup(companyId: number, userGroupId: number) {
   const userGroup = await usersRepository.findUserGroupForCompany(companyId, userGroupId);
   if (!userGroup) {
     throw new AppError(400, 'Selected user group does not exist.', [
@@ -53,17 +53,17 @@ export async function list(params: ListUsersParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export function listOptions(companyId: string) {
+export function listOptions(companyId: number) {
   return usersRepository.listUserOptions(companyId);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const user = await usersRepository.findUserById(companyId, id);
   if (!user) throw new AppError(404, 'User not found.');
   return user;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateUserInput) {
+export async function create(companyId: number, actorId: number, input: CreateUserInput) {
   await assertUsernameIsFree(input.username);
   if (input.email) await assertEmailIsFree(input.email);
   const userGroup = await resolveUserGroup(companyId, input.userGroupId);
@@ -76,7 +76,6 @@ export async function create(companyId: string, actorId: string, input: CreateUs
   const user = await usersRepository.createUser({
     companyId,
     userGroupId: userGroup.id,
-    employeeCode: input.employeeCode || null,
     fullName: input.fullName,
     username: input.username,
     email: input.email || null,
@@ -101,7 +100,7 @@ export async function create(companyId: string, actorId: string, input: CreateUs
   return user;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateUserInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateUserInput) {
   const existing = await usersRepository.findUserById(companyId, id);
   if (!existing) throw new AppError(404, 'User not found.');
 
@@ -140,7 +139,6 @@ export async function update(companyId: string, actorId: string, id: string, inp
     isActive: input.isActive,
     // Optional fields are only written when the caller sent them, so a partial update cannot clear
     // a value it never mentioned; an empty string is an explicit "remove this".
-    ...(input.employeeCode === undefined ? {} : { employeeCode: input.employeeCode || null }),
     ...(input.email === undefined ? {} : { email: input.email || null }),
     ...(input.city === undefined ? {} : { city: input.city || null }),
     ...(passwordHash ? { passwordHash } : {}),
@@ -158,7 +156,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return user;
 }
 
-export async function updateProfilePhoto(companyId: string, actorId: string, id: string, filePath: string) {
+export async function updateProfilePhoto(companyId: number, actorId: number, id: number, filePath: string) {
   const existing = await usersRepository.findUserById(companyId, id);
   if (!existing) throw new AppError(404, 'User not found.');
 
@@ -180,14 +178,14 @@ export async function updateProfilePhoto(companyId: string, actorId: string, id:
  * Profile photos are staff PII, so they are served through an authenticated route rather than the
  * public /uploads mount — the same treatment order documents and task photos get.
  */
-export async function getProfilePhotoPath(companyId: string, id: string): Promise<string> {
+export async function getProfilePhotoPath(companyId: number, id: number): Promise<string> {
   const user = await usersRepository.findUserById(companyId, id);
   if (!user) throw new AppError(404, 'User not found.');
   if (!user.profilePhoto) throw new AppError(404, 'This user has no profile photo.');
   return user.profilePhoto;
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await usersRepository.findUserById(companyId, id);
   if (!existing) throw new AppError(404, 'User not found.');
 

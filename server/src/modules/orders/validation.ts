@@ -1,9 +1,10 @@
 import { OrderStatus } from '@prisma/client';
 import { z } from 'zod';
+import { idSchema } from '../../utils/parseId';
 
 export const convertToOrderSchema = z.object({
-  enquiryId: z.string().uuid('A valid enquiry is required.'),
-  quotationId: z.string().uuid('A valid quotation is required.'),
+  enquiryId: idSchema('A valid enquiry is required.'),
+  quotationId: idSchema('A valid quotation is required.'),
 });
 
 export const updateOrderSchema = z
@@ -12,7 +13,7 @@ export const updateOrderSchema = z
     venue: z.string().min(1).optional(),
     notes: z.string().min(1).optional(),
     remarks: z.string().min(1).optional(),
-    coordinatorId: z.string().uuid().optional(),
+    coordinatorId: idSchema().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required.' });
 
@@ -32,7 +33,7 @@ export const listOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().optional(),
   search: z.string().trim().min(1).optional(),
   status: z.nativeEnum(OrderStatus).optional(),
-  customerId: z.string().uuid().optional(),
+  customerId: idSchema().optional(),
   eventDateFrom: z.coerce.date().optional(),
   eventDateTo: z.coerce.date().optional(),
 });

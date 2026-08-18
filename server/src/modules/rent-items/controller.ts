@@ -3,6 +3,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import { AuthenticatedUser } from '../auth/types';
 import * as rentItemsService from './service';
 import { CreateRentalItemSchema, UpdateRentalItemSchema, listRentalItemsQuerySchema } from './validation';
@@ -45,7 +46,7 @@ export async function listCategories(req: Request, res: Response, next: NextFunc
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const item = await rentItemsService.getById(actor.companyId, req.params.id);
+    const item = await rentItemsService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, item, 'Rental item retrieved successfully.');
   } catch (error) {
     next(error);
@@ -73,7 +74,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const item = await rentItemsService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const item = await rentItemsService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, item, 'Rental item updated successfully.');
   } catch (error) {
     next(error);
@@ -83,7 +84,7 @@ export async function update(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await rentItemsService.remove(actor.companyId, actor.id, req.params.id);
+    await rentItemsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Rental item deleted successfully.');
   } catch (error) {
     next(error);

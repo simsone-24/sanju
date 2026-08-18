@@ -1,5 +1,5 @@
 export interface EventTypeOption {
-  id: string;
+  id: number;
   eventName: string;
   colorCode: string | null;
   status: 'ACTIVE' | 'INACTIVE';
@@ -7,13 +7,13 @@ export interface EventTypeOption {
 
 // Served by GET /users/options — just enough to fill an "Assigned To"/"Coordinator" picker.
 export interface UserOption {
-  id: string;
+  id: number;
   fullName: string;
   username: string;
 }
 
 export interface CustomerOption {
-  id: string;
+  id: number;
   customerCode: string;
   customerName: string;
   mobile: string;

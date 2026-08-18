@@ -142,7 +142,7 @@ export default function RentalItemListPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (itemId: string) => rentService.deleteItem(itemId),
+    mutationFn: (itemId: number) => rentService.deleteItem(itemId),
     onSuccess: () => {
       invalidate();
       showToast('Rental item deleted.');

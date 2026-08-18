@@ -2,12 +2,12 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
 interface LogActivityInput {
-  companyId?: string | null;
+  companyId?: number | null;
   module: string;
-  referenceId: string;
+  referenceId: number;
   action: string;
   description?: string;
-  performedById?: string | null;
+  performedById?: number | null;
   metadata?: Prisma.InputJsonValue;
 }
 

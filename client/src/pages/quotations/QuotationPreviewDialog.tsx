@@ -23,7 +23,7 @@ import { buildQuotationWhatsAppLink, canShareQuotation } from './quotationAction
 
 interface QuotationPreviewDialogProps {
   /** The quotation to preview; the dialog is open whenever this is non-null. */
-  quotationId: string | null;
+  quotationId: number | null;
   onClose: () => void;
 }
 

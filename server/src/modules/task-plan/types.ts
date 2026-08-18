@@ -32,7 +32,7 @@ export interface UploadedPhoto {
 }
 
 export interface TaskItemView {
-  id: string;
+  id: number;
   taskName: string;
   status: TaskItemStatus;
   remarks: string | null;
@@ -43,7 +43,7 @@ export interface TaskItemView {
 
 /** A group plus its dynamically calculated progress — never stored, always derived. */
 export interface TaskGroupView {
-  id: string;
+  id: number;
   title: string;
   description: string | null;
   status: TaskGroupStatus;

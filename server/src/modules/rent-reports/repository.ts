@@ -23,7 +23,7 @@ export type PersonSummaryRecord = Prisma.RentalPersonGetPayload<{ select: typeof
  * (stock.md §24, §27). An inactive person with no transactions has nothing to report on, so they
  * drop out; an inactive person who still owes money does not.
  */
-export function listPersonsForSummary(companyId: string, search: string | undefined, take: number) {
+export function listPersonsForSummary(companyId: number, search: string | undefined, take: number) {
   return prisma.rentalPerson.findMany({
     where: {
       companyId,

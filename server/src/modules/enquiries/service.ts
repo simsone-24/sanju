@@ -23,7 +23,7 @@ import {
 // single `customer` object (id is null while the enquiry is still an unconfirmed prospect).
 function mapEnquiryListItem<
   T extends {
-    customer: { id: string; customerName: string; mobile: string } | null;
+    customer: { id: number; customerName: string; mobile: string } | null;
     prospectName: string | null;
     prospectMobile: string | null;
   },
@@ -32,14 +32,14 @@ function mapEnquiryListItem<
   return {
     ...rest,
     customer: customer
-      ? { id: customer.id as string | null, customerName: customer.customerName, mobile: customer.mobile }
+      ? { id: customer.id as number | null, customerName: customer.customerName, mobile: customer.mobile }
       : { id: null, customerName: prospectName ?? '', mobile: prospectMobile ?? '' },
   };
 }
 
 function mapEnquiryDetail<
   T extends {
-    customer: { id: string; customerName: string; mobile: string } | null;
+    customer: { id: number; customerName: string; mobile: string } | null;
     prospectName: string | null;
     prospectMobile: string | null;
     prospectWhatsapp: string | null;
@@ -76,7 +76,7 @@ export async function getStats(params: EnquiryStatsParams) {
   return enquiriesRepository.getEnquiryStats(params);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const enquiry = await enquiriesRepository.findEnquiryById(companyId, id);
   if (!enquiry) throw new AppError(404, 'Enquiry not found.');
   return mapEnquiryDetail(enquiry);
@@ -86,7 +86,7 @@ export async function getById(companyId: string, id: string) {
 // immediately; for a NEW customer we DON'T create a Customer row yet (that happens only at
 // ORDER_CONFIRMED) — the details are stored in the prospect_* columns until then.
 type EnquiryCustomerColumns = {
-  customerId: string | null;
+  customerId: number | null;
   prospectName: string | null;
   prospectMobile: string | null;
   prospectWhatsapp: string | null;
@@ -96,7 +96,7 @@ type EnquiryCustomerColumns = {
 };
 
 async function resolveCustomerColumns(
-  companyId: string,
+  companyId: number,
   input: CreateEnquiryInput['customer'],
   client: PrismaClientOrTx,
 ): Promise<EnquiryCustomerColumns> {
@@ -138,17 +138,17 @@ const VALID_INITIAL_STATUSES: EnquiryStatus[] = Object.values(EnquiryStatus);
 // Finds an existing customer by mobile (never duplicating) or creates one from the given details.
 // Shared by create() (direct ORDER_CONFIRMED) and confirmProspectCustomer() (status change).
 async function findOrCreateCustomerId(
-  companyId: string,
+  companyId: number,
   details: { customerName: string; mobile: string; whatsapp?: string; email?: string; address?: string; city?: string },
   client: PrismaClientOrTx,
-): Promise<string> {
+): Promise<number> {
   const matched = await customersRepository.findCustomerByMobile(companyId, details.mobile, client);
   if (matched) return matched.id;
   const created = await customersService.create(companyId, details, client);
   return created.id;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateEnquiryInput) {
+export async function create(companyId: number, actorId: number, input: CreateEnquiryInput) {
   const eventType = await enquiriesRepository.findEventTypeForCompany(companyId, input.eventTypeId);
   if (!eventType) {
     throw new AppError(400, 'Selected event type does not exist.', [
@@ -248,7 +248,7 @@ export async function create(companyId: string, actorId: string, input: CreateEn
   return mapEnquiryDetail(enquiry);
 }
 
-export async function update(actor: AuthenticatedUser, id: string, input: UpdateEnquiryInput) {
+export async function update(actor: AuthenticatedUser, id: number, input: UpdateEnquiryInput) {
   const companyId = actor.companyId;
   const existingEnquiry = await enquiriesRepository.findEnquiryById(companyId, id);
   if (!existingEnquiry) throw new AppError(404, 'Enquiry not found.');
@@ -315,9 +315,9 @@ export async function update(actor: AuthenticatedUser, id: string, input: Update
 }
 
 export async function changeStatus(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   targetStatus: EnquiryStatus,
   remarks?: string,
 ) {
@@ -358,9 +358,9 @@ export async function changeStatus(
 // with the status flip to ORDER_CONFIRMED. If a customer with the same mobile already exists, it
 // links that one instead of creating a duplicate (honouring the "never duplicate customer" rule).
 async function confirmProspectCustomer(
-  companyId: string,
+  companyId: number,
   existingEnquiry: { prospectName: string | null; prospectMobile: string | null; prospectWhatsapp: string | null; prospectEmail: string | null; prospectAddress: string | null; prospectCity: string | null },
-  id: string,
+  id: number,
   targetStatus: EnquiryStatus,
 ) {
   if (!existingEnquiry.prospectName || !existingEnquiry.prospectMobile) {
@@ -387,7 +387,7 @@ async function confirmProspectCustomer(
 
 // "md files/Enquiry/enq.md" §8 — the enquiry's complete history, including the activity of the
 // quotations and order that descend from it (see repository.getEnquiryTimeline).
-export async function getTimeline(companyId: string, id: string) {
+export async function getTimeline(companyId: number, id: number) {
   const existingEnquiry = await enquiriesRepository.findEnquiryById(companyId, id);
   if (!existingEnquiry) throw new AppError(404, 'Enquiry not found.');
 
@@ -403,7 +403,7 @@ export async function getTimeline(companyId: string, id: string) {
  * There is deliberately no "still referenced" guard: a delete here is understood to take the whole
  * chain with it. The cascade is what makes that safe — nothing is left pointing at a hidden parent.
  */
-export async function remove(actor: AuthenticatedUser, id: string): Promise<void> {
+export async function remove(actor: AuthenticatedUser, id: number): Promise<void> {
   const existingEnquiry = await enquiriesRepository.findEnquiryById(actor.companyId, id);
   if (!existingEnquiry) throw new AppError(404, 'Enquiry not found.');
 
@@ -429,9 +429,9 @@ export async function remove(actor: AuthenticatedUser, id: string): Promise<void
 }
 
 export async function addFollowUp(
-  companyId: string,
-  actorId: string,
-  enquiryId: string,
+  companyId: number,
+  actorId: number,
+  enquiryId: number,
   input: CreateFollowUpInput,
 ) {
   const existingEnquiry = await enquiriesRepository.findEnquiryById(companyId, enquiryId);

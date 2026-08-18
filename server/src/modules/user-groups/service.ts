@@ -8,7 +8,7 @@ import { CreateUserGroupInput, ListUserGroupsParams, UpdateUserGroupInput } from
 
 const ACTIVITY_MODULE = 'USER_GROUPS';
 
-async function assertGroupNameIsFree(companyId: string, groupName: string, exceptId?: string): Promise<void> {
+async function assertGroupNameIsFree(companyId: number, groupName: string, exceptId?: number): Promise<void> {
   const owner = await userGroupsRepository.findUserGroupByName(companyId, groupName);
   if (owner && owner.id !== exceptId) {
     throw new AppError(409, 'A user group with this name already exists.', [
@@ -22,17 +22,17 @@ export async function list(params: ListUserGroupsParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export function listOptions(companyId: string) {
+export function listOptions(companyId: number) {
   return userGroupsRepository.listActiveUserGroups(companyId);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const userGroup = await userGroupsRepository.findUserGroupById(companyId, id);
   if (!userGroup) throw new AppError(404, 'User group not found.');
   return userGroup;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateUserGroupInput) {
+export async function create(companyId: number, actorId: number, input: CreateUserGroupInput) {
   await assertGroupNameIsFree(companyId, input.groupName);
 
   const permissions = dedupeGrants(input.permissions ?? []);
@@ -58,7 +58,7 @@ export async function create(companyId: string, actorId: string, input: CreateUs
   return userGroup;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateUserGroupInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateUserGroupInput) {
   const existing = await userGroupsRepository.findUserGroupById(companyId, id);
   if (!existing) throw new AppError(404, 'User group not found.');
 
@@ -101,7 +101,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return userGroup;
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await userGroupsRepository.findUserGroupById(companyId, id);
   if (!existing) throw new AppError(404, 'User group not found.');
 

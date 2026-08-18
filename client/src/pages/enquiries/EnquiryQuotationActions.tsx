@@ -21,7 +21,7 @@ import { buildQuotationWhatsAppLink, canShareQuotation } from '../quotations/quo
 // status may block Edit (§6/§7), and any quotation can be confirmed (§2).
 interface EnquiryQuotationActionsProps {
   row: QuotationListItem;
-  onView: (id: string) => void;
+  onView: (id: number) => void;
 }
 
 function errorMessage(error: unknown, fallback: string): string {

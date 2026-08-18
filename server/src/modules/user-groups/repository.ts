@@ -41,7 +41,7 @@ export async function listUserGroups(params: ListUserGroupsParams) {
 }
 
 /** Active groups only — user.md: "Inactive User Groups cannot be assigned to new users." */
-export function listActiveUserGroups(companyId: string) {
+export function listActiveUserGroups(companyId: number) {
   return prisma.userGroup.findMany({
     where: { companyId, deletedAt: null, status: 'ACTIVE' },
     select: { id: true, groupName: true },
@@ -49,31 +49,31 @@ export function listActiveUserGroups(companyId: string) {
   });
 }
 
-export function findUserGroupById(companyId: string, id: string) {
+export function findUserGroupById(companyId: number, id: number) {
   return prisma.userGroup.findFirst({
     where: { id, companyId, deletedAt: null },
     include: userGroupDetailInclude,
   });
 }
 
-export function findUserGroupByName(companyId: string, groupName: string) {
+export function findUserGroupByName(companyId: number, groupName: string) {
   return prisma.userGroup.findFirst({ where: { companyId, groupName, deletedAt: null } });
 }
 
-export function countUsersInGroup(userGroupId: string) {
+export function countUsersInGroup(userGroupId: number) {
   return prisma.user.count({ where: { userGroupId, deletedAt: null } });
 }
 
 // The group and its permissions are written by a single nested create, so a group never exists
 // without the permissions it was created with.
-export function createUserGroup(companyId: string, data: Prisma.UserGroupCreateWithoutCompanyInput) {
+export function createUserGroup(companyId: number, data: Prisma.UserGroupCreateWithoutCompanyInput) {
   return prisma.userGroup.create({
     data: { ...data, company: { connect: { id: companyId } } },
     include: userGroupDetailInclude,
   });
 }
 
-export function updateUserGroup(id: string, data: Prisma.UserGroupUpdateInput) {
+export function updateUserGroup(id: number, data: Prisma.UserGroupUpdateInput) {
   return prisma.userGroup.update({ where: { id }, data, include: userGroupDetailInclude });
 }
 
@@ -82,7 +82,7 @@ export function updateUserGroup(id: string, data: Prisma.UserGroupUpdateInput) {
  * the stored set exactly what the editor submitted — a permission cleared in the UI cannot survive
  * as a leftover row.
  */
-export async function replacePermissions(userGroupId: string, permissions: PermissionGrant[]): Promise<void> {
+export async function replacePermissions(userGroupId: number, permissions: PermissionGrant[]): Promise<void> {
   await prisma.$transaction([
     prisma.userGroupPermission.deleteMany({ where: { userGroupId } }),
     ...(permissions.length > 0
@@ -99,6 +99,6 @@ export async function replacePermissions(userGroupId: string, permissions: Permi
   ]);
 }
 
-export function softDeleteUserGroup(id: string) {
+export function softDeleteUserGroup(id: number) {
   return prisma.userGroup.update({ where: { id }, data: { deletedAt: new Date() } });
 }

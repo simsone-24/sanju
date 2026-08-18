@@ -165,15 +165,15 @@ export async function getEnquiryStats(params: EnquiryStatsParams) {
   return { totalEnquiries, confirmedEnquiries, pendingEnquiries, appointmentPending };
 }
 
-export function findEnquiryById(companyId: string, id: string) {
+export function findEnquiryById(companyId: number, id: number) {
   return prisma.enquiry.findFirst({ where: { id, companyId, deletedAt: null }, select: enquiryDetailSelect });
 }
 
-export function findEventTypeForCompany(companyId: string, eventTypeId: string, client: PrismaClientOrTx = prisma) {
+export function findEventTypeForCompany(companyId: number, eventTypeId: number, client: PrismaClientOrTx = prisma) {
   return client.eventType.findFirst({ where: { id: eventTypeId, companyId, deletedAt: null } });
 }
 
-export function findUserForCompany(companyId: string, userId: string, client: PrismaClientOrTx = prisma) {
+export function findUserForCompany(companyId: number, userId: number, client: PrismaClientOrTx = prisma) {
   return client.user.findFirst({ where: { id: userId, companyId, deletedAt: null, isActive: true } });
 }
 
@@ -182,14 +182,14 @@ export function createEnquiry(data: Prisma.EnquiryUncheckedCreateInput, client: 
 }
 
 export function updateEnquiry(
-  id: string,
+  id: number,
   data: Prisma.EnquiryUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.enquiry.update({ where: { id }, data, select: enquiryDetailSelect });
 }
 
-export function updateEnquiryStatus(id: string, status: EnquiryStatus, client: PrismaClientOrTx = prisma) {
+export function updateEnquiryStatus(id: number, status: EnquiryStatus, client: PrismaClientOrTx = prisma) {
   return client.enquiry.update({ where: { id }, data: { status }, select: enquiryDetailSelect });
 }
 
@@ -201,7 +201,7 @@ export function updateEnquiryStatus(id: string, status: EnquiryStatus, client: P
  * payments, which is where the timeline's "Payment Tracking" tail comes from). The ids are gathered
  * first so the whole timeline is one indexed query over the pairs rather than a read per record.
  */
-export async function getEnquiryTimeline(companyId: string, enquiryId: string) {
+export async function getEnquiryTimeline(companyId: number, enquiryId: number) {
   const [quotations, order] = await Promise.all([
     prisma.quotation.findMany({
       where: { enquiryId, companyId, deletedAt: null },
@@ -252,7 +252,7 @@ export async function getEnquiryTimeline(companyId: string, enquiryId: string) {
  * enquiry_followups, quotation_items and order_tasks have none, but each is read exclusively
  * through its (now deleted) parent, so they become unreachable rather than orphaned.
  */
-export async function softDeleteEnquiryCascade(companyId: string, enquiryId: string) {
+export async function softDeleteEnquiryCascade(companyId: number, enquiryId: number) {
   return prisma.$transaction(async (tx) => {
     const deletedAt = new Date();
 

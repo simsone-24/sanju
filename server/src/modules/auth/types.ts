@@ -6,9 +6,9 @@ export interface LoginInput {
 }
 
 export interface AuthenticatedUser {
-  id: string;
-  companyId: string;
-  userGroupId: string;
+  id: number;
+  companyId: number;
+  userGroupId: number;
   userGroupName: string;
   fullName: string;
   username: string;
@@ -22,7 +22,7 @@ export interface AuthTokens {
 }
 
 export interface AuthenticatedProfile {
-  id: string;
+  id: number;
   fullName: string;
   username: string;
   email: string | null;
@@ -30,11 +30,11 @@ export interface AuthenticatedProfile {
   city: string | null;
   profilePhoto: string | null;
   userGroup: {
-    id: string;
+    id: number;
     groupName: string;
   };
   company: {
-    id: string;
+    id: number;
     companyName: string;
     /** Relative upload path, or null when no logo has been uploaded. Branding is shown to every
         signed-in user, so it travels on the profile rather than the SETTINGS-gated company API. */

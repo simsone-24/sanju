@@ -4,7 +4,7 @@ import { AppTimeline } from '../../../components/Timeline';
 import * as orderService from '../../../services/orderService';
 
 interface OrderTimelineTabProps {
-  orderId: string;
+  orderId: number;
 }
 
 export default function OrderTimelineTab({ orderId }: OrderTimelineTabProps) {

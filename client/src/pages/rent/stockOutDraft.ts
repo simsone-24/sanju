@@ -1,4 +1,5 @@
 import type { StockOutDetail, StockOutItemInput, RentalItem } from '../../types/rent';
+import { fromId, toOptionalId } from '../../utils/ids';
 
 /**
  * The rental item rows of a stock out being composed.
@@ -99,7 +100,7 @@ export function applyRentalItemToDraft(
     if (!master) return { ...item, rentalItemId: '' };
     return {
       ...item,
-      rentalItemId: master.id,
+      rentalItemId: String(master.id),
       itemName: master.itemName,
       rate: item.rate === '' && master.defaultRentRate !== null ? String(Number(master.defaultRentRate)) : item.rate,
     };
@@ -131,7 +132,7 @@ export function toStockOutItemsInput(items: StockOutDraftItem[]): StockOutItemsR
 
   return {
     items: named.map((item, index) => ({
-      rentalItemId: item.rentalItemId || undefined,
+      rentalItemId: toOptionalId(item.rentalItemId),
       itemName: item.itemName.trim(),
       quantity: Number(item.quantity),
       rate: Number(item.rate),
@@ -145,7 +146,7 @@ export function toStockOutItemsInput(items: StockOutDraftItem[]): StockOutItemsR
 export function stockOutToDraftItems(stockOut: StockOutDetail): StockOutDraftItem[] {
   return [
     ...stockOut.items.map((item) => ({
-      rentalItemId: item.rentalItemId ?? '',
+      rentalItemId: fromId(item.rentalItemId),
       itemName: item.itemName,
       quantity: String(item.quantity),
       rate: String(item.rate),

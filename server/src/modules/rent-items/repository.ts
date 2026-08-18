@@ -47,7 +47,7 @@ export async function listRentalItems(params: ListRentalItemsParams) {
 }
 
 /** Distinct categories in use — feeds the category filter/autocomplete without a second master. */
-export async function listRentalItemCategories(companyId: string): Promise<string[]> {
+export async function listRentalItemCategories(companyId: number): Promise<string[]> {
   const rows = await prisma.rentalItem.findMany({
     where: { companyId, deletedAt: null, category: { not: null } },
     distinct: ['category'],
@@ -57,22 +57,22 @@ export async function listRentalItemCategories(companyId: string): Promise<strin
   return rows.map((row) => row.category).filter((category): category is string => Boolean(category));
 }
 
-export function findRentalItemById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findRentalItemById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.rentalItem.findFirst({ where: { id, companyId, deletedAt: null }, select: rentalItemSelect });
 }
 
-export function findRentalItemsByIds(companyId: string, ids: string[], client: PrismaClientOrTx = prisma) {
+export function findRentalItemsByIds(companyId: number, ids: number[], client: PrismaClientOrTx = prisma) {
   return client.rentalItem.findMany({
     where: { id: { in: ids }, companyId, deletedAt: null },
     select: rentalItemSelect,
   });
 }
 
-export function findRentalItemByName(companyId: string, itemName: string) {
+export function findRentalItemByName(companyId: number, itemName: string) {
   return prisma.rentalItem.findFirst({ where: { companyId, itemName, deletedAt: null }, select: { id: true } });
 }
 
-export function countStockOutLinesForItem(rentalItemId: string) {
+export function countStockOutLinesForItem(rentalItemId: number) {
   return prisma.stockOutItem.count({ where: { rentalItemId } });
 }
 
@@ -80,10 +80,10 @@ export function createRentalItem(data: Prisma.RentalItemUncheckedCreateInput) {
   return prisma.rentalItem.create({ data, select: rentalItemSelect });
 }
 
-export function updateRentalItem(id: string, data: Prisma.RentalItemUpdateInput) {
+export function updateRentalItem(id: number, data: Prisma.RentalItemUpdateInput) {
   return prisma.rentalItem.update({ where: { id }, data, select: rentalItemSelect });
 }
 
-export function softDeleteRentalItem(id: string) {
+export function softDeleteRentalItem(id: number) {
   return prisma.rentalItem.update({ where: { id }, data: { deletedAt: new Date() } });
 }

@@ -22,7 +22,7 @@ export const RENT_PAYMENT_MODES: { value: RentPaymentMode; label: string }[] = [
 ];
 
 export interface UserMini {
-  id: string;
+  id: number;
   fullName: string;
 }
 
@@ -31,7 +31,7 @@ export interface UserMini {
 // ---------------------------------------------------------------------------
 
 export interface RentalPerson {
-  id: string;
+  id: number;
   name: string;
   phone: string;
   email: string | null;
@@ -74,7 +74,7 @@ export interface ListRentalPersonsParams {
 // ---------------------------------------------------------------------------
 
 export interface RentalItem {
-  id: string;
+  id: number;
   itemName: string;
   category: string | null;
   defaultRentRate: string | null;
@@ -108,7 +108,7 @@ export interface ListRentalItemsParams {
 // ---------------------------------------------------------------------------
 
 export interface StockOutPersonMini {
-  id: string;
+  id: number;
   name: string;
   phone: string;
   city: string | null;
@@ -116,8 +116,8 @@ export interface StockOutPersonMini {
 }
 
 export interface StockOutItem {
-  id: string;
-  rentalItemId: string | null;
+  id: number;
+  rentalItemId: number | null;
   itemName: string;
   quantity: number;
   rate: number;
@@ -128,7 +128,7 @@ export interface StockOutItem {
 }
 
 export interface StockOutSummary {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: string;
   expectedReturnDate: string | null;
@@ -156,7 +156,7 @@ export interface StockOutSummary {
 }
 
 export interface StockOutReturnEntry {
-  id: string;
+  id: number;
   returnNo: string;
   returnDate: string;
   notes: string | null;
@@ -164,15 +164,15 @@ export interface StockOutReturnEntry {
   createdBy: UserMini | null;
   createdAt: string;
   items: {
-    id: string;
-    stockOutItemId: string;
+    id: number;
+    stockOutItemId: number;
     itemName: string;
     quantityReturned: number;
   }[];
 }
 
 export interface StockOutPaymentEntry {
-  id: string;
+  id: number;
   paymentNo: string;
   paymentDate: string;
   amount: number;
@@ -189,7 +189,7 @@ export interface StockOutDetail extends StockOutSummary {
 }
 
 export interface StockOutItemInput {
-  rentalItemId?: string;
+  rentalItemId?: number;
   itemName: string;
   quantity: number;
   rate: number;
@@ -206,7 +206,7 @@ export interface InlinePaymentInput {
 }
 
 export interface CreateStockOutInput {
-  rentalPersonId: string;
+  rentalPersonId: number;
   stockOutDate?: string;
   expectedReturnDate?: string;
   discountPercent?: number;
@@ -230,7 +230,7 @@ export interface ListStockOutsParams {
   page?: number;
   limit?: number;
   search?: string;
-  rentalPersonId?: string;
+  rentalPersonId?: number;
   returnStatus?: StockReturnStatus;
   paymentStatus?: RentPaymentStatus;
   status?: StockOutStatus;
@@ -243,7 +243,7 @@ export interface ListStockOutsParams {
 // ---------------------------------------------------------------------------
 
 export interface StockReturn {
-  id: string;
+  id: number;
   returnNo: string;
   returnDate: string;
   notes: string | null;
@@ -251,7 +251,7 @@ export interface StockReturn {
   createdAt: string;
   createdBy: UserMini | null;
   stockOut: {
-    id: string;
+    id: number;
     rentNo: string;
     stockOutDate: string;
     expectedReturnDate: string | null;
@@ -259,11 +259,11 @@ export interface StockReturn {
     returnedQuantity: number;
     balanceQuantity: number;
     returnStatus: StockReturnStatus;
-    rentalPerson: { id: string; name: string; phone: string };
+    rentalPerson: { id: number; name: string; phone: string };
   };
   items: {
-    id: string;
-    stockOutItemId: string;
+    id: number;
+    stockOutItemId: number;
     itemName: string;
     issuedQuantity: number;
     quantityReturned: number;
@@ -273,7 +273,7 @@ export interface StockReturn {
 export interface CreateStockReturnInput {
   returnDate?: string;
   notes?: string;
-  items: { stockOutItemId: string; quantityReturned: number }[];
+  items: { stockOutItemId: number; quantityReturned: number }[];
   /** Money settled at handover; saved in the same transaction as the return. */
   collection?: InlinePaymentInput;
 }
@@ -282,8 +282,8 @@ export interface ListStockReturnsParams {
   page?: number;
   limit?: number;
   search?: string;
-  stockOutId?: string;
-  rentalPersonId?: string;
+  stockOutId?: number;
+  rentalPersonId?: number;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -302,7 +302,7 @@ export interface ReturnSummary {
 // ---------------------------------------------------------------------------
 
 export interface RentPayment {
-  id: string;
+  id: number;
   paymentNo: string;
   paymentDate: string;
   amount: number;
@@ -311,9 +311,9 @@ export interface RentPayment {
   notes: string | null;
   createdAt: string;
   receivedBy: UserMini | null;
-  rentalPerson: { id: string; name: string; phone: string };
+  rentalPerson: { id: number; name: string; phone: string };
   stockOut: {
-    id: string;
+    id: number;
     rentNo: string;
     stockOutDate: string;
     grandTotal: number;
@@ -324,8 +324,8 @@ export interface RentPayment {
 }
 
 export interface CreateRentPaymentInput {
-  stockOutId: string;
-  rentalPersonId: string;
+  stockOutId: number;
+  rentalPersonId: number;
   paymentDate?: string;
   amount: number;
   paymentMode: RentPaymentMode;
@@ -345,8 +345,8 @@ export interface ListRentPaymentsParams {
   page?: number;
   limit?: number;
   search?: string;
-  stockOutId?: string;
-  rentalPersonId?: string;
+  stockOutId?: number;
+  rentalPersonId?: number;
   paymentMode?: RentPaymentMode;
   dateFrom?: string;
   dateTo?: string;
@@ -385,7 +385,7 @@ export interface StockOutReportRow extends StockOutSummary {
 }
 
 export interface ReturnReportRow {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: string;
   expectedReturnDate: string | null;
@@ -398,7 +398,7 @@ export interface ReturnReportRow {
 }
 
 export interface PendingReturnReportRow {
-  stockOutId: string;
+  stockOutId: number;
   rentNo: string;
   personName: string;
   personPhone: string;
@@ -410,7 +410,7 @@ export interface PendingReturnReportRow {
 }
 
 export interface PaymentReportRow {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: string;
   personName: string;
@@ -422,7 +422,7 @@ export interface PaymentReportRow {
 }
 
 export interface PersonSummaryReportRow {
-  id: string;
+  id: number;
   name: string;
   phone: string;
   city: string | null;
@@ -459,8 +459,8 @@ export type PersonSummaryReport = ReportEnvelope<
 export interface RentReportFilters {
   dateFrom?: string;
   dateTo?: string;
-  rentalPersonId?: string;
-  rentalItemId?: string;
+  rentalPersonId?: number;
+  rentalItemId?: number;
   returnStatus?: StockReturnStatus;
   paymentMode?: RentPaymentMode;
   paymentStatus?: RentPaymentStatus;

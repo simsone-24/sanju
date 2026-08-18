@@ -29,7 +29,7 @@ export default function UserGroupsTab() {
   const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<DialogMode | null>(null);
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<number | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<UserGroupListItem | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export default function UserGroupsTab() {
   }
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => userGroupService.remove(id),
+    mutationFn: (id: number) => userGroupService.remove(id),
     onSuccess: () => {
       invalidateGroups();
       setDeletingGroup(null);

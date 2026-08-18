@@ -28,7 +28,7 @@ const TASK_ITEM_STATUS_TRANSITIONS: Record<TaskItemStatus, TaskItemStatus[]> = {
 };
 
 interface RawTaskItem {
-  id: string;
+  id: number;
   taskName: string;
   status: TaskItemStatus;
   remarks: string | null;
@@ -38,7 +38,7 @@ interface RawTaskItem {
 }
 
 interface RawTaskGroup {
-  id: string;
+  id: number;
   title: string;
   description: string | null;
   status: TaskGroupStatus;
@@ -79,19 +79,19 @@ function toGroupView(group: RawTaskGroup): TaskGroupView {
   };
 }
 
-async function requireOrder(companyId: string, orderId: string) {
+async function requireOrder(companyId: number, orderId: number) {
   const order = await ordersRepository.findOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Order not found.');
   return order;
 }
 
-async function requireGroup(companyId: string, id: string) {
+async function requireGroup(companyId: number, id: number) {
   const group = await taskPlanRepository.findGroupById(companyId, id);
   if (!group) throw new AppError(404, 'Task group not found.');
   return group;
 }
 
-async function requireItem(companyId: string, id: string) {
+async function requireItem(companyId: number, id: number) {
   const item = await taskPlanRepository.findItemById(companyId, id);
   if (!item) throw new AppError(404, 'Task not found.');
   return item;
@@ -107,16 +107,16 @@ async function removePhotoFile(relativePath: string | null): Promise<void> {
   }
 }
 
-export async function listGroups(companyId: string, orderId: string): Promise<TaskGroupView[]> {
+export async function listGroups(companyId: number, orderId: number): Promise<TaskGroupView[]> {
   await requireOrder(companyId, orderId);
   const groups = await taskPlanRepository.listGroupsForOrder(companyId, orderId);
   return groups.map(toGroupView);
 }
 
 export async function createGroup(
-  companyId: string,
-  actorId: string,
-  orderId: string,
+  companyId: number,
+  actorId: number,
+  orderId: number,
   input: CreateTaskGroupInput,
 ): Promise<TaskGroupView> {
   const order = await requireOrder(companyId, orderId);
@@ -163,9 +163,9 @@ const TASK_GROUP_STATUS_TRANSITIONS: Record<TaskGroupStatus, TaskGroupStatus[]> 
 };
 
 export async function changeGroupStatus(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   status: TaskGroupStatus,
 ): Promise<TaskGroupView> {
   const existing = await requireGroup(companyId, id);
@@ -204,9 +204,9 @@ export async function changeGroupStatus(
 }
 
 export async function updateGroup(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   input: UpdateTaskGroupInput,
 ): Promise<TaskGroupView> {
   const existing = await requireGroup(companyId, id);
@@ -228,7 +228,7 @@ export async function updateGroup(
   return toGroupView(group);
 }
 
-export async function deleteGroup(companyId: string, actorId: string, id: string): Promise<void> {
+export async function deleteGroup(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await requireGroup(companyId, id);
 
   await taskPlanRepository.softDeleteGroupWithItems(id);
@@ -244,9 +244,9 @@ export async function deleteGroup(companyId: string, actorId: string, id: string
 }
 
 export async function createItem(
-  companyId: string,
-  actorId: string,
-  groupId: string,
+  companyId: number,
+  actorId: number,
+  groupId: number,
   input: CreateTaskItemInput,
 ): Promise<TaskItemView> {
   const group = await requireGroup(companyId, groupId);
@@ -275,9 +275,9 @@ export async function createItem(
 }
 
 export async function updateItem(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   input: UpdateTaskItemInput,
 ): Promise<TaskItemView> {
   const existing = await requireItem(companyId, id);
@@ -319,7 +319,7 @@ export async function updateItem(
   return toItemView(item);
 }
 
-export async function deleteItem(companyId: string, actorId: string, id: string): Promise<void> {
+export async function deleteItem(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await requireItem(companyId, id);
 
   await taskPlanRepository.softDeleteItem(id);
@@ -337,9 +337,9 @@ export async function deleteItem(companyId: string, actorId: string, id: string)
 
 /** scope.md §Completion Photo — always optional, and replacing one discards the previous file. */
 export async function uploadItemPhoto(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   photo: UploadedPhoto,
 ): Promise<TaskItemView> {
   const existing = await requireItem(companyId, id);
@@ -359,7 +359,7 @@ export async function uploadItemPhoto(
   return toItemView(item);
 }
 
-export async function removeItemPhoto(companyId: string, actorId: string, id: string): Promise<TaskItemView> {
+export async function removeItemPhoto(companyId: number, actorId: number, id: number): Promise<TaskItemView> {
   const existing = await requireItem(companyId, id);
   if (!existing.photoPath) throw new AppError(404, 'This task has no completion photo.');
 
@@ -378,7 +378,7 @@ export async function removeItemPhoto(companyId: string, actorId: string, id: st
   return toItemView(item);
 }
 
-export async function getItemPhotoPath(companyId: string, id: string): Promise<string> {
+export async function getItemPhotoPath(companyId: number, id: number): Promise<string> {
   const item = await requireItem(companyId, id);
   if (!item.photoPath) throw new AppError(404, 'This task has no completion photo.');
   return item.photoPath;

@@ -13,20 +13,20 @@ import { CreatePaymentInput } from './types';
 // The amounts accept a plain number as well as a Decimal so the tracker can validate against the
 // budget it is about to write in the same request, before that value has come back from the DB.
 export interface PayableOrder {
-  id: string;
+  id: number;
   orderNumber: string;
   totalAmount: Prisma.Decimal | number;
   paidAmount: Prisma.Decimal | number;
   pendingAmount: Prisma.Decimal | number;
 }
 
-export async function list(companyId: string, orderId: string) {
+export async function list(companyId: number, orderId: number) {
   const order = await ordersRepository.findOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Order not found.');
   return paymentsRepository.listPaymentsForOrder(companyId, orderId);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const payment = await paymentsRepository.findPaymentById(companyId, id);
   if (!payment) throw new AppError(404, 'Payment not found.');
   return payment;
@@ -61,7 +61,7 @@ export function assertPaymentAllowed(order: PayableOrder, amount: number): void 
 export async function recordPayment(
   tx: PrismaClientOrTx,
   order: PayableOrder,
-  actorId: string,
+  actorId: number,
   input: CreatePaymentInput,
   receiptNumber: string,
 ) {
@@ -100,7 +100,7 @@ export async function recordPayment(
   return payment;
 }
 
-export async function create(companyId: string, actorId: string, orderId: string, input: CreatePaymentInput) {
+export async function create(companyId: number, actorId: number, orderId: number, input: CreatePaymentInput) {
   const order = await ordersRepository.findOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Order not found.');
 

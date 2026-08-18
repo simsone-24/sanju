@@ -148,7 +148,7 @@ export async function listQuotations(params: ListQuotationsParams) {
 
 // KPI tiles above the Quotations list. Revenue counts APPROVED quotations only — the value
 // actually won, rather than every draft ever raised.
-export async function getQuotationStats(companyId: string) {
+export async function getQuotationStats(companyId: number) {
   const baseWhere: Prisma.QuotationWhereInput = { companyId, deletedAt: null };
 
   const [draft, sent, approved, rejected, revenue] = await Promise.all([
@@ -279,7 +279,7 @@ export function listNonEnquiryQuotations(params: ListQuotationsParams) {
   return prisma.quotation.findMany({ where, select: quotationBaseSelect, orderBy: { createdAt: 'desc' } });
 }
 
-export function findQuotationById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findQuotationById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.quotation.findFirst({
     where: { id, deletedAt: null, companyId },
     select: quotationDetailSelect,
@@ -289,7 +289,7 @@ export function findQuotationById(companyId: string, id: string, client: PrismaC
 // Every revision raised against one enquiry, newest version first — feeds the quotation view
 // page's revision-history drawer. Deliberately a thin projection: the drawer only lists versions
 // and links to them, it never renders a full document.
-export function listQuotationRevisions(companyId: string, enquiryId: string) {
+export function listQuotationRevisions(companyId: number, enquiryId: number) {
   return prisma.quotation.findMany({
     where: { enquiryId, companyId, deletedAt: null },
     orderBy: { version: 'desc' },
@@ -308,7 +308,7 @@ export function listQuotationRevisions(companyId: string, enquiryId: string) {
 
 // Audit trail for one quotation — the same shape the Orders module's timeline uses, so the
 // AppTimeline component renders both without branching.
-export function getQuotationActivityLog(id: string, client: PrismaClientOrTx = prisma) {
+export function getQuotationActivityLog(id: number, client: PrismaClientOrTx = prisma) {
   return client.activityLog.findMany({
     where: { module: 'QUOTATIONS', referenceId: id },
     orderBy: { performedAt: 'asc' },
@@ -323,8 +323,8 @@ export function getQuotationActivityLog(id: string, client: PrismaClientOrTx = p
 }
 
 export function findLatestQuotationForEnquiry(
-  companyId: string,
-  enquiryId: string,
+  companyId: number,
+  enquiryId: number,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.quotation.findFirst({
@@ -334,8 +334,8 @@ export function findLatestQuotationForEnquiry(
 }
 
 export function findApprovedQuotationForEnquiry(
-  companyId: string,
-  enquiryId: string,
+  companyId: number,
+  enquiryId: number,
   client: PrismaClientOrTx = prisma,
 ) {
   return client.quotation.findFirst({
@@ -352,8 +352,8 @@ export function findApprovedQuotationForEnquiry(
  * Returns 0 when nothing is approved.
  */
 export async function sumApprovedQuotationTotalForEnquiry(
-  companyId: string,
-  enquiryId: string,
+  companyId: number,
+  enquiryId: number,
   client: PrismaClientOrTx = prisma,
 ): Promise<number> {
   const aggregate = await client.quotation.aggregate({
@@ -377,11 +377,11 @@ interface ManualCustomerData {
 }
 
 interface CreateQuotationData {
-  companyId: string;
+  companyId: number;
   source: QuotationSource;
-  enquiryId?: string;
-  customerId?: string;
-  orderId?: string;
+  enquiryId?: number;
+  customerId?: number;
+  orderId?: number;
   manualCustomer?: ManualCustomerData;
   quotationNumber: string;
   version: number;
@@ -393,7 +393,7 @@ interface CreateQuotationData {
   tax: number;
   totalAmount: number;
   remarks?: string;
-  createdById: string;
+  createdById: number;
   items: QuotationItemWithAmount[];
 }
 
@@ -441,7 +441,7 @@ export function createQuotation(data: CreateQuotationData, client: PrismaClientO
   });
 }
 
-export function markQuotationRevised(id: string, client: PrismaClientOrTx = prisma) {
+export function markQuotationRevised(id: number, client: PrismaClientOrTx = prisma) {
   return client.quotation.update({ where: { id }, data: { status: QuotationStatus.REVISED } });
 }
 
@@ -458,7 +458,7 @@ interface UpdateQuotationData {
 }
 
 export async function updateQuotation(
-  id: string,
+  id: number,
   data: UpdateQuotationData,
   items: QuotationItemWithAmount[] | undefined,
   client: PrismaClientOrTx = prisma,
@@ -494,18 +494,18 @@ export async function updateQuotation(
   });
 }
 
-export function updateQuotationStatus(id: string, status: QuotationStatus, client: PrismaClientOrTx = prisma) {
+export function updateQuotationStatus(id: number, status: QuotationStatus, client: PrismaClientOrTx = prisma) {
   return client.quotation.update({ where: { id }, data: { status }, select: quotationDetailSelect });
 }
 
-export function updateQuotationPdfPath(id: string, pdfPath: string, client: PrismaClientOrTx = prisma) {
+export function updateQuotationPdfPath(id: number, pdfPath: string, client: PrismaClientOrTx = prisma) {
   return client.quotation.update({ where: { id }, data: { pdfPath } });
 }
 
 // ---- Quotation images -----------------------------------------------------
 
 interface QuotationImageData {
-  quotationId: string;
+  quotationId: number;
   fileName: string;
   filePath: string;
   sortOrder: number;
@@ -515,17 +515,17 @@ export function createQuotationImages(rows: QuotationImageData[], client: Prisma
   return client.quotationImage.createMany({ data: rows });
 }
 
-export function countQuotationImages(quotationId: string, client: PrismaClientOrTx = prisma) {
+export function countQuotationImages(quotationId: number, client: PrismaClientOrTx = prisma) {
   return client.quotationImage.count({ where: { quotationId, deletedAt: null } });
 }
 
-export function findQuotationImageById(id: string, client: PrismaClientOrTx = prisma) {
+export function findQuotationImageById(id: number, client: PrismaClientOrTx = prisma) {
   return client.quotationImage.findFirst({
     where: { id, deletedAt: null },
     select: { id: true, quotationId: true, filePath: true, fileName: true },
   });
 }
 
-export function softDeleteQuotationImage(id: string, client: PrismaClientOrTx = prisma) {
+export function softDeleteQuotationImage(id: number, client: PrismaClientOrTx = prisma) {
   return client.quotationImage.update({ where: { id }, data: { deletedAt: new Date() } });
 }

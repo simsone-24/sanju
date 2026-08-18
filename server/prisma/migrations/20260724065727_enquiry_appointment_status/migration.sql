@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `enquiries` ADD COLUMN `appointment_status` ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED') NOT NULL DEFAULT 'PENDING';

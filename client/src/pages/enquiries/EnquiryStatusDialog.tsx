@@ -34,7 +34,7 @@ const ENQUIRY_STATUS_OPTIONS: EnquiryStatus[] = [
 
 interface EnquiryStatusDialogProps {
   open: boolean;
-  enquiryId: string;
+  enquiryId: number;
   currentStatus: EnquiryStatus;
   onClose: () => void;
 }

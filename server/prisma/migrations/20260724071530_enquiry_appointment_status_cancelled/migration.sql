@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `enquiries` MODIFY `appointment_status` ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING';

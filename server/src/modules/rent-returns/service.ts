@@ -14,15 +14,15 @@ import { CreateStockReturnInput, ListStockReturnsParams } from './types';
 const MODULE = 'RENT';
 
 export interface StockReturnResponse {
-  id: string;
+  id: number;
   returnNo: string;
   returnDate: Date;
   notes: string | null;
   totalReturned: number;
   createdAt: Date;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
   stockOut: {
-    id: string;
+    id: number;
     rentNo: string;
     stockOutDate: Date;
     expectedReturnDate: Date | null;
@@ -30,11 +30,11 @@ export interface StockReturnResponse {
     returnedQuantity: number;
     balanceQuantity: number;
     returnStatus: string;
-    rentalPerson: { id: string; name: string; phone: string };
+    rentalPerson: { id: number; name: string; phone: string };
   };
   items: {
-    id: string;
-    stockOutItemId: string;
+    id: number;
+    stockOutItemId: number;
     itemName: string;
     issuedQuantity: number;
     quantityReturned: number;
@@ -82,13 +82,13 @@ export async function list(params: ListStockReturnsParams) {
   };
 }
 
-export async function getById(companyId: string, id: string): Promise<StockReturnResponse> {
+export async function getById(companyId: number, id: number): Promise<StockReturnResponse> {
   const record = await returnsRepository.findStockReturnById(companyId, id);
   if (!record) throw new AppError(404, 'Stock return not found.');
   return mapStockReturn(record);
 }
 
-export function getSummary(companyId: string) {
+export function getSummary(companyId: number) {
   return returnsRepository.getReturnSummary(companyId);
 }
 
@@ -104,9 +104,9 @@ export function getSummary(companyId: string) {
  * The return rows and the stock out's recalculated totals land together or not at all (§31).
  */
 export async function create(
-  companyId: string,
-  actorId: string,
-  stockOutId: string,
+  companyId: number,
+  actorId: number,
+  stockOutId: number,
   input: CreateStockReturnInput,
 ): Promise<StockReturnResponse> {
   const stockOut = await stockOutsService.getWritableCore(companyId, stockOutId);
@@ -121,7 +121,7 @@ export async function create(
     const stockOutItems = await stockOutsRepository.listStockOutItems(stockOutId, tx);
     const itemById = new Map(stockOutItems.map((item) => [item.id, item]));
 
-    const lines: { stockOutItemId: string; quantityReturned: number }[] = [];
+    const lines: { stockOutItemId: number; quantityReturned: number }[] = [];
 
     for (const line of input.items) {
       const stockOutItem = itemById.get(line.stockOutItemId);

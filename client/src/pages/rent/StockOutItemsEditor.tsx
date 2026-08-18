@@ -93,7 +93,7 @@ export function StockOutItemsEditor({
             {items.map((item, index) => {
               const rowTotal = stockOutRowAmount(item);
               const isTrailingEmpty = index === items.length - 1 && !item.itemName.trim();
-              const selectedMaster = masterItems.find((master) => master.id === item.rentalItemId) ?? null;
+              const selectedMaster = masterItems.find((master) => String(master.id) === item.rentalItemId) ?? null;
 
               return (
                 <TableRow key={index}>

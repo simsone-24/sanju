@@ -2,6 +2,7 @@ import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } fro
 import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '../../components/SearchBar';
 import * as rentService from '../../services/rentService';
+import { toOptionalId } from '../../utils/ids';
 import {
   RENT_PAYMENT_MODES,
   type RentPaymentMode,
@@ -104,7 +105,7 @@ export function RentReportFilterBar({ config, filters, onChange }: RentReportFil
             label="Rental Person"
             sx={{ width: 200 }}
             value={filters.rentalPersonId ?? ''}
-            onChange={(event) => set('rentalPersonId', event.target.value)}
+            onChange={(event) => set('rentalPersonId', toOptionalId(event.target.value))}
           >
             <MenuItem value="">All</MenuItem>
             {persons?.records.map((person) => (
@@ -122,7 +123,7 @@ export function RentReportFilterBar({ config, filters, onChange }: RentReportFil
             label="Item"
             sx={{ width: 200 }}
             value={filters.rentalItemId ?? ''}
-            onChange={(event) => set('rentalItemId', event.target.value)}
+            onChange={(event) => set('rentalItemId', toOptionalId(event.target.value))}
           >
             <MenuItem value="">All</MenuItem>
             {items?.records.map((item) => (

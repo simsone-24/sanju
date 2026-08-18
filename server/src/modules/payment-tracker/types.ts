@@ -12,11 +12,11 @@ export const PAYMENT_TRACKER_STATUS_GROUPS = {
 export type PaymentTrackerStatusGroup = keyof typeof PAYMENT_TRACKER_STATUS_GROUPS;
 
 export interface ListPaymentTrackerParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
-  customerId?: string;
+  customerId?: number;
   paymentStatus?: PaymentTrackerStatus;
   /** Dashboard-card filter — widens to every status in the group (see PAYMENT_TRACKER_STATUS_GROUPS). */
   statusGroup?: PaymentTrackerStatusGroup;

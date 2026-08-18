@@ -15,7 +15,7 @@ import { InvoiceResult } from './types';
  * renumbered or re-dated itself on every reprint would be worthless. Everything else is read live,
  * so a payment collected after the invoice was first opened shows up on the next print.
  */
-export async function getForOrder(companyId: string, actorId: string, orderId: string): Promise<InvoiceResult> {
+export async function getForOrder(companyId: number, actorId: number, orderId: number): Promise<InvoiceResult> {
   const source = await invoicesRepository.findInvoiceSource(companyId, orderId);
   if (!source) throw new AppError(404, 'No invoice is available for this order.');
 
@@ -80,7 +80,7 @@ function roundMoney(value: number): number {
 // Absolute filesystem path to a freshly-rendered invoice PDF, for the authenticated download route.
 // Unlike a quotation's PDF, nothing here is cached: paid/balance and the receipts list can change
 // after the invoice is first opened, so every download regenerates from the live figures.
-export async function getPdfForDownload(companyId: string, actorId: string, orderId: string) {
+export async function getPdfForDownload(companyId: number, actorId: number, orderId: number) {
   const invoice = await getForOrder(companyId, actorId, orderId);
 
   const pdfPath = await generateInvoicePdf(
@@ -134,7 +134,7 @@ export async function getPdfForDownload(companyId: string, actorId: string, orde
   };
 }
 
-async function issueInvoice(companyId: string, actorId: string, orderId: string, orderNumber: string) {
+async function issueInvoice(companyId: number, actorId: number, orderId: number, orderNumber: string) {
   const existing = await invoicesRepository.findInvoiceByOrderId(companyId, orderId);
   if (existing) return existing;
 

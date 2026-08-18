@@ -151,7 +151,9 @@ Always handle Promise errors.
 
 Use Prisma.
 
-Use UUID primary keys.
+Use integer auto-increment primary keys (`Int @id @default(autoincrement())`, NOT NULL).
+
+Foreign keys are integers too. Keep a foreign key nullable only where the relationship is genuinely optional.
 
 Use snake_case table names.
 

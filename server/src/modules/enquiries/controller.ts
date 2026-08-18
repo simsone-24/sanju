@@ -4,6 +4,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as enquiriesService from './service';
 import {
   ChangeEnquiryStatusSchema,
@@ -74,7 +75,7 @@ export async function getStats(req: Request, res: Response, next: NextFunction):
 export async function getById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const enquiry = await enquiriesService.getById(actor.companyId, req.params.id);
+    const enquiry = await enquiriesService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, enquiry, 'Enquiry retrieved successfully.');
   } catch (error) {
     next(error);
@@ -84,7 +85,7 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
 export async function getTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const timeline = await enquiriesService.getTimeline(actor.companyId, req.params.id);
+    const timeline = await enquiriesService.getTimeline(actor.companyId, parseId(req.params.id));
     sendSuccess(res, timeline, 'Enquiry timeline retrieved successfully.');
   } catch (error) {
     next(error);
@@ -112,7 +113,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const enquiry = await enquiriesService.update(actor, req.params.id, req.body);
+    const enquiry = await enquiriesService.update(actor, parseId(req.params.id), req.body);
     sendSuccess(res, enquiry, 'Enquiry updated successfully.');
   } catch (error) {
     next(error);
@@ -129,7 +130,7 @@ export async function changeStatus(
     const enquiry = await enquiriesService.changeStatus(
       actor.companyId,
       actor.id,
-      req.params.id,
+      parseId(req.params.id),
       req.body.status,
       req.body.remarks,
     );
@@ -142,7 +143,7 @@ export async function changeStatus(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await enquiriesService.remove(actor, req.params.id);
+    await enquiriesService.remove(actor, parseId(req.params.id));
     sendSuccess(res, null, 'Enquiry deleted successfully.');
   } catch (error) {
     next(error);
@@ -156,7 +157,7 @@ export async function addFollowUp(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const followUp = await enquiriesService.addFollowUp(actor.companyId, actor.id, req.params.id, req.body);
+    const followUp = await enquiriesService.addFollowUp(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, followUp, 'Follow-up added successfully.', 201);
   } catch (error) {
     next(error);

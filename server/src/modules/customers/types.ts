@@ -1,5 +1,5 @@
 export interface ListCustomersParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

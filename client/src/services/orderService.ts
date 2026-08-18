@@ -29,22 +29,22 @@ export async function getStats(params: OrderStatsParams): Promise<OrderStats> {
   return response.data.data;
 }
 
-export async function getById(id: string): Promise<OrderDetail> {
+export async function getById(id: number): Promise<OrderDetail> {
   const response = await apiClient.get<ApiSuccessResponse<OrderDetail>>(`/orders/${id}`);
   return response.data.data;
 }
 
-export async function getTimeline(id: string): Promise<OrderTimelineEntry[]> {
+export async function getTimeline(id: number): Promise<OrderTimelineEntry[]> {
   const response = await apiClient.get<ApiSuccessResponse<OrderTimelineEntry[]>>(`/orders/${id}/timeline`);
   return response.data.data;
 }
 
-export async function update(id: string, input: UpdateOrderInput): Promise<OrderDetail> {
+export async function update(id: number, input: UpdateOrderInput): Promise<OrderDetail> {
   const response = await apiClient.put<ApiSuccessResponse<OrderDetail>>(`/orders/${id}`, input);
   return response.data.data;
 }
 
-export async function changeStatus(id: string, input: ChangeOrderStatusInput): Promise<OrderDetail> {
+export async function changeStatus(id: number, input: ChangeOrderStatusInput): Promise<OrderDetail> {
   const response = await apiClient.patch<ApiSuccessResponse<OrderDetail>>(`/orders/${id}/status`, input);
   return response.data.data;
 }

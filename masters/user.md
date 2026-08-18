@@ -333,7 +333,6 @@ If required, additional permissions can be granted specifically to that user.
 
 | Field | Required | Description |
 |---------|----------|-------------|
-| Employee Code | No | Optional employee identifier |
 | Full Name | ✅ Yes | Employee/User name |
 | Username | ✅ Yes | Login username |
 | Password | ✅ Yes | Login password |

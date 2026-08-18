@@ -93,7 +93,7 @@ export default function EventTypesTab() {
   }, [editingItem, editForm]);
 
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; values: EventTypeFormValues }) =>
+    mutationFn: (input: { id: number; values: EventTypeFormValues }) =>
       eventTypeService.update(input.id, {
         eventName: input.values.eventName,
         colorCode: input.values.colorCode || undefined,
@@ -121,7 +121,7 @@ export default function EventTypesTab() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => eventTypeService.remove(id),
+    mutationFn: (id: number) => eventTypeService.remove(id),
     onSuccess: () => {
       invalidateList();
       setDeletingItem(null);

@@ -11,7 +11,7 @@ export type AppointmentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCE
 export type EventTime = 'MORNING' | 'EVENING';
 
 export interface EnquiryListItem {
-  id: string;
+  id: number;
   enquiryNumber: string;
   eventName: string | null;
   eventDate: string | null;
@@ -21,9 +21,9 @@ export interface EnquiryListItem {
   status: EnquiryStatus;
   createdAt: string;
   // id is null while the enquiry is still an unconfirmed prospect (no Customer row yet).
-  customer: { id: string | null; customerName: string; mobile: string };
-  eventType: { id: string; eventName: string; colorCode: string | null };
-  assignedUser: { id: string; fullName: string } | null;
+  customer: { id: number | null; customerName: string; mobile: string };
+  eventType: { id: number; eventName: string; colorCode: string | null };
+  assignedUser: { id: number; fullName: string } | null;
 }
 
 // Present only while the enquiry has no linked Customer (i.e. customer.id is null). Carries the
@@ -38,12 +38,12 @@ export interface EnquiryProspect {
 }
 
 export interface EnquiryFollowUp {
-  id: string;
+  id: number;
   followUpDate: string;
   notes: string | null;
   outcome: string | null;
   createdAt: string;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
 }
 
 export interface EnquiryDetail extends EnquiryListItem {
@@ -80,14 +80,14 @@ export interface NewCustomerInput {
 
 export interface ExistingCustomerInput {
   type: 'EXISTING';
-  customerId: string;
+  customerId: number;
 }
 
 export type CustomerInput = NewCustomerInput | ExistingCustomerInput;
 
 export interface CreateEnquiryInput {
   customer: CustomerInput;
-  eventTypeId: string;
+  eventTypeId: number;
   eventName?: string;
   eventDate?: string;
   eventTime?: EventTime;
@@ -104,7 +104,7 @@ export interface CreateEnquiryInput {
   meetingLocation?: string;
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
-  assignedUserId?: string;
+  assignedUserId?: number;
   followUpDate?: string;
   /** Defaults to NEW server-side. Only a status reachable from NEW may be set at creation. */
   status?: EnquiryStatus;
@@ -134,12 +134,12 @@ export type UpdateEnquiryInput = Partial<Omit<CreateEnquiryInput, 'customer' | '
  * entry belongs to and is what the UI groups and colours by.
  */
 export interface EnquiryTimelineEntry {
-  id: string;
+  id: number;
   module: string;
   action: string;
   description: string | null;
   performedAt: string;
-  performedBy: { id: string; fullName: string } | null;
+  performedBy: { id: number; fullName: string } | null;
 }
 
 // "md files/Enquiry/dashcount.md" §1-4 — dashboard card filters that aren't a single
@@ -154,9 +154,9 @@ export interface ListEnquiriesParams {
   appointmentStatus?: AppointmentStatus;
   // Comma-separated EnquiryStatusGroup values — several dashboard cards can be active at once.
   statusGroup?: string;
-  eventTypeId?: string;
-  assignedUserId?: string;
-  customerId?: string;
+  eventTypeId?: number;
+  assignedUserId?: number;
+  customerId?: number;
   eventDateFrom?: string;
   eventDateTo?: string;
   appointmentDateFrom?: string;

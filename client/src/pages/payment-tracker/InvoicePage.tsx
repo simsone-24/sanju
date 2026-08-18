@@ -1,10 +1,10 @@
+import { useRouteId } from '../../hooks/useRouteId';
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import * as invoiceService from '../../services/invoiceService';
 import { useToast } from '../../store/ToastContext';
@@ -421,13 +421,13 @@ function InvoiceSheet({ invoice }: { invoice: Invoice }) {
 }
 
 export default function InvoicePage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const { showToast } = useToast();
   const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['invoice', id],
-    queryFn: () => invoiceService.getForOrder(id!),
+    queryFn: () => invoiceService.getForOrder(id),
     enabled: Boolean(id),
   });
 

@@ -3,7 +3,7 @@ import type { OrderStatus } from './order';
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE';
 
 export interface CustomerListItem {
-  id: string;
+  id: number;
   customerCode: string;
   customerName: string;
   mobile: string;
@@ -24,7 +24,7 @@ export interface CustomerDetail extends CustomerListItem {
 }
 
 export interface CustomerOrderSummary {
-  id: string;
+  id: number;
   orderNumber: string;
   eventDate: string;
   venue: string | null;
@@ -36,13 +36,13 @@ export interface CustomerOrderSummary {
 }
 
 export interface CustomerPaymentSummary {
-  id: string;
+  id: number;
   paymentDate: string;
   paymentType: string;
   amount: string;
   paymentMethod: string;
   receiptNumber: string;
-  order: { id: string; orderNumber: string };
+  order: { id: number; orderNumber: string };
 }
 
 export interface CustomerHistory {

@@ -24,7 +24,7 @@ export async function listOptions(): Promise<UserGroupOption[]> {
   return response.data.data;
 }
 
-export async function getById(id: string): Promise<UserGroupDetail> {
+export async function getById(id: number): Promise<UserGroupDetail> {
   const response = await apiClient.get<ApiSuccessResponse<UserGroupDetail>>(`/user-groups/${id}`);
   return response.data.data;
 }
@@ -34,11 +34,11 @@ export async function create(input: SaveUserGroupInput): Promise<UserGroupDetail
   return response.data.data;
 }
 
-export async function update(id: string, input: SaveUserGroupInput): Promise<UserGroupDetail> {
+export async function update(id: number, input: SaveUserGroupInput): Promise<UserGroupDetail> {
   const response = await apiClient.put<ApiSuccessResponse<UserGroupDetail>>(`/user-groups/${id}`, input);
   return response.data.data;
 }
 
-export async function remove(id: string): Promise<void> {
+export async function remove(id: number): Promise<void> {
   await apiClient.delete(`/user-groups/${id}`);
 }

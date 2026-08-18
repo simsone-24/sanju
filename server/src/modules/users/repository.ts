@@ -7,7 +7,6 @@ import { ListUsersParams } from './types';
 const userSelect = {
   id: true,
   companyId: true,
-  employeeCode: true,
   fullName: true,
   username: true,
   email: true,
@@ -38,7 +37,6 @@ export async function listUsers(params: ListUsersParams) {
             { username: { contains: params.search } },
             { email: { contains: params.search } },
             { mobile: { contains: params.search } },
-            { employeeCode: { contains: params.search } },
             { city: { contains: params.search } },
           ],
         }
@@ -63,7 +61,7 @@ export async function listUsers(params: ListUsersParams) {
  * The minimum needed to populate an "Assigned To"/"Coordinator" picker. Deliberately narrow: this
  * is the one user query reachable without Masters access, so it exposes no contact details.
  */
-export function listUserOptions(companyId: string) {
+export function listUserOptions(companyId: number) {
   return prisma.user.findMany({
     where: { companyId, deletedAt: null, isActive: true },
     select: { id: true, fullName: true, username: true },
@@ -71,7 +69,7 @@ export function listUserOptions(companyId: string) {
   });
 }
 
-export function findUserById(companyId: string, id: string) {
+export function findUserById(companyId: number, id: number) {
   return prisma.user.findFirst({ where: { id, companyId, deletedAt: null }, select: userDetailSelect });
 }
 
@@ -83,7 +81,7 @@ export function findUserByEmail(email: string) {
   return prisma.user.findFirst({ where: { email, deletedAt: null }, select: { id: true } });
 }
 
-export function findUserGroupForCompany(companyId: string, userGroupId: string) {
+export function findUserGroupForCompany(companyId: number, userGroupId: number) {
   return prisma.userGroup.findFirst({ where: { id: userGroupId, companyId, deletedAt: null } });
 }
 
@@ -91,12 +89,12 @@ export function createUser(data: Prisma.UserUncheckedCreateInput) {
   return prisma.user.create({ data, select: userDetailSelect });
 }
 
-export function updateUser(id: string, data: Prisma.UserUncheckedUpdateInput) {
+export function updateUser(id: number, data: Prisma.UserUncheckedUpdateInput) {
   return prisma.user.update({ where: { id }, data, select: userDetailSelect });
 }
 
 /** Same replace-in-one-transaction model as user group permissions — see user-groups/repository.ts. */
-export async function replacePermissionOverrides(userId: string, overrides: PermissionGrant[]): Promise<void> {
+export async function replacePermissionOverrides(userId: number, overrides: PermissionGrant[]): Promise<void> {
   await prisma.$transaction([
     prisma.userPermissionOverride.deleteMany({ where: { userId } }),
     ...(overrides.length > 0
@@ -113,6 +111,6 @@ export async function replacePermissionOverrides(userId: string, overrides: Perm
   ]);
 }
 
-export function softDeleteUser(id: string) {
+export function softDeleteUser(id: number) {
   return prisma.user.update({ where: { id }, data: { deletedAt: new Date() } });
 }

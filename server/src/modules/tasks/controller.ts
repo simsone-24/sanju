@@ -3,6 +3,7 @@ import { AuthenticatedUser } from '../auth/types';
 import { AppError } from '../../utils/AppError';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as tasksService from './service';
 import { CreateOrderTaskSchema, UpdateOrderTaskSchema, listOrderTasksQuerySchema } from './validation';
 
@@ -17,7 +18,7 @@ export async function listForOrder(req: Request<{ id: string }>, res: Response, 
     const query = parseQuery(listOrderTasksQuerySchema, req.query);
     const tasks = await tasksService.list({
       companyId: actor.companyId,
-      orderId: req.params.id,
+      orderId: parseId(req.params.id),
       taskCategory: query.taskCategory,
     });
     sendSuccess(res, tasks, 'Tasks retrieved successfully.');
@@ -33,7 +34,7 @@ export async function createForOrder(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const task = await tasksService.create(actor.companyId, actor.id, req.params.id, req.body);
+    const task = await tasksService.create(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, task, 'Task created successfully.', 201);
   } catch (error) {
     next(error);
@@ -47,7 +48,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const task = await tasksService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const task = await tasksService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, task, 'Task updated successfully.');
   } catch (error) {
     next(error);

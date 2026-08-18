@@ -4,6 +4,7 @@ import { AuthenticatedUser } from '../auth/types';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as taskPlanService from './service';
 import {
   ChangeTaskGroupStatusSchema,
@@ -21,7 +22,7 @@ function requireUser(req: Request): AuthenticatedUser {
 export async function listForOrder(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const groups = await taskPlanService.listGroups(actor.companyId, req.params.id);
+    const groups = await taskPlanService.listGroups(actor.companyId, parseId(req.params.id));
     sendSuccess(res, groups, 'Task plan retrieved successfully.');
   } catch (error) {
     next(error);
@@ -35,7 +36,7 @@ export async function createGroupForOrder(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const group = await taskPlanService.createGroup(actor.companyId, actor.id, req.params.id, req.body);
+    const group = await taskPlanService.createGroup(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, group, 'Task group created successfully.', 201);
   } catch (error) {
     next(error);
@@ -49,7 +50,7 @@ export async function updateGroup(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const group = await taskPlanService.updateGroup(actor.companyId, actor.id, req.params.id, req.body);
+    const group = await taskPlanService.updateGroup(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, group, 'Task group updated successfully.');
   } catch (error) {
     next(error);
@@ -66,7 +67,7 @@ export async function changeGroupStatus(
     const group = await taskPlanService.changeGroupStatus(
       actor.companyId,
       actor.id,
-      req.params.id,
+      parseId(req.params.id),
       req.body.status,
     );
     sendSuccess(res, group, 'Task group status updated successfully.');
@@ -78,7 +79,7 @@ export async function changeGroupStatus(
 export async function deleteGroup(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await taskPlanService.deleteGroup(actor.companyId, actor.id, req.params.id);
+    await taskPlanService.deleteGroup(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Task group deleted successfully.');
   } catch (error) {
     next(error);
@@ -92,7 +93,7 @@ export async function createItemForGroup(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const item = await taskPlanService.createItem(actor.companyId, actor.id, req.params.id, req.body);
+    const item = await taskPlanService.createItem(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, item, 'Task created successfully.', 201);
   } catch (error) {
     next(error);
@@ -106,7 +107,7 @@ export async function updateItem(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const item = await taskPlanService.updateItem(actor.companyId, actor.id, req.params.id, req.body);
+    const item = await taskPlanService.updateItem(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, item, 'Task updated successfully.');
   } catch (error) {
     next(error);
@@ -116,7 +117,7 @@ export async function updateItem(
 export async function deleteItem(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await taskPlanService.deleteItem(actor.companyId, actor.id, req.params.id);
+    await taskPlanService.deleteItem(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Task deleted successfully.');
   } catch (error) {
     next(error);
@@ -131,7 +132,7 @@ export async function uploadItemPhoto(req: Request<{ id: string }>, res: Respons
     }
 
     const relativePath = path.relative(env.uploadPath, req.file.path).split(path.sep).join('/');
-    const item = await taskPlanService.uploadItemPhoto(actor.companyId, actor.id, req.params.id, {
+    const item = await taskPlanService.uploadItemPhoto(actor.companyId, actor.id, parseId(req.params.id), {
       path: relativePath,
     });
     sendSuccess(res, item, 'Completion photo uploaded successfully.', 201);
@@ -143,7 +144,7 @@ export async function uploadItemPhoto(req: Request<{ id: string }>, res: Respons
 export async function deleteItemPhoto(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const item = await taskPlanService.removeItemPhoto(actor.companyId, actor.id, req.params.id);
+    const item = await taskPlanService.removeItemPhoto(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, item, 'Completion photo removed successfully.');
   } catch (error) {
     next(error);
@@ -155,7 +156,7 @@ export async function deleteItemPhoto(req: Request<{ id: string }>, res: Respons
 export async function getItemPhoto(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const relativePath = await taskPlanService.getItemPhotoPath(actor.companyId, req.params.id);
+    const relativePath = await taskPlanService.getItemPhotoPath(actor.companyId, parseId(req.params.id));
     res.sendFile(path.resolve(env.uploadPath, relativePath), (error) => {
       if (error) next(error);
     });

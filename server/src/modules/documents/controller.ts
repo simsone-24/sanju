@@ -4,6 +4,7 @@ import { AuthenticatedUser } from '../auth/types';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import * as documentsService from './service';
 import { UploadDocumentSchema } from './validation';
 
@@ -15,7 +16,7 @@ function requireUser(req: Request): AuthenticatedUser {
 export async function listForOrder(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const documents = await documentsService.list({ companyId: actor.companyId, orderId: req.params.id });
+    const documents = await documentsService.list({ companyId: actor.companyId, orderId: parseId(req.params.id) });
     sendSuccess(res, documents, 'Documents retrieved successfully.');
   } catch (error) {
     next(error);
@@ -34,7 +35,7 @@ export async function uploadForOrder(
     }
 
     const relativePath = path.relative(env.uploadPath, req.file.path).split(path.sep).join('/');
-    const document = await documentsService.upload(actor.companyId, actor.id, req.params.id, req.body, {
+    const document = await documentsService.upload(actor.companyId, actor.id, parseId(req.params.id), req.body, {
       originalname: req.file.originalname,
       path: relativePath,
     });
@@ -49,7 +50,7 @@ export async function uploadForOrder(
 export async function downloadFile(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const { filePath, fileName } = await documentsService.getFileForDownload(actor.companyId, req.params.id);
+    const { filePath, fileName } = await documentsService.getFileForDownload(actor.companyId, parseId(req.params.id));
     const absolutePath = path.resolve(env.uploadPath, filePath);
     res.download(absolutePath, fileName, (error) => {
       if (error) next(error);
@@ -62,7 +63,7 @@ export async function downloadFile(req: Request<{ id: string }>, res: Response, 
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await documentsService.remove(actor.companyId, actor.id, req.params.id);
+    await documentsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Document deleted successfully.');
   } catch (error) {
     next(error);

@@ -12,14 +12,14 @@ export interface NewCustomerInput {
 
 export interface ExistingCustomerInput {
   type: 'EXISTING';
-  customerId: string;
+  customerId: number;
 }
 
 export type CustomerInput = NewCustomerInput | ExistingCustomerInput;
 
 export interface CreateEnquiryInput {
   customer: CustomerInput;
-  eventTypeId: string;
+  eventTypeId: number;
   eventName?: string;
   eventDate?: Date;
   eventTime?: EventTime;
@@ -36,7 +36,7 @@ export interface CreateEnquiryInput {
   meetingLocation?: string;
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
-  assignedUserId?: string;
+  assignedUserId?: number;
   /** When the customer should next be contacted — the workflow's optional Follow-up step. */
   followUpDate?: Date;
   /** Defaults to NEW. Only a status reachable from NEW (see STATUS_TRANSITIONS in service.ts) may
@@ -46,7 +46,7 @@ export interface CreateEnquiryInput {
 }
 
 export interface UpdateEnquiryInput {
-  eventTypeId?: string;
+  eventTypeId?: number;
   eventName?: string;
   eventDate?: Date;
   eventTime?: EventTime;
@@ -63,7 +63,7 @@ export interface UpdateEnquiryInput {
   meetingLocation?: string;
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
-  assignedUserId?: string;
+  assignedUserId?: number;
   /** null clears the date; undefined leaves it untouched. */
   followUpDate?: Date | null;
   // Prospect (unconfirmed customer) fields — applied only while the enquiry has no linked Customer.
@@ -89,7 +89,7 @@ export interface CreateFollowUpInput {
 export type EnquiryStatusGroup = 'ACTIVE' | 'CONFIRMED' | 'PENDING' | 'APPOINTMENT_PENDING';
 
 export interface ListEnquiriesParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;
@@ -97,9 +97,9 @@ export interface ListEnquiriesParams {
   appointmentStatus?: AppointmentStatus;
   // Dashboard cards are single-select — at most one group is ever passed.
   statusGroup?: EnquiryStatusGroup[];
-  eventTypeId?: string;
-  assignedUserId?: string;
-  customerId?: string;
+  eventTypeId?: number;
+  assignedUserId?: number;
+  customerId?: number;
   eventDateFrom?: Date;
   eventDateTo?: Date;
   appointmentDateFrom?: Date;

@@ -12,17 +12,17 @@ export async function list(params: ListRentalItemsParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export function listCategories(companyId: string) {
+export function listCategories(companyId: number) {
   return rentItemsRepository.listRentalItemCategories(companyId);
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const item = await rentItemsRepository.findRentalItemById(companyId, id);
   if (!item) throw new AppError(404, 'Rental item not found.');
   return item;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateRentalItemInput) {
+export async function create(companyId: number, actorId: number, input: CreateRentalItemInput) {
   const duplicate = await rentItemsRepository.findRentalItemByName(companyId, input.itemName);
   if (duplicate) {
     throw new AppError(409, 'A rental item with this name already exists.', [
@@ -51,7 +51,7 @@ export async function create(companyId: string, actorId: string, input: CreateRe
   return item;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateRentalItemInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateRentalItemInput) {
   const existing = await rentItemsRepository.findRentalItemById(companyId, id);
   if (!existing) throw new AppError(404, 'Rental item not found.');
 
@@ -86,7 +86,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return item;
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await rentItemsRepository.findRentalItemById(companyId, id);
   if (!existing) throw new AppError(404, 'Rental item not found.');
 

@@ -20,7 +20,7 @@ const taskDetailSelect = {
   order: { select: { id: true, orderNumber: true, companyId: true } },
 } satisfies Prisma.OrderTaskSelect;
 
-export function listTasksForOrder(companyId: string, orderId: string, taskCategory?: TaskCategory) {
+export function listTasksForOrder(companyId: number, orderId: number, taskCategory?: TaskCategory) {
   return prisma.orderTask.findMany({
     where: {
       orderId,
@@ -32,7 +32,7 @@ export function listTasksForOrder(companyId: string, orderId: string, taskCatego
   });
 }
 
-export function findTaskById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findTaskById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.orderTask.findFirst({
     where: { id, order: { companyId } },
     select: taskDetailSelect,
@@ -44,7 +44,7 @@ export function createTask(data: Prisma.OrderTaskUncheckedCreateInput, client: P
 }
 
 export function updateTask(
-  id: string,
+  id: number,
   data: Prisma.OrderTaskUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {

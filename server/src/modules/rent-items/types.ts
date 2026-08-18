@@ -16,7 +16,7 @@ export interface UpdateRentalItemInput {
 }
 
 export interface ListRentalItemsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

@@ -17,7 +17,7 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -27,6 +27,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import { Menu, MenuItem } from '../../components/ui/Menu';
 import { SCROLL_ANCHORS } from '../../constants/scrollAnchors';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as enquiryService from '../../services/enquiryService';
 import * as quotationService from '../../services/quotationService';
 import { useToast } from '../../store/ToastContext';
@@ -57,7 +58,7 @@ function DetailSkeleton() {
 // quotation carries — its other versions, its audit trail, its PDF — is reachable from the header
 // without competing with those three for the reader's attention.
 export default function QuotationDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -80,7 +81,7 @@ export default function QuotationDetailPage() {
 
   const { data: quotation, isLoading } = useQuery({
     queryKey: ['quotation', id],
-    queryFn: () => quotationService.getById(id!),
+    queryFn: () => quotationService.getById(id),
     enabled: Boolean(id),
   });
 
@@ -112,15 +113,15 @@ export default function QuotationDetailPage() {
   }
 
   const sendMutation = useMutation({
-    mutationFn: () => quotationService.changeStatus(id!, 'SENT'),
+    mutationFn: () => quotationService.changeStatus(id, 'SENT'),
     onSuccess: invalidateAfterAction,
   });
   const rejectMutation = useMutation({
-    mutationFn: () => quotationService.changeStatus(id!, 'REJECTED'),
+    mutationFn: () => quotationService.changeStatus(id, 'REJECTED'),
     onSuccess: invalidateAfterAction,
   });
   const approveMutation = useMutation({
-    mutationFn: () => quotationService.approve(id!),
+    mutationFn: () => quotationService.approve(id),
     onSuccess: invalidateAfterAction,
   });
 
@@ -129,9 +130,9 @@ export default function QuotationDetailPage() {
   // autoConvertFromEnquiry). This button drives that documented step rather than a second path into
   // the Orders table, then re-reads the quotation to pick up the order it produced.
   const convertMutation = useMutation({
-    mutationFn: async (enquiryId: string) => {
+    mutationFn: async (enquiryId: number) => {
       await enquiryService.changeStatus(enquiryId, 'ORDER_CONFIRMED');
-      return quotationService.getById(id!);
+      return quotationService.getById(id);
     },
     onSuccess: (refreshed) => {
       invalidateAfterAction();
@@ -743,7 +744,7 @@ interface PlainColumn<T> {
 interface PlainTableProps<T> {
   columns: PlainColumn<T>[];
   rows: T[];
-  getRowId: (row: T) => string;
+  getRowId: (row: T) => number;
   onRowClick?: (row: T) => void;
   /** Tints the row the page is currently showing. */
   isRowActive?: (row: T) => boolean;

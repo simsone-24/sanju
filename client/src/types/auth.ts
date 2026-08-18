@@ -1,7 +1,7 @@
 import type { EffectivePermission } from './permission';
 
 export interface AuthenticatedProfile {
-  id: string;
+  id: number;
   fullName: string;
   username: string;
   email: string | null;
@@ -9,11 +9,11 @@ export interface AuthenticatedProfile {
   city: string | null;
   profilePhoto: string | null;
   userGroup: {
-    id: string;
+    id: number;
     groupName: string;
   };
   company: {
-    id: string;
+    id: number;
     companyName: string;
     /** Relative upload path — resolve through getPublicAssetUrl before using as an <img> src. */
     logo: string | null;

@@ -215,7 +215,7 @@ enum RentPaymentMode {
 // ---------------------------------------------------------------------------
 
 model Company {
-  id            String  @id @default(uuid()) @db.Char(36)
+  id            Int     @id @default(autoincrement())
   companyName   String  @map("company_name")
   contactPerson String? @map("contact_person")
   mobile        String?
@@ -271,8 +271,8 @@ model Company {
 // permissions; administrators create as many as the business needs ("There is no restriction on the
 // number of User Groups").
 model UserGroup {
-  id          String          @id @default(uuid()) @db.Char(36)
-  companyId   String          @map("company_id") @db.Char(36)
+  id          Int             @id @default(autoincrement())
+  companyId   Int             @map("company_id")
   groupName   String          @map("group_name")
   description String?         @db.Text
   status      UserGroupStatus @default(ACTIVE)
@@ -297,8 +297,8 @@ model UserGroup {
 // soft-deleted grant would be indistinguishable from a live one at read time, so unlike the
 // transactional tables these carry only created_at.
 model UserGroupPermission {
-  id          String   @id @default(uuid()) @db.Char(36)
-  userGroupId String   @map("user_group_id") @db.Char(36)
+  id          Int      @id @default(autoincrement())
+  userGroupId Int      @map("user_group_id")
   module      String   @db.VarChar(50)
   action      String   @db.VarChar(50)
   createdAt   DateTime @default(now()) @map("created_at")
@@ -312,8 +312,8 @@ model UserGroupPermission {
 // user.md §User Permission Override — an extra permission granted to one user without touching
 // their group. Same presence-is-the-grant model as UserGroupPermission above.
 model UserPermissionOverride {
-  id        String   @id @default(uuid()) @db.Char(36)
-  userId    String   @map("user_id") @db.Char(36)
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
   module    String   @db.VarChar(50)
   action    String   @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at")
@@ -325,9 +325,9 @@ model UserPermissionOverride {
 }
 
 model User {
-  id           String    @id @default(uuid()) @db.Char(36)
-  companyId    String    @map("company_id") @db.Char(36)
-  userGroupId  String    @map("user_group_id") @db.Char(36)
+  id           Int       @id @default(autoincrement())
+  companyId    Int       @map("company_id")
+  userGroupId  Int       @map("user_group_id")
   // user.md §Create User — optional employee identifier, distinct from the login username.
   employeeCode String?   @map("employee_code")
   fullName     String    @map("full_name")
@@ -372,8 +372,8 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Customer {
-  id           String         @id @default(uuid()) @db.Char(36)
-  companyId    String         @map("company_id") @db.Char(36)
+  id           Int            @id @default(autoincrement())
+  companyId    Int            @map("company_id")
   customerCode String         @unique @map("customer_code")
   customerName String         @map("customer_name")
   mobile       String
@@ -405,8 +405,8 @@ model Customer {
 // ---------------------------------------------------------------------------
 
 model EventType {
-  id           String          @id @default(uuid()) @db.Char(36)
-  companyId    String          @map("company_id") @db.Char(36)
+  id           Int             @id @default(autoincrement())
+  companyId    Int             @map("company_id")
   eventName    String          @map("event_name")
   colorCode    String?         @map("color_code")
   displayOrder Int             @default(0) @map("display_order")
@@ -423,8 +423,8 @@ model EventType {
 }
 
 model TaskTemplate {
-  id           String       @id @default(uuid()) @db.Char(36)
-  companyId    String       @map("company_id") @db.Char(36)
+  id           Int          @id @default(autoincrement())
+  companyId    Int          @map("company_id")
   taskName     String       @map("task_name")
   taskCategory TaskCategory @default(EXECUTION) @map("task_category")
   displayOrder Int          @default(0) @map("display_order")
@@ -443,15 +443,15 @@ model TaskTemplate {
 // ---------------------------------------------------------------------------
 
 model Enquiry {
-  id            String  @id @default(uuid()) @db.Char(36)
-  companyId     String  @map("company_id") @db.Char(36)
-  enquiryNumber String  @unique @map("enquiry_number")
+  id            Int    @id @default(autoincrement())
+  companyId     Int    @map("company_id")
+  enquiryNumber String @unique @map("enquiry_number")
   // Nullable: a NEW-customer enquiry has no Customer row until it reaches ORDER_CONFIRMED. Its
   // prospective details are held in the prospect_* columns below until then, at which point a
   // Customer is created (or matched by mobile) and linked here. EXISTING-customer enquiries set
   // this immediately and leave the prospect_* columns empty.
-  customerId    String? @map("customer_id") @db.Char(36)
-  eventTypeId   String  @map("event_type_id") @db.Char(36)
+  customerId    Int?   @map("customer_id")
+  eventTypeId   Int    @map("event_type_id")
 
   // Prospective (unconfirmed) customer details — populated only for NEW-customer enquiries that
   // have not yet reached ORDER_CONFIRMED. Once confirmed, these are copied into a Customer row.
@@ -482,7 +482,7 @@ model Enquiry {
   appointmentNotes  String?           @map("appointment_notes") @db.Text
   appointmentStatus AppointmentStatus @default(PENDING) @map("appointment_status")
 
-  assignedUserId String? @map("assigned_user_id") @db.Char(36)
+  assignedUserId Int? @map("assigned_user_id")
 
   // Denormalized cache of the latest/approved quotation — see docs/10_IMPLEMENTATION_DECISIONS.md §8.
   // Kept in sync by the Enquiry/Quotation Service layer whenever a quotation is created, updated, or approved.
@@ -528,12 +528,12 @@ model Enquiry {
 // Child table: 02_BUSINESS_WORKFLOW.md §3 — "Multiple follow-ups can be recorded"
 // cannot be represented by a single status field.
 model EnquiryFollowUp {
-  id           String   @id @default(uuid()) @db.Char(36)
-  enquiryId    String   @map("enquiry_id") @db.Char(36)
+  id           Int      @id @default(autoincrement())
+  enquiryId    Int      @map("enquiry_id")
   followUpDate DateTime @map("follow_up_date")
   notes        String?  @db.Text
   outcome      String?
-  createdById  String?  @map("created_by_id") @db.Char(36)
+  createdById  Int?     @map("created_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
   enquiry   Enquiry @relation(fields: [enquiryId], references: [id])
@@ -547,18 +547,18 @@ model EnquiryFollowUp {
 // ---------------------------------------------------------------------------
 
 model Quotation {
-  id        String          @id @default(uuid()) @db.Char(36)
+  id        Int             @id @default(autoincrement())
   // companyId is stored directly (not derived through the enquiry) so MANUAL quotations — which have
   // no linked enquiry/customer/order — can still be company-scoped in every query. See "md files/
   // Quotation/quotation.md" §Quotation Creation Sources.
-  companyId String          @map("company_id") @db.Char(36)
+  companyId Int             @map("company_id")
   source    QuotationSource @default(ENQUIRY)
 
   // Exactly one of enquiryId / customerId / orderId is set (or none, for MANUAL). Enforced in the
   // Service layer, not by the DB, because the valid-source combination is a business rule.
-  enquiryId  String? @map("enquiry_id") @db.Char(36)
-  customerId String? @map("customer_id") @db.Char(36)
-  orderId    String? @map("order_id") @db.Char(36)
+  enquiryId  Int? @map("enquiry_id")
+  customerId Int? @map("customer_id")
+  orderId    Int? @map("order_id")
 
   // MANUAL-quotation customer snapshot — a customer contacted by phone/WhatsApp for whom no Customer
   // record is created. Only populated when source = MANUAL.
@@ -583,7 +583,7 @@ model Quotation {
   remarks         String?         @db.Text
   status          QuotationStatus @default(DRAFT)
   pdfPath         String?         @map("pdf_path")
-  createdById     String?         @map("created_by_id") @db.Char(36)
+  createdById     Int?            @map("created_by_id")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")
@@ -608,8 +608,8 @@ model Quotation {
 
 // docs/10_IMPLEMENTATION_DECISIONS.md §5 — quotations are itemized, not a lump sum.
 model QuotationItem {
-  id          String  @id @default(uuid()) @db.Char(36)
-  quotationId String  @map("quotation_id") @db.Char(36)
+  id          Int     @id @default(autoincrement())
+  quotationId Int     @map("quotation_id")
   itemName    String  @map("item_name")
   description String? @db.Text
   quantity    Decimal @db.Decimal(10, 2)
@@ -626,8 +626,8 @@ model QuotationItem {
 // Sample decor images attached to a quotation — shown to the customer and rendered on a single
 // gallery page in the quotation PDF.
 model QuotationImage {
-  id          String    @id @default(uuid()) @db.Char(36)
-  quotationId String    @map("quotation_id") @db.Char(36)
+  id          Int       @id @default(autoincrement())
+  quotationId Int       @map("quotation_id")
   fileName    String    @map("file_name")
   filePath    String    @map("file_path")
   caption     String?
@@ -646,16 +646,16 @@ model QuotationImage {
 // ---------------------------------------------------------------------------
 
 model Order {
-  id          String  @id @default(uuid()) @db.Char(36)
-  companyId   String  @map("company_id") @db.Char(36)
-  orderNumber String  @unique @map("order_number")
-  enquiryId   String  @map("enquiry_id") @db.Char(36)
+  id          Int    @id @default(autoincrement())
+  companyId   Int    @map("company_id")
+  orderNumber String @unique @map("order_number")
+  enquiryId   Int    @map("enquiry_id")
   // Nullable: an enquiry moved to Order Confirmed always lands in Orders and the Payment Tracker,
   // whether or not a quotation was ever raised for it ("md files/Enquiry/flow.md" §3 — the enquiry's
   // status is the decision). Without one, the order's total falls back to the enquiry's final /
   // estimated budget and its invoice prints no line items.
-  quotationId String? @map("quotation_id") @db.Char(36)
-  customerId  String  @map("customer_id") @db.Char(36)
+  quotationId Int?   @map("quotation_id")
+  customerId  Int    @map("customer_id")
 
   // Nullable for the same reason: confirming an enquiry that has no event date yet still raises the
   // order. Such an order stays off the calendar until a date is set on it.
@@ -673,7 +673,7 @@ model Order {
   pendingAmount Decimal @default(0) @map("pending_amount") @db.Decimal(12, 2)
 
   // 03_MODULES.md Order Tab 1 "Assigned Coordinator" — not in 04_DATABASE_DESIGN.md's field list, added to satisfy the documented UI.
-  coordinatorId String? @map("coordinator_id") @db.Char(36)
+  coordinatorId Int? @map("coordinator_id")
 
   // 02_BUSINESS_WORKFLOW.md §14 — reason is mandatory when cancelling; enforced in the Service layer.
   cancellationReason String? @map("cancellation_reason") @db.Text
@@ -708,15 +708,15 @@ model Order {
 // docs/10_IMPLEMENTATION_DECISIONS.md §6 — payment status is derived from Order.totalAmount / Order.paidAmount,
 // never stored on the payment row itself.
 model Payment {
-  id              String        @id @default(uuid()) @db.Char(36)
-  orderId         String        @map("order_id") @db.Char(36)
+  id              Int           @id @default(autoincrement())
+  orderId         Int           @map("order_id")
   paymentDate     DateTime      @map("payment_date")
   paymentType     PaymentType   @map("payment_type")
   amount          Decimal       @db.Decimal(12, 2)
   paymentMethod   PaymentMethod @map("payment_method")
   referenceNumber String?       @map("reference_number")
   remarks         String?       @db.Text
-  receivedById    String?       @map("received_by_id") @db.Char(36)
+  receivedById    Int?          @map("received_by_id")
   receiptNumber   String        @unique @map("receipt_number")
   createdAt       DateTime      @default(now()) @map("created_at")
   deletedAt       DateTime?     @map("deleted_at")
@@ -734,12 +734,12 @@ model Payment {
 // balance) is read live from the order and its approved quotation rather than copied here — the
 // module's rule against duplicating order information (see PaymentTracker below) applies equally.
 model Invoice {
-  id            String   @id @default(uuid()) @db.Char(36)
-  companyId     String   @map("company_id") @db.Char(36)
-  orderId       String   @unique @map("order_id") @db.Char(36)
+  id            Int      @id @default(autoincrement())
+  companyId     Int      @map("company_id")
+  orderId       Int      @unique @map("order_id")
   invoiceNumber String   @unique @map("invoice_number")
   invoiceDate   DateTime @map("invoice_date")
-  issuedById    String?  @map("issued_by_id") @db.Char(36)
+  issuedById    Int?     @map("issued_by_id")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -757,8 +757,8 @@ model Invoice {
 // and balance stay on Order, per the module's rule that it "should not duplicate customer or order
 // information".
 model PaymentTracker {
-  id      String @id @default(uuid()) @db.Char(36)
-  orderId String @unique @map("order_id") @db.Char(36)
+  id      Int @id @default(autoincrement())
+  orderId Int @unique @map("order_id")
 
   paymentStatus PaymentTrackerStatus @default(PENDING) @map("payment_status")
   // Set once someone chooses the status by hand; automatic recalculation then leaves it alone until
@@ -780,14 +780,14 @@ model PaymentTracker {
 // docs/10_IMPLEMENTATION_DECISIONS.md §7 — Planning (Tab 4) and Checklist (Tab 5) share one table,
 // distinguished by taskCategory.
 model OrderTask {
-  id            String       @id @default(uuid()) @db.Char(36)
-  orderId       String       @map("order_id") @db.Char(36)
+  id            Int          @id @default(autoincrement())
+  orderId       Int          @map("order_id")
   taskName      String       @map("task_name")
   taskCategory  TaskCategory @map("task_category")
-  assignedToId  String?      @map("assigned_to_id") @db.Char(36)
+  assignedToId  Int?         @map("assigned_to_id")
   dueDate       DateTime?    @map("due_date")
   completedDate DateTime?    @map("completed_date")
-  completedById String?      @map("completed_by_id") @db.Char(36)
+  completedById Int?         @map("completed_by_id")
   remarks       String?      @db.Text
   status        TaskStatus   @default(PENDING)
   createdAt     DateTime     @default(now()) @map("created_at")
@@ -808,8 +808,8 @@ model OrderTask {
 // ---------------------------------------------------------------------------
 
 model TaskGroup {
-  id           String          @id @default(uuid()) @db.Char(36)
-  orderId      String          @map("order_id") @db.Char(36)
+  id           Int             @id @default(autoincrement())
+  orderId      Int             @map("order_id")
   title        String
   description  String?         @db.Text
   status       TaskGroupStatus @default(PUBLISHED)
@@ -826,8 +826,8 @@ model TaskGroup {
 }
 
 model TaskItem {
-  id           String         @id @default(uuid()) @db.Char(36)
-  taskGroupId  String         @map("task_group_id") @db.Char(36)
+  id           Int            @id @default(autoincrement())
+  taskGroupId  Int            @map("task_group_id")
   taskName     String         @map("task_name")
   status       TaskItemStatus @default(PENDING)
   remarks      String?        @db.Text
@@ -847,12 +847,12 @@ model TaskItem {
 }
 
 model OrderDocument {
-  id           String       @id @default(uuid()) @db.Char(36)
-  orderId      String       @map("order_id") @db.Char(36)
+  id           Int          @id @default(autoincrement())
+  orderId      Int          @map("order_id")
   documentType DocumentType @map("document_type")
   fileName     String       @map("file_name")
   filePath     String       @map("file_path")
-  uploadedById String?      @map("uploaded_by_id") @db.Char(36)
+  uploadedById Int?         @map("uploaded_by_id")
   uploadedAt   DateTime     @default(now()) @map("uploaded_at")
   deletedAt    DateTime?    @map("deleted_at")
 
@@ -876,8 +876,8 @@ model OrderDocument {
 // ---------------------------------------------------------------------------
 
 model RentalPerson {
-  id        String             @id @default(uuid()) @db.Char(36)
-  companyId String             @map("company_id") @db.Char(36)
+  id        Int                @id @default(autoincrement())
+  companyId Int                @map("company_id")
   name      String
   phone     String
   email     String?
@@ -902,8 +902,8 @@ model RentalPerson {
 // QuotationItem is a free-text line on one document, not a reusable record, so rent gets its own
 // master rather than borrowing a table that cannot be selected from.
 model RentalItem {
-  id              String           @id @default(uuid()) @db.Char(36)
-  companyId       String           @map("company_id") @db.Char(36)
+  id              Int              @id @default(autoincrement())
+  companyId       Int              @map("company_id")
   itemName        String           @map("item_name")
   category        String?
   defaultRentRate Decimal?         @map("default_rent_rate") @db.Decimal(12, 2)
@@ -929,14 +929,14 @@ model RentalItem {
 // a per-row aggregate cannot do. Every writer recomputes them from the child rows inside the same
 // transaction that changes those rows — see rent-stock-outs/service.ts recalculate().
 model StockOut {
-  id                 String    @id @default(uuid()) @db.Char(36)
-  companyId          String    @map("company_id") @db.Char(36)
+  id                 Int       @id @default(autoincrement())
+  companyId          Int       @map("company_id")
   rentNo             String    @unique @map("rent_no")
-  rentalPersonId     String    @map("rental_person_id") @db.Char(36)
+  rentalPersonId     Int       @map("rental_person_id")
   stockOutDate       DateTime  @map("stock_out_date")
   expectedReturnDate DateTime? @map("expected_return_date")
 
-  subtotal Decimal @db.Decimal(12, 2)
+  subtotal          Decimal @db.Decimal(12, 2)
   // Discount is entered as a percentage of the subtotal; `discount` is the resulting amount,
   // computed and stored by the service. Both are kept for the same reason the Quotation model keeps
   // cgstPercent alongside `tax`: the percentage is what the user agreed, the amount is what every
@@ -954,7 +954,7 @@ model StockOut {
 
   notes       String?        @db.Text
   status      StockOutStatus @default(ACTIVE)
-  createdById String?        @map("created_by_id") @db.Char(36)
+  createdById Int?           @map("created_by_id")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -982,9 +982,9 @@ model StockOut {
 // `returnedQuantity` is the same kind of transactional cache as StockOut's — it is what the return
 // screen shows as "Previously Returned" and what the over-return guard (§16) checks against.
 model StockOutItem {
-  id               String   @id @default(uuid()) @db.Char(36)
-  stockOutId       String   @map("stock_out_id") @db.Char(36)
-  rentalItemId     String?  @map("rental_item_id") @db.Char(36)
+  id               Int      @id @default(autoincrement())
+  stockOutId       Int      @map("stock_out_id")
+  rentalItemId     Int?     @map("rental_item_id")
   itemName         String   @map("item_name_snapshot")
   quantity         Decimal  @db.Decimal(10, 2)
   rate             Decimal  @db.Decimal(12, 2)
@@ -1006,13 +1006,13 @@ model StockOutItem {
 // instalments as the customer brings items back, so returns are rows rather than a boolean, and the
 // history is never overwritten.
 model StockReturn {
-  id          String   @id @default(uuid()) @db.Char(36)
-  companyId   String   @map("company_id") @db.Char(36)
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @map("company_id")
   returnNo    String   @unique @map("return_no")
-  stockOutId  String   @map("stock_out_id") @db.Char(36)
+  stockOutId  Int      @map("stock_out_id")
   returnDate  DateTime @map("return_date")
   notes       String?  @db.Text
-  createdById String?  @map("created_by_id") @db.Char(36)
+  createdById Int?     @map("created_by_id")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1029,9 +1029,9 @@ model StockReturn {
 }
 
 model StockReturnItem {
-  id               String   @id @default(uuid()) @db.Char(36)
-  stockReturnId    String   @map("stock_return_id") @db.Char(36)
-  stockOutItemId   String   @map("stock_out_item_id") @db.Char(36)
+  id               Int      @id @default(autoincrement())
+  stockReturnId    Int      @map("stock_return_id")
+  stockOutItemId   Int      @map("stock_out_item_id")
   quantityReturned Decimal  @map("quantity_returned") @db.Decimal(10, 2)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -1051,17 +1051,17 @@ model StockReturnItem {
 // outstanding report (§24) groups payments by person directly, and the service checks the two agree
 // before writing (§31).
 model RentPayment {
-  id             String          @id @default(uuid()) @db.Char(36)
-  companyId      String          @map("company_id") @db.Char(36)
+  id             Int             @id @default(autoincrement())
+  companyId      Int             @map("company_id")
   paymentNo      String          @unique @map("payment_no")
-  stockOutId     String          @map("stock_out_id") @db.Char(36)
-  rentalPersonId String          @map("rental_person_id") @db.Char(36)
+  stockOutId     Int             @map("stock_out_id")
+  rentalPersonId Int             @map("rental_person_id")
   paymentDate    DateTime        @map("payment_date")
   amount         Decimal         @db.Decimal(12, 2)
   paymentMode    RentPaymentMode @map("payment_mode")
   referenceNo    String?         @map("reference_no")
   notes          String?         @db.Text
-  receivedById   String?         @map("received_by_id") @db.Char(36)
+  receivedById   Int?            @map("received_by_id")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1083,14 +1083,14 @@ model RentPayment {
 // ---------------------------------------------------------------------------
 
 model ActivityLog {
-  id            String   @id @default(uuid()) @db.Char(36)
-  companyId     String?  @map("company_id") @db.Char(36)
+  id            Int      @id @default(autoincrement())
+  companyId     Int?     @map("company_id")
   module        String
-  referenceId   String   @map("reference_id") @db.Char(36)
+  referenceId   Int      @map("reference_id")
   action        String
   description   String?  @db.Text
   metadata      Json?
-  performedById String?  @map("performed_by_id") @db.Char(36)
+  performedById Int?     @map("performed_by_id")
   performedAt   DateTime @default(now()) @map("performed_at")
 
   company     Company? @relation(fields: [companyId], references: [id])
@@ -1105,8 +1105,8 @@ model ActivityLog {
 // ---------------------------------------------------------------------------
 
 model DocumentSequence {
-  id           String       @id @default(uuid()) @db.Char(36)
-  companyId    String       @map("company_id") @db.Char(36)
+  id           Int          @id @default(autoincrement())
+  companyId    Int          @map("company_id")
   sequenceType SequenceType @map("sequence_type")
   year         Int
   lastNumber   Int          @default(0) @map("last_number")

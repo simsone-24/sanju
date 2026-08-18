@@ -3,7 +3,7 @@ import type { PermissionGrant } from './permission';
 export type UserGroupStatus = 'ACTIVE' | 'INACTIVE';
 
 export interface UserGroupListItem {
-  id: string;
+  id: number;
   groupName: string;
   description: string | null;
   status: UserGroupStatus;
@@ -17,7 +17,7 @@ export interface UserGroupDetail extends UserGroupListItem {
 }
 
 export interface UserGroupOption {
-  id: string;
+  id: number;
   groupName: string;
 }
 

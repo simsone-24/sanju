@@ -25,8 +25,8 @@ const MODULE = 'RENT';
 // ---------------------------------------------------------------------------
 
 export interface StockOutItemResponse {
-  id: string;
-  rentalItemId: string | null;
+  id: number;
+  rentalItemId: number | null;
   itemName: string;
   quantity: number;
   rate: number;
@@ -37,11 +37,11 @@ export interface StockOutItemResponse {
 }
 
 export interface StockOutSummaryResponse {
-  id: string;
+  id: number;
   rentNo: string;
   stockOutDate: Date;
   expectedReturnDate: Date | null;
-  rentalPerson: { id: string; name: string; phone: string; city: string | null; status: string };
+  rentalPerson: { id: number; name: string; phone: string; city: string | null; status: string };
   subtotal: number;
   discountPercent: number;
   discount: number;
@@ -58,31 +58,31 @@ export interface StockOutSummaryResponse {
   notes: string | null;
   totalItems: number;
   returnCount: number;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface StockOutReturnResponse {
-  id: string;
+  id: number;
   returnNo: string;
   returnDate: Date;
   notes: string | null;
   totalReturned: number;
-  createdBy: { id: string; fullName: string } | null;
+  createdBy: { id: number; fullName: string } | null;
   createdAt: Date;
-  items: { id: string; stockOutItemId: string; itemName: string; quantityReturned: number }[];
+  items: { id: number; stockOutItemId: number; itemName: string; quantityReturned: number }[];
 }
 
 export interface StockOutPaymentResponse {
-  id: string;
+  id: number;
   paymentNo: string;
   paymentDate: Date;
   amount: number;
   paymentMode: string;
   referenceNo: string | null;
   notes: string | null;
-  receivedBy: { id: string; fullName: string } | null;
+  receivedBy: { id: number; fullName: string } | null;
 }
 
 export interface StockOutDetailResponse extends StockOutSummaryResponse {
@@ -126,8 +126,8 @@ export function mapStockOutSummary(record: stockOutsRepository.StockOutBaseRecor
 }
 
 export function mapStockOutItem(item: {
-  id: string;
-  rentalItemId: string | null;
+  id: number;
+  rentalItemId: number | null;
   itemName: string;
   quantity: unknown;
   rate: unknown;
@@ -199,7 +199,7 @@ function mapStockOutDetail(record: stockOutsRepository.StockOutDetailRecord): St
  * Idempotent by construction: it derives everything from scratch rather than applying a delta, so
  * running it twice, or after a partially-applied edit, still lands on the correct value.
  */
-export async function recalculate(tx: PrismaClientOrTx, stockOutId: string): Promise<void> {
+export async function recalculate(tx: PrismaClientOrTx, stockOutId: number): Promise<void> {
   const [items, returnedByItem, paidAmountRaw, totals] = await Promise.all([
     stockOutsRepository.listStockOutItems(stockOutId, tx),
     stockOutsRepository.sumReturnedQuantityByStockOutItem(stockOutId, tx),
@@ -252,7 +252,7 @@ export async function list(params: ListStockOutsParams) {
   };
 }
 
-export async function getById(companyId: string, id: string): Promise<StockOutDetailResponse> {
+export async function getById(companyId: number, id: number): Promise<StockOutDetailResponse> {
   const record = await stockOutsRepository.findStockOutById(companyId, id);
   if (!record) throw new AppError(404, 'Stock out not found.');
   return mapStockOutDetail(record);
@@ -264,7 +264,7 @@ export async function getById(companyId: string, id: string): Promise<StockOutDe
  * Cancelled transactions are refused: they are excluded from every total, so booking a return or a
  * collection against one would write a row nothing ever reads back.
  */
-export async function getWritableCore(companyId: string, id: string, client?: PrismaClientOrTx) {
+export async function getWritableCore(companyId: number, id: number, client?: PrismaClientOrTx) {
   const stockOut = await stockOutsRepository.findStockOutCore(companyId, id, client);
   if (!stockOut) throw new AppError(404, 'Stock out not found.');
   if (stockOut.status === StockOutStatus.CANCELLED) {
@@ -282,8 +282,8 @@ export async function getWritableCore(companyId: string, id: string, client?: Pr
  * describes the item as it was known at issue time (stock.md §28) rather than trusting whatever the
  * browser posted. Lines with no master item keep the typed name.
  */
-async function resolveLines(companyId: string, items: StockOutItemInput[]) {
-  const masterIds = [...new Set(items.map((item) => item.rentalItemId).filter((id): id is string => Boolean(id)))];
+async function resolveLines(companyId: number, items: StockOutItemInput[]) {
+  const masterIds = [...new Set(items.map((item) => item.rentalItemId).filter((id): id is number => Boolean(id)))];
   const masters = masterIds.length
     ? await rentItemsRepository.findRentalItemsByIds(companyId, masterIds)
     : [];
@@ -319,8 +319,8 @@ function assertTotalIsPayable(grandTotal: number, paidAmount: number, rentNo: st
 }
 
 export async function create(
-  companyId: string,
-  actorId: string,
+  companyId: number,
+  actorId: number,
   input: CreateStockOutInput,
 ): Promise<StockOutDetailResponse> {
   await rentPersonsService.assertSelectableForStockOut(companyId, input.rentalPersonId);
@@ -414,9 +414,9 @@ export async function create(
  *   rather than half-applied; the header (dates, notes, discount, charges) stays editable.
  */
 export async function update(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   input: UpdateStockOutInput,
 ): Promise<StockOutDetailResponse> {
   const existing = await stockOutsRepository.findStockOutCore(companyId, id);
@@ -500,9 +500,9 @@ export async function update(
  * returns and payments stay on record and remain readable from its view page.
  */
 export async function cancel(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   reason?: string,
 ): Promise<StockOutDetailResponse> {
   const existing = await stockOutsRepository.findStockOutCore(companyId, id);
@@ -531,7 +531,7 @@ export async function cancel(
  * stock.md §33 — once returns or payments exist the record is financially and operationally
  * auditable, so deletion is refused and the caller is pointed at Cancel instead.
  */
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await stockOutsRepository.findStockOutCore(companyId, id);
   if (!existing) throw new AppError(404, 'Stock out not found.');
 

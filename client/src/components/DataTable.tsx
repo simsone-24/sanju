@@ -38,7 +38,8 @@ interface EmptyStateConfig {
 interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   rows: T[];
-  getRowId: (row: T) => string;
+  /** Usually the record's primary key; report rows with no single key compose one from their parts. */
+  getRowId: (row: T) => string | number;
   loading?: boolean;
   meta?: PaginationMeta;
   page: number;
@@ -57,7 +58,7 @@ interface DataTableProps<T> {
    */
   canExport?: boolean;
   /** Row id to briefly flash — e.g. the record just created/updated on a form page. */
-  highlightRowId?: string;
+  highlightRowId?: number;
   /** Optional colored left-border accent per row (e.g. status color) — returns a CSS color or undefined for none. */
   rowAccentColor?: (row: T) => string | undefined;
   /** Skip the built-in card wrapper — for pages that nest DataTable inside their own card. */

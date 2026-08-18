@@ -46,6 +46,7 @@ import {
   toDateRangePreset,
 } from '../../utils/dateRange';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { toOptionalId } from '../../utils/ids';
 import { QuotationPreviewDialog } from './QuotationPreviewDialog';
 import { buildQuotationWhatsAppLink, canShareQuotation } from './quotationActions';
 import { isQuotationEditable } from './quotationStatusTransitions';
@@ -75,7 +76,7 @@ const QUOTATION_ROW_ACCENT: Record<QuotationStatus, string> = {
 const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[150px]';
 
 interface PendingAction {
-  id: string;
+  id: number;
   quotationNumber: string;
   action: 'send' | 'reject';
 }
@@ -95,14 +96,14 @@ const ACTION_COPY: Record<PendingAction['action'], { title: string; message: (nu
 // A grouped row is either one enquiry (showing its latest revision) or a standalone
 // Customer/Order/Manual quotation. Flattened here so the columns don't branch on `kind` repeatedly.
 interface FlatRow {
-  rowId: string;
-  quotationId: string;
+  rowId: number;
+  quotationId: number;
   quotationNumber: string;
   version: number;
   revisionCount: number;
   sourceLabel: string;
   enquiryNumber: string | null;
-  enquiryId: string | null;
+  enquiryId: number | null;
   customerName: string;
   phone: string | null;
   whatsapp: string | null;
@@ -213,11 +214,11 @@ export default function QuotationListPage() {
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [previewQuotationId, setPreviewQuotationId] = useState<string | null>(null);
+  const [previewQuotationId, setPreviewQuotationId] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<FlatRow | null>(null);
   const [menuState, setMenuState] = useState<{ anchor: HTMLElement; row: FlatRow } | null>(null);
-  const [highlightId, setHighlightId] = useState<string | undefined>(
-    () => (location.state as { highlightId?: string } | null)?.highlightId,
+  const [highlightId, setHighlightId] = useState<number | undefined>(
+    () => (location.state as { highlightId?: number } | null)?.highlightId,
   );
 
   useEffect(() => {
@@ -283,8 +284,8 @@ export default function QuotationListPage() {
         search: search || undefined,
         status: status || undefined,
         source: sourceFilter || undefined,
-        customerId: customerId || undefined,
-        assignedUserId: assignedUserId || undefined,
+        customerId: toOptionalId(customerId),
+        assignedUserId: toOptionalId(assignedUserId),
         dateFrom: dateFrom ? dateFrom.format('YYYY-MM-DD') : undefined,
         dateTo: dateTo ? dateTo.format('YYYY-MM-DD') : undefined,
       }),
@@ -297,11 +298,11 @@ export default function QuotationListPage() {
   }
 
   const sendMutation = useMutation({
-    mutationFn: (id: string) => quotationService.changeStatus(id, 'SENT'),
+    mutationFn: (id: number) => quotationService.changeStatus(id, 'SENT'),
     onSuccess: onActionSettled,
   });
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => quotationService.changeStatus(id, 'REJECTED'),
+    mutationFn: (id: number) => quotationService.changeStatus(id, 'REJECTED'),
     onSuccess: onActionSettled,
   });
 
@@ -415,7 +416,7 @@ export default function QuotationListPage() {
     });
   }
   if (customerId) {
-    const customer = customerOptions?.find((option) => option.id === customerId);
+    const customer = customerOptions?.find((option) => String(option.id) === customerId);
     activeFilters.push({
       key: 'customer',
       label: `Customer: ${customer?.customerName ?? 'Selected customer'}`,
@@ -423,7 +424,7 @@ export default function QuotationListPage() {
     });
   }
   if (assignedUserId) {
-    const user = userOptions?.find((option) => option.id === assignedUserId);
+    const user = userOptions?.find((option) => String(option.id) === assignedUserId);
     activeFilters.push({
       key: 'user',
       label: `Assigned: ${user?.fullName ?? 'Selected user'}`,
@@ -769,7 +770,7 @@ export default function QuotationListPage() {
               value={customerId}
               onChange={(value) => patchParams({ customer: value || null })}
               options={(customerOptions ?? []).map((option) => ({
-                value: option.id,
+                value: String(option.id),
                 label: option.customerName,
               }))}
             />
@@ -781,7 +782,7 @@ export default function QuotationListPage() {
             emptyLabel="All"
             value={assignedUserId}
             onChange={(value) => patchParams({ user: value || null })}
-            options={(userOptions ?? []).map((option) => ({ value: option.id, label: option.fullName }))}
+            options={(userOptions ?? []).map((option) => ({ value: String(option.id), label: option.fullName }))}
           />
 
           <DateRangeFilter

@@ -5,7 +5,7 @@ import { EventTime, OrderStatus } from '@prisma/client';
 export type CalendarColor = 'GREEN' | 'BLUE' | 'ORANGE' | 'RED' | 'GREY';
 
 export interface CalendarEvent {
-  id: string;
+  id: number;
   orderNumber: string;
   customerName: string;
   eventName: string;

@@ -57,7 +57,7 @@ export type PaymentTrackerDetail = Prisma.OrderGetPayload<{ select: typeof track
 // Rejected orders carry no payment obligation, so they stay out of the module entirely —
 // "payment/payment.md" scopes it to confirmed orders. Their tracker rows still exist (see the
 // backfill migration) in case an order is ever reinstated.
-function baseWhere(companyId: string): Prisma.OrderWhereInput {
+function baseWhere(companyId: number): Prisma.OrderWhereInput {
   return { companyId, deletedAt: null, status: { not: OrderStatus.REJECTED } };
 }
 
@@ -145,20 +145,20 @@ export async function getPaymentTrackerStats(params: PaymentTrackerStatsParams) 
   };
 }
 
-export function findTrackerOrderById(companyId: string, orderId: string, client: PrismaClientOrTx = prisma) {
+export function findTrackerOrderById(companyId: number, orderId: number, client: PrismaClientOrTx = prisma) {
   return client.order.findFirst({ where: { id: orderId, ...baseWhere(companyId) }, select: trackerDetailSelect });
 }
 
 // Orders created before this module existed are covered by the backfill migration; this guards the
 // remaining gap (an order whose tracker row was never written) so an edit can never 404 on it.
-export async function ensureTracker(orderId: string, client: PrismaClientOrTx = prisma) {
+export async function ensureTracker(orderId: number, client: PrismaClientOrTx = prisma) {
   const existing = await client.paymentTracker.findUnique({ where: { orderId }, select: { id: true } });
   if (existing) return existing;
   return client.paymentTracker.create({ data: { orderId }, select: { id: true } });
 }
 
 export function updateTracker(
-  orderId: string,
+  orderId: number,
   data: Prisma.PaymentTrackerUncheckedUpdateInput,
   client: PrismaClientOrTx = prisma,
 ) {
@@ -172,7 +172,7 @@ export function updateTracker(
  * status can never lag the amounts it is derived from.
  */
 export async function syncTrackerStatus(
-  orderId: string,
+  orderId: number,
   budget: number,
   collected: number,
   client: PrismaClientOrTx = prisma,
@@ -198,7 +198,7 @@ export async function syncTrackerStatus(
   return paymentStatus;
 }
 
-export function getTrackerActivityLog(orderId: string, client: PrismaClientOrTx = prisma) {
+export function getTrackerActivityLog(orderId: number, client: PrismaClientOrTx = prisma) {
   return client.activityLog.findMany({
     where: { module: 'PAYMENT_TRACKER', referenceId: orderId },
     orderBy: { performedAt: 'desc' },

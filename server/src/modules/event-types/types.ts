@@ -12,7 +12,7 @@ export interface UpdateEventTypeInput {
 }
 
 export interface ListEventTypesParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

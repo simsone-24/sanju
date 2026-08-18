@@ -5,17 +5,17 @@ export interface RevenueReportFilters {
   limit: number;
   dateFrom?: string;
   dateTo?: string;
-  eventTypeId?: string;
+  eventTypeId?: number;
 }
 
 export interface RevenuePaymentRow {
-  id: string;
+  id: number;
   paymentDate: string;
   paymentType: string;
   amount: string;
   paymentMethod: string;
   receiptNumber: string;
-  order: { id: string; orderNumber: string; customer: { customerName: string } };
+  order: { id: number; orderNumber: string; customer: { customerName: string } };
 }
 
 export interface RevenueMethodBreakdown {
@@ -56,19 +56,19 @@ export interface OutstandingReportFilters {
   limit: number;
   dateFrom?: string;
   dateTo?: string;
-  eventTypeId?: string;
-  customerId?: string;
+  eventTypeId?: number;
+  customerId?: number;
 }
 
 export interface OutstandingOrderRow {
-  id: string;
+  id: number;
   orderNumber: string;
   eventDate: string;
   totalAmount: string;
   paidAmount: string;
   pendingAmount: string;
   status: OrderStatus;
-  customer: { id: string; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string };
 }
 
 export interface OutstandingReportResult {
@@ -87,19 +87,19 @@ export interface EventReportFilters {
   limit: number;
   dateFrom?: string;
   dateTo?: string;
-  eventTypeId?: string;
+  eventTypeId?: number;
   status?: OrderStatus;
 }
 
 export interface EventReportRow {
-  id: string;
+  id: number;
   orderNumber: string;
   eventDate: string;
   venue: string | null;
   status: OrderStatus;
   totalAmount: string;
-  customer: { id: string; customerName: string };
-  enquiry: { eventType: { id: string; eventName: string; colorCode: string | null } };
+  customer: { id: number; customerName: string };
+  enquiry: { eventType: { id: number; eventName: string; colorCode: string | null } };
 }
 
 export interface EventStatusCount {

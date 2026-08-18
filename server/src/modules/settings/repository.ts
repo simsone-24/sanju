@@ -27,10 +27,10 @@ const companySelect = {
 
 export type CompanyRecord = Prisma.CompanyGetPayload<{ select: typeof companySelect }>;
 
-export function findCompanyById(id: string) {
+export function findCompanyById(id: number) {
   return prisma.company.findUnique({ where: { id }, select: companySelect });
 }
 
-export function updateCompany(id: string, data: Prisma.CompanyUpdateInput) {
+export function updateCompany(id: number, data: Prisma.CompanyUpdateInput) {
   return prisma.company.update({ where: { id }, data, select: companySelect });
 }

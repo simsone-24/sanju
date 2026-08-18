@@ -139,7 +139,7 @@ async function main() {
     console.log(`Using existing company: ${company.companyName}`);
   }
 
-  const groupIdByName: Record<GroupName, string> = {} as Record<GroupName, string>;
+  const groupIdByName: Record<GroupName, number> = {} as Record<GroupName, number>;
 
   for (const groupName of GROUP_NAMES) {
     const group = await prisma.userGroup.upsert({

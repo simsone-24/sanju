@@ -2,8 +2,7 @@ import type { PermissionGrant } from './permission';
 import type { UserGroupStatus } from './userGroup';
 
 export interface UserListItem {
-  id: string;
-  employeeCode: string | null;
+  id: number;
   fullName: string;
   username: string;
   email: string | null;
@@ -13,7 +12,7 @@ export interface UserListItem {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  userGroup: { id: string; groupName: string; status: UserGroupStatus };
+  userGroup: { id: number; groupName: string; status: UserGroupStatus };
 }
 
 export interface UserDetail extends UserListItem {
@@ -22,7 +21,6 @@ export interface UserDetail extends UserListItem {
 }
 
 export interface CreateUserInput {
-  employeeCode?: string;
   fullName: string;
   username: string;
   password: string;
@@ -30,13 +28,12 @@ export interface CreateUserInput {
   mobile: string;
   email?: string;
   city?: string;
-  userGroupId: string;
+  userGroupId: number;
   isActive: boolean;
   permissionOverrides: PermissionGrant[];
 }
 
 export interface UpdateUserInput {
-  employeeCode?: string;
   fullName?: string;
   username?: string;
   password?: string;
@@ -44,7 +41,7 @@ export interface UpdateUserInput {
   mobile?: string;
   email?: string;
   city?: string;
-  userGroupId?: string;
+  userGroupId?: number;
   isActive?: boolean;
   permissionOverrides?: PermissionGrant[];
 }
@@ -53,6 +50,6 @@ export interface ListUsersParams {
   page: number;
   limit: number;
   search?: string;
-  userGroupId?: string;
+  userGroupId?: number;
   isActive?: boolean;
 }

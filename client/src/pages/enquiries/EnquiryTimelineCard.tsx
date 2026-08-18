@@ -37,7 +37,7 @@ function toTimelineEntry(entry: EnquiryTimelineEntry): TimelineEntry {
   };
 }
 
-export function EnquiryTimelineCard({ enquiryId }: { enquiryId: string }) {
+export function EnquiryTimelineCard({ enquiryId }: { enquiryId: number }) {
   const [expanded, setExpanded] = useState(false);
 
   const { data: timeline, isLoading } = useQuery({

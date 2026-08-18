@@ -8,6 +8,7 @@ import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
 import * as quotationsService from './service';
 import { logActivity } from '../../utils/activityLogger';
+import { parseId } from '../../utils/parseId';
 import {
   ChangeQuotationStatusSchema,
   CreateQuotationSchema,
@@ -86,7 +87,7 @@ export async function stats(req: Request, res: Response, next: NextFunction): Pr
 export async function getById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const quotation = await quotationsService.getById(actor.companyId, req.params.id);
+    const quotation = await quotationsService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, quotation, 'Quotation retrieved successfully.');
   } catch (error) {
     next(error);
@@ -96,7 +97,7 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
 export async function getTimeline(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const entries = await quotationsService.getTimeline(actor.companyId, req.params.id);
+    const entries = await quotationsService.getTimeline(actor.companyId, parseId(req.params.id));
     sendSuccess(res, entries, 'Quotation timeline retrieved successfully.');
   } catch (error) {
     next(error);
@@ -134,7 +135,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const quotation = await quotationsService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const quotation = await quotationsService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, quotation, 'Quotation updated successfully.');
   } catch (error) {
     next(error);
@@ -151,7 +152,7 @@ export async function changeStatus(
     const quotation = await quotationsService.changeStatus(
       actor.companyId,
       actor.id,
-      req.params.id,
+      parseId(req.params.id),
       req.body.status,
       req.body.remarks,
     );
@@ -164,7 +165,7 @@ export async function changeStatus(
 export async function approve(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const quotation = await quotationsService.approve(actor.companyId, actor.id, req.params.id);
+    const quotation = await quotationsService.approve(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, quotation, 'Quotation approved successfully.');
   } catch (error) {
     next(error);
@@ -182,7 +183,7 @@ export async function uploadImages(req: Request<{ id: string }>, res: Response, 
       fileName: file.originalname,
       filePath: path.relative(env.uploadPath, file.path).split(path.sep).join('/'),
     }));
-    const quotation = await quotationsService.addImages(actor.companyId, actor.id, req.params.id, mapped);
+    const quotation = await quotationsService.addImages(actor.companyId, actor.id, parseId(req.params.id), mapped);
     sendSuccess(res, quotation, 'Images added successfully.', 201);
   } catch (error) {
     next(error);
@@ -196,7 +197,7 @@ export async function deleteImage(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const quotation = await quotationsService.removeImage(actor.companyId, actor.id, req.params.id, req.params.imageId);
+    const quotation = await quotationsService.removeImage(actor.companyId, actor.id, parseId(req.params.id), parseId(req.params.imageId, 'imageId'));
     sendSuccess(res, quotation, 'Image removed successfully.');
   } catch (error) {
     next(error);
@@ -208,11 +209,11 @@ export async function deleteImage(
 export async function downloadPdf(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const { absolutePath, fileName } = await quotationsService.getPdfForDownload(actor.companyId, req.params.id);
+    const { absolutePath, fileName } = await quotationsService.getPdfForDownload(actor.companyId, parseId(req.params.id));
     await logActivity({
       companyId: actor.companyId,
       module: 'QUOTATIONS',
-      referenceId: req.params.id,
+      referenceId: parseId(req.params.id),
       action: 'PRINT',
       description: `Quotation PDF "${fileName}" downloaded.`,
       performedById: actor.id,

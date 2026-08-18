@@ -7,7 +7,7 @@ import * as quotationService from '../../services/quotationService';
 
 interface QuotationActivityDrawerProps {
   open: boolean;
-  quotationId: string;
+  quotationId: number;
   onClose: () => void;
 }
 

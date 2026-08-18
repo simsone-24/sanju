@@ -13,7 +13,7 @@ import { CreateRentPaymentInput, ListRentPaymentsParams, UpdateRentPaymentInput 
 const MODULE = 'RENT';
 
 export interface RentPaymentResponse {
-  id: string;
+  id: number;
   paymentNo: string;
   paymentDate: Date;
   amount: number;
@@ -21,10 +21,10 @@ export interface RentPaymentResponse {
   referenceNo: string | null;
   notes: string | null;
   createdAt: Date;
-  receivedBy: { id: string; fullName: string } | null;
-  rentalPerson: { id: string; name: string; phone: string };
+  receivedBy: { id: number; fullName: string } | null;
+  rentalPerson: { id: number; name: string; phone: string };
   stockOut: {
-    id: string;
+    id: number;
     rentNo: string;
     stockOutDate: Date;
     grandTotal: number;
@@ -69,19 +69,19 @@ export async function list(params: ListRentPaymentsParams) {
   };
 }
 
-export async function getById(companyId: string, id: string): Promise<RentPaymentResponse> {
+export async function getById(companyId: number, id: number): Promise<RentPaymentResponse> {
   const record = await paymentsRepository.findRentPaymentById(companyId, id);
   if (!record) throw new AppError(404, 'Payment not found.');
   return mapRentPayment(record);
 }
 
-export function getSummary(companyId: string) {
+export function getSummary(companyId: number) {
   return paymentsRepository.getPaymentSummary(companyId);
 }
 
 export async function create(
-  companyId: string,
-  actorId: string,
+  companyId: number,
+  actorId: number,
   input: CreateRentPaymentInput,
 ): Promise<RentPaymentResponse> {
   const stockOut = await stockOutsService.getWritableCore(companyId, input.stockOutId);
@@ -125,9 +125,9 @@ export async function create(
 }
 
 export async function update(
-  companyId: string,
-  actorId: string,
-  id: string,
+  companyId: number,
+  actorId: number,
+  id: number,
   input: UpdateRentPaymentInput,
 ): Promise<RentPaymentResponse> {
   const existing = await paymentsRepository.findRentPaymentById(companyId, id);
@@ -169,7 +169,7 @@ export async function update(
   return getById(companyId, id);
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existing = await paymentsRepository.findRentPaymentById(companyId, id);
   if (!existing) throw new AppError(404, 'Payment not found.');
 

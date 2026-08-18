@@ -21,7 +21,7 @@ export async function list(params: ListOrderTasksParams) {
   return tasksRepository.listTasksForOrder(params.companyId, params.orderId, params.taskCategory);
 }
 
-export async function create(companyId: string, actorId: string, orderId: string, input: CreateOrderTaskInput) {
+export async function create(companyId: number, actorId: number, orderId: number, input: CreateOrderTaskInput) {
   const order = await ordersRepository.findOrderById(companyId, orderId);
   if (!order) throw new AppError(404, 'Order not found.');
 
@@ -55,7 +55,7 @@ export async function create(companyId: string, actorId: string, orderId: string
   return task;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateOrderTaskInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateOrderTaskInput) {
   const existing = await tasksRepository.findTaskById(companyId, id);
   if (!existing) throw new AppError(404, 'Task not found.');
 

@@ -128,7 +128,7 @@ export function TaskPlanGroupCard({
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; values: TaskItemFormValues }) =>
+    mutationFn: (input: { id: number; values: TaskItemFormValues }) =>
       taskPlanService.updateItem(input.id, {
         taskName: input.values.taskName,
         status: input.values.status,
@@ -144,7 +144,7 @@ export function TaskPlanGroupCard({
   // Optimistic: the checkbox, the row's badge and the group's progress all move on click, and the
   // refetch that follows only confirms them. A failure puts the previous plan straight back.
   const statusMutation = useMutation({
-    mutationFn: (input: { id: string; status: TaskItemStatus }) =>
+    mutationFn: (input: { id: number; status: TaskItemStatus }) =>
       taskPlanService.updateItem(input.id, { status: input.status }),
     onMutate: async (input) => {
       // An in-flight refetch would otherwise land on top of the optimistic value.
@@ -163,7 +163,7 @@ export function TaskPlanGroupCard({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => taskPlanService.deleteItem(id),
+    mutationFn: (id: number) => taskPlanService.deleteItem(id),
     onSuccess: () => {
       invalidate();
       setDeletingItem(null);

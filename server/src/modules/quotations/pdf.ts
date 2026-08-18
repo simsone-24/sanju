@@ -68,7 +68,7 @@ const MUTED = '#555555';
 // §PDF Layout): green banner + QUOTATION pill, letterhead, ITEM/QUANTITY/UNIT PRICE/SUBTOTAL table,
 // bank box + totals with a TOTAL pill, thank-you footer.
 export async function generateQuotationPdf(
-  quotationId: string,
+  quotationId: number,
   data: QuotationPdfData,
   company: CompanyPdfData,
 ): Promise<string> {

@@ -47,7 +47,7 @@ export default function OrderDocumentsTab({ order }: OrderDocumentsTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const documentsQueryKey = ['order-documents', order.id];
@@ -99,14 +99,14 @@ export default function OrderDocumentsTab({ order }: OrderDocumentsTabProps) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => documentService.remove(id),
+    mutationFn: (id: number) => documentService.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: documentsQueryKey });
       setDeletingId(null);
     },
   });
 
-  async function handleDownload(id: string, fileName: string) {
+  async function handleDownload(id: number, fileName: string) {
     setDownloadError(null);
     try {
       await documentService.downloadFile(id, fileName);

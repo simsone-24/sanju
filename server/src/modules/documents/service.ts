@@ -11,9 +11,9 @@ export async function list(params: ListOrderDocumentsParams) {
 }
 
 export async function upload(
-  companyId: string,
-  actorId: string,
-  orderId: string,
+  companyId: number,
+  actorId: number,
+  orderId: number,
   input: UploadDocumentInput,
   file: UploadedFile,
 ) {
@@ -40,13 +40,13 @@ export async function upload(
   return document;
 }
 
-export async function getFileForDownload(companyId: string, id: string) {
+export async function getFileForDownload(companyId: number, id: number) {
   const document = await documentsRepository.findDocumentById(companyId, id);
   if (!document) throw new AppError(404, 'Document not found.');
   return { filePath: document.filePath, fileName: document.fileName };
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const document = await documentsRepository.findDocumentById(companyId, id);
   if (!document) throw new AppError(404, 'Document not found.');
 

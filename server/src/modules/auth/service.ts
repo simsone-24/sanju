@@ -83,7 +83,7 @@ export async function refresh(refreshToken: string): Promise<AuthTokens> {
   return issueTokens(user);
 }
 
-export async function me(userId: string): Promise<AuthenticatedProfile> {
+export async function me(userId: number): Promise<AuthenticatedProfile> {
   const user = await authRepository.findUserById(userId);
   if (!user || !user.isActive) {
     throw new AppError(401, 'Session is no longer valid.');
@@ -91,7 +91,7 @@ export async function me(userId: string): Promise<AuthenticatedProfile> {
   return toProfile(user);
 }
 
-export async function logout(userId: string, companyId: string): Promise<void> {
+export async function logout(userId: number, companyId: number): Promise<void> {
   await logActivity({
     companyId,
     module: 'AUTH',

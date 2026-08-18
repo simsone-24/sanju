@@ -25,6 +25,7 @@ import * as userService from '../../services/userService';
 import type { PermissionGrant } from '../../types/permission';
 import type { UserDetail } from '../../types/user';
 import { avatarHue, avatarInitials } from '../../utils/avatar';
+import { fromId } from '../../utils/ids';
 import {
   createUserSchema,
   updateUserSchema,
@@ -54,7 +55,6 @@ interface UserFormDialogProps {
 }
 
 const EMPTY_FORM: CreateUserFormValues = {
-  employeeCode: '',
   fullName: '',
   username: '',
   password: '',
@@ -154,7 +154,6 @@ export function UserFormDialog({
     reset(
       user
         ? {
-            employeeCode: user.employeeCode ?? '',
             fullName: user.fullName,
             username: user.username,
             password: '',
@@ -162,7 +161,7 @@ export function UserFormDialog({
             mobile: user.mobile,
             email: user.email ?? '',
             city: user.city ?? '',
-            userGroupId: user.userGroup.id,
+            userGroupId: fromId(user.userGroup.id),
             isActive: user.isActive,
           }
         : EMPTY_FORM,
@@ -202,14 +201,6 @@ export function UserFormDialog({
             mb: 3,
           }}
         >
-          <TextField
-            label="Employee Code"
-            fullWidth
-            disabled={readOnly}
-            error={Boolean(fieldErrors.employeeCode)}
-            helperText={fieldErrors.employeeCode?.message}
-            {...register('employeeCode')}
-          />
           <TextField
             label="Full Name"
             required
@@ -300,10 +291,10 @@ export function UserFormDialog({
                 inputRef={field.ref}
               >
                 {readOnly && user ? (
-                  <MenuItem value={user.userGroup.id}>{user.userGroup.groupName}</MenuItem>
+                  <MenuItem value={fromId(user.userGroup.id)}>{user.userGroup.groupName}</MenuItem>
                 ) : (
                   (groupOptions ?? []).map((group) => (
-                    <MenuItem key={group.id} value={group.id}>
+                    <MenuItem key={group.id} value={fromId(group.id)}>
                       {group.groupName}
                     </MenuItem>
                   ))

@@ -34,15 +34,15 @@ export async function listEventTypes(params: ListEventTypesParams) {
   return { records, totalRecords };
 }
 
-export function findEventTypeById(companyId: string, id: string) {
+export function findEventTypeById(companyId: number, id: number) {
   return prisma.eventType.findFirst({ where: { id, companyId, deletedAt: null }, select: eventTypeSelect });
 }
 
-export function findEventTypeByName(companyId: string, eventName: string) {
+export function findEventTypeByName(companyId: number, eventName: string) {
   return prisma.eventType.findFirst({ where: { companyId, eventName, deletedAt: null } });
 }
 
-export function countEnquiriesForEventType(eventTypeId: string) {
+export function countEnquiriesForEventType(eventTypeId: number) {
   return prisma.enquiry.count({ where: { eventTypeId, deletedAt: null } });
 }
 
@@ -50,10 +50,10 @@ export function createEventType(data: Prisma.EventTypeUncheckedCreateInput) {
   return prisma.eventType.create({ data, select: eventTypeSelect });
 }
 
-export function updateEventType(id: string, data: Prisma.EventTypeUpdateInput) {
+export function updateEventType(id: number, data: Prisma.EventTypeUpdateInput) {
   return prisma.eventType.update({ where: { id }, data, select: eventTypeSelect });
 }
 
-export function softDeleteEventType(id: string) {
+export function softDeleteEventType(id: number) {
   return prisma.eventType.update({ where: { id }, data: { deletedAt: new Date() } });
 }

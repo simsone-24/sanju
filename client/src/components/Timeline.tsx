@@ -11,7 +11,7 @@ import { Typography } from '@mui/material';
 import dayjs from 'dayjs';
 
 export interface TimelineEntry {
-  id: string;
+  id: number;
   action: string;
   description?: string | null;
   performedAt: string;

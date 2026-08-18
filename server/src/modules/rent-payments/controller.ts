@@ -3,6 +3,7 @@ import { AppError } from '../../utils/AppError';
 import { normalizeLimit, normalizePage } from '../../utils/pagination';
 import { parseQuery } from '../../utils/parseQuery';
 import { sendSuccess } from '../../utils/response';
+import { parseId } from '../../utils/parseId';
 import { AuthenticatedUser } from '../auth/types';
 import * as rentPaymentsService from './service';
 import {
@@ -52,7 +53,7 @@ export async function summary(req: Request, res: Response, next: NextFunction): 
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    const payment = await rentPaymentsService.getById(actor.companyId, req.params.id);
+    const payment = await rentPaymentsService.getById(actor.companyId, parseId(req.params.id));
     sendSuccess(res, payment, 'Rent payment retrieved successfully.');
   } catch (error) {
     next(error);
@@ -80,7 +81,7 @@ export async function update(
 ): Promise<void> {
   try {
     const actor = requireUser(req);
-    const payment = await rentPaymentsService.update(actor.companyId, actor.id, req.params.id, req.body);
+    const payment = await rentPaymentsService.update(actor.companyId, actor.id, parseId(req.params.id), req.body);
     sendSuccess(res, payment, 'Rent payment updated successfully.');
   } catch (error) {
     next(error);
@@ -90,7 +91,7 @@ export async function update(
 export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
   try {
     const actor = requireUser(req);
-    await rentPaymentsService.remove(actor.companyId, actor.id, req.params.id);
+    await rentPaymentsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Rent payment deleted successfully.');
   } catch (error) {
     next(error);

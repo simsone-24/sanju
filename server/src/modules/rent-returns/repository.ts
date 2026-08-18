@@ -84,18 +84,18 @@ export async function listStockReturns(params: ListStockReturnsParams) {
   return { records, totalRecords };
 }
 
-export function findStockReturnById(companyId: string, id: string) {
+export function findStockReturnById(companyId: number, id: number) {
   return prisma.stockReturn.findFirst({ where: { id, companyId, deletedAt: null }, select: stockReturnSelect });
 }
 
 interface CreateStockReturnData {
-  companyId: string;
+  companyId: number;
   returnNo: string;
-  stockOutId: string;
+  stockOutId: number;
   returnDate: Date;
   notes?: string;
-  createdById: string;
-  items: { stockOutItemId: string; quantityReturned: number }[];
+  createdById: number;
+  items: { stockOutItemId: number; quantityReturned: number }[];
 }
 
 export function createStockReturn(data: CreateStockReturnData, client: PrismaClientOrTx = prisma) {
@@ -114,7 +114,7 @@ export function createStockReturn(data: CreateStockReturnData, client: PrismaCli
 }
 
 /** The most recent return booked against each of the given stock outs — the list's "Last Return". */
-export async function findLatestReturnDates(stockOutIds: string[]): Promise<Map<string, Date>> {
+export async function findLatestReturnDates(stockOutIds: number[]): Promise<Map<number, Date>> {
   if (stockOutIds.length === 0) return new Map();
 
   const grouped = await prisma.stockReturn.groupBy({
@@ -123,7 +123,7 @@ export async function findLatestReturnDates(stockOutIds: string[]): Promise<Map<
     _max: { returnDate: true },
   });
 
-  const dates = new Map<string, Date>();
+  const dates = new Map<number, Date>();
   for (const row of grouped) {
     if (row._max.returnDate) dates.set(row.stockOutId, row._max.returnDate);
   }
@@ -144,7 +144,7 @@ export interface ReturnSummaryTotals {
  * than from the return rows: "not returned" is a stock out with no returns at all, which no query
  * over the returns table can see.
  */
-export async function getReturnSummary(companyId: string): Promise<ReturnSummaryTotals> {
+export async function getReturnSummary(companyId: number): Promise<ReturnSummaryTotals> {
   const baseWhere: Prisma.StockOutWhereInput = {
     companyId,
     deletedAt: null,

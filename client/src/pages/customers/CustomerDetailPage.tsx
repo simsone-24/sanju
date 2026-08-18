@@ -1,6 +1,6 @@
+import { useRouteId } from '../../hooks/useRouteId';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
 import { AppTabs } from '../../components/AppTabs';
 import { PageHeader } from '../../components/PageHeader';
 import * as customerService from '../../services/customerService';
@@ -14,16 +14,16 @@ import CustomerProfileTab from './tabs/CustomerProfileTab';
 // for either yet (server/src/modules/customers only exposes list/detail/orders), unlike Order
 // Detail where those endpoints already existed before their tabs were built.
 export default function CustomerDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
 
   const { data: customer, isLoading: customerLoading } = useQuery({
     queryKey: ['customer', id],
-    queryFn: () => customerService.getById(id!),
+    queryFn: () => customerService.getById(id),
   });
 
   const { data: history, isLoading: historyLoading } = useQuery({
     queryKey: ['customer-history', id],
-    queryFn: () => customerService.getHistory(id!),
+    queryFn: () => customerService.getHistory(id),
   });
 
   if (customerLoading || historyLoading) return <CircularProgress size={28} />;

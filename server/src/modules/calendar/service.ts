@@ -3,7 +3,7 @@ import * as calendarRepository from './repository';
 import { CalendarColor, CalendarEvent } from './types';
 
 type CalendarOrder = {
-  id: string;
+  id: number;
   orderNumber: string;
   // Nullable on the model: an order raised from an enquiry that had no event date yet. The range
   // filter already excludes those rows, so a dated order is all that ever reaches toCalendarEvent.
@@ -53,20 +53,20 @@ function getWeekRange(date: Date): { startDate: Date; endDate: Date } {
   return { startDate: monday, endDate: sunday };
 }
 
-export async function getMonth(companyId: string, month: number, year: number): Promise<CalendarEvent[]> {
+export async function getMonth(companyId: number, month: number, year: number): Promise<CalendarEvent[]> {
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)); // day 0 of next month = last day of this month
   const orders = await calendarRepository.findOrdersInRange(companyId, startDate, endDate);
   return toCalendarEvents(orders);
 }
 
-export async function getWeek(companyId: string, date: Date): Promise<CalendarEvent[]> {
+export async function getWeek(companyId: number, date: Date): Promise<CalendarEvent[]> {
   const { startDate, endDate } = getWeekRange(date);
   const orders = await calendarRepository.findOrdersInRange(companyId, startDate, endDate);
   return toCalendarEvents(orders);
 }
 
-export async function getDay(companyId: string, date: Date): Promise<CalendarEvent[]> {
+export async function getDay(companyId: number, date: Date): Promise<CalendarEvent[]> {
   const startDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const endDate = new Date(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999),

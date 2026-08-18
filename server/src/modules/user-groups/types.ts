@@ -16,7 +16,7 @@ export interface UpdateUserGroupInput {
 }
 
 export interface ListUserGroupsParams {
-  companyId: string;
+  companyId: number;
   page: number;
   limit: number;
   search?: string;

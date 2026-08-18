@@ -32,6 +32,7 @@ import { RENT_PAYMENT_MODES, type RentPayment, type RentPaymentMode } from '../.
 import { describeApiError } from '../../utils/apiError';
 import { dateRangeParams, TRANSACTION_DATE_PRESETS } from '../../utils/dateRange';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { toOptionalId } from '../../utils/ids';
 import { RentPaymentDialog } from './RentPaymentDialog';
 
 /** Rent Payments — "md files/Stock/stock.md" §20, §21. */
@@ -109,7 +110,7 @@ export default function RentPaymentListPage() {
         page,
         limit,
         search: search || undefined,
-        rentalPersonId: rentalPersonId || undefined,
+        rentalPersonId: toOptionalId(rentalPersonId),
         paymentMode: paymentMode || undefined,
         dateFrom: effectiveFrom || undefined,
         dateTo: effectiveTo || undefined,
@@ -119,7 +120,7 @@ export default function RentPaymentListPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (paymentId: string) => rentService.deletePayment(paymentId),
+    mutationFn: (paymentId: number) => rentService.deletePayment(paymentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rent-payments'] });
       queryClient.invalidateQueries({ queryKey: ['rent-payment-summary'] });

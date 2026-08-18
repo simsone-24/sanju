@@ -9,13 +9,13 @@ export async function list(params: ListTaskTemplatesParams) {
   return { records, meta: buildPaginationMeta(params.page, params.limit, totalRecords) };
 }
 
-export async function getById(companyId: string, id: string) {
+export async function getById(companyId: number, id: number) {
   const taskTemplate = await taskTemplatesRepository.findTaskTemplateById(companyId, id);
   if (!taskTemplate) throw new AppError(404, 'Task template not found.');
   return taskTemplate;
 }
 
-export async function create(companyId: string, actorId: string, input: CreateTaskTemplateInput) {
+export async function create(companyId: number, actorId: number, input: CreateTaskTemplateInput) {
   const taskTemplate = await taskTemplatesRepository.createTaskTemplate({
     companyId,
     taskName: input.taskName,
@@ -36,7 +36,7 @@ export async function create(companyId: string, actorId: string, input: CreateTa
   return taskTemplate;
 }
 
-export async function update(companyId: string, actorId: string, id: string, input: UpdateTaskTemplateInput) {
+export async function update(companyId: number, actorId: number, id: number, input: UpdateTaskTemplateInput) {
   const existingTaskTemplate = await taskTemplatesRepository.findTaskTemplateById(companyId, id);
   if (!existingTaskTemplate) throw new AppError(404, 'Task template not found.');
 
@@ -59,7 +59,7 @@ export async function update(companyId: string, actorId: string, id: string, inp
   return taskTemplate;
 }
 
-export async function remove(companyId: string, actorId: string, id: string): Promise<void> {
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
   const existingTaskTemplate = await taskTemplatesRepository.findTaskTemplateById(companyId, id);
   if (!existingTaskTemplate) throw new AppError(404, 'Task template not found.');
 

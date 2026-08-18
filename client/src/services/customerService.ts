@@ -38,17 +38,17 @@ export async function list(params: ListCustomersParams): Promise<ListCustomersRe
   return { records: response.data.data, meta: response.data.meta! };
 }
 
-export async function getById(id: string): Promise<CustomerDetail> {
+export async function getById(id: number): Promise<CustomerDetail> {
   const response = await apiClient.get<ApiSuccessResponse<CustomerDetail>>(`/customers/${id}`);
   return response.data.data;
 }
 
-export async function getHistory(id: string): Promise<CustomerHistory> {
+export async function getHistory(id: number): Promise<CustomerHistory> {
   const response = await apiClient.get<ApiSuccessResponse<CustomerHistory>>(`/customers/${id}/orders`);
   return response.data.data;
 }
 
-export async function update(id: string, input: UpdateCustomerInput): Promise<CustomerDetail> {
+export async function update(id: number, input: UpdateCustomerInput): Promise<CustomerDetail> {
   const response = await apiClient.put<ApiSuccessResponse<CustomerDetail>>(`/customers/${id}`, input);
   return response.data.data;
 }

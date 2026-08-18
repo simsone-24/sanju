@@ -172,12 +172,12 @@ export function countStockOutsFiltered(params: StockOutFilters) {
   return prisma.stockOut.count({ where: buildStockOutWhere(params) });
 }
 
-export function findStockOutById(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findStockOutById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.stockOut.findFirst({ where: { id, companyId, deletedAt: null }, select: stockOutDetailSelect });
 }
 
 /** The thin projection the write paths need — no children, no joins. */
-export function findStockOutCore(companyId: string, id: string, client: PrismaClientOrTx = prisma) {
+export function findStockOutCore(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.stockOut.findFirst({
     where: { id, companyId, deletedAt: null },
     select: {
@@ -201,11 +201,11 @@ export function findStockOutCore(companyId: string, id: string, client: PrismaCl
 }
 
 /** Just the figure the cache recalculation compares the collected total against. */
-export function findStockOutGrandTotal(id: string, client: PrismaClientOrTx = prisma) {
+export function findStockOutGrandTotal(id: number, client: PrismaClientOrTx = prisma) {
   return client.stockOut.findUnique({ where: { id }, select: { grandTotal: true } });
 }
 
-export function listStockOutItems(stockOutId: string, client: PrismaClientOrTx = prisma) {
+export function listStockOutItems(stockOutId: number, client: PrismaClientOrTx = prisma) {
   return client.stockOutItem.findMany({
     where: { stockOutId },
     orderBy: { sortOrder: 'asc' },
@@ -214,7 +214,7 @@ export function listStockOutItems(stockOutId: string, client: PrismaClientOrTx =
 }
 
 export interface StockOutItemWriteData {
-  rentalItemId?: string;
+  rentalItemId?: number;
   itemName: string;
   quantity: number;
   rate: number;
@@ -223,9 +223,9 @@ export interface StockOutItemWriteData {
 }
 
 interface CreateStockOutData {
-  companyId: string;
+  companyId: number;
   rentNo: string;
-  rentalPersonId: string;
+  rentalPersonId: number;
   stockOutDate: Date;
   expectedReturnDate?: Date;
   subtotal: number;
@@ -235,7 +235,7 @@ interface CreateStockOutData {
   grandTotal: number;
   issuedQuantity: number;
   notes?: string;
-  createdById: string;
+  createdById: number;
   items: StockOutItemWriteData[];
 }
 
@@ -280,7 +280,7 @@ interface UpdateStockOutData {
  * edit otherwise), so no stock_return_items row can be left pointing at a deleted line.
  */
 export async function updateStockOut(
-  id: string,
+  id: number,
   data: UpdateStockOutData,
   items: StockOutItemWriteData[] | undefined,
   client: PrismaClientOrTx = prisma,
@@ -307,11 +307,11 @@ export async function updateStockOut(
   });
 }
 
-export function updateStockOutStatus(id: string, status: StockOutStatus, client: PrismaClientOrTx = prisma) {
+export function updateStockOutStatus(id: number, status: StockOutStatus, client: PrismaClientOrTx = prisma) {
   return client.stockOut.update({ where: { id }, data: { status }, select: { id: true } });
 }
 
-export function softDeleteStockOut(id: string, client: PrismaClientOrTx = prisma) {
+export function softDeleteStockOut(id: number, client: PrismaClientOrTx = prisma) {
   return client.stockOut.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
@@ -319,9 +319,9 @@ export function softDeleteStockOut(id: string, client: PrismaClientOrTx = prisma
 
 /** Returned quantity per line, summed from live (non-deleted) return rows. */
 export async function sumReturnedQuantityByStockOutItem(
-  stockOutId: string,
+  stockOutId: number,
   client: PrismaClientOrTx = prisma,
-): Promise<Map<string, number>> {
+): Promise<Map<number, number>> {
   const grouped = await client.stockReturnItem.groupBy({
     by: ['stockOutItemId'],
     where: { stockOutItem: { stockOutId }, stockReturn: { deletedAt: null } },
@@ -331,7 +331,7 @@ export async function sumReturnedQuantityByStockOutItem(
   return new Map(grouped.map((row) => [row.stockOutItemId, Number(row._sum.quantityReturned ?? 0)]));
 }
 
-export async function sumPaymentsForStockOut(stockOutId: string, client: PrismaClientOrTx = prisma): Promise<number> {
+export async function sumPaymentsForStockOut(stockOutId: number, client: PrismaClientOrTx = prisma): Promise<number> {
   const aggregate = await client.rentPayment.aggregate({
     where: { stockOutId, deletedAt: null },
     _sum: { amount: true },
@@ -340,7 +340,7 @@ export async function sumPaymentsForStockOut(stockOutId: string, client: PrismaC
 }
 
 export function setStockOutItemReturnedQuantity(
-  id: string,
+  id: number,
   returnedQuantity: number,
   client: PrismaClientOrTx = prisma,
 ) {
@@ -355,16 +355,16 @@ interface StockOutCacheData {
   paymentStatus: RentPaymentStatus;
 }
 
-export function writeStockOutCaches(id: string, data: StockOutCacheData, client: PrismaClientOrTx = prisma) {
+export function writeStockOutCaches(id: number, data: StockOutCacheData, client: PrismaClientOrTx = prisma) {
   return client.stockOut.update({ where: { id }, data, select: { id: true } });
 }
 
 // ---- Guards used by the edit/delete rules (stock.md §32, §33) --------------
 
-export function countReturnsForStockOut(stockOutId: string, client: PrismaClientOrTx = prisma) {
+export function countReturnsForStockOut(stockOutId: number, client: PrismaClientOrTx = prisma) {
   return client.stockReturn.count({ where: { stockOutId, deletedAt: null } });
 }
 
-export function countPaymentsForStockOut(stockOutId: string, client: PrismaClientOrTx = prisma) {
+export function countPaymentsForStockOut(stockOutId: number, client: PrismaClientOrTx = prisma) {
   return client.rentPayment.count({ where: { stockOutId, deletedAt: null } });
 }

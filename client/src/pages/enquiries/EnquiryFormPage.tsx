@@ -33,7 +33,7 @@ import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Controller, useForm, type Control } from 'react-hook-form';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
@@ -43,6 +43,7 @@ import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TimePickerField } from '../../components/TimePickerField';
 import { usePermission } from '../../hooks/usePermission';
+import { useRouteId } from '../../hooks/useRouteId';
 import * as customerService from '../../services/customerService';
 import * as enquiryService from '../../services/enquiryService';
 import * as eventTypeService from '../../services/eventTypeService';
@@ -67,6 +68,7 @@ import type {
   QuotationStatus,
 } from '../../types/quotation';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { fromId, toId, toOptionalId } from '../../utils/ids';
 import { enquiryFormSchema, type EnquiryFormValues } from '../../validation/enquirySchemas';
 import { CustomerEditDialog } from './CustomerEditDialog';
 import { EnquiryCustomerDetailsCard } from './EnquiryCustomerDetailsCard';
@@ -112,21 +114,19 @@ function quotationStatusOptions(status: QuotationStatus, canEdit: boolean, canAp
 // md files/forms.md "Enquiry Module": the Enquiry Status field, driving the documented
 // Enquiry → ... → Closed workflow (docs/10_IMPLEMENTATION_DECISIONS.md §2).
 //
-// Two distinct modes, because "editable" means something different in each:
-// - Edit (enquiry != null): status changes go through the dedicated PATCH /enquiries/:id/status
-//   endpoint (server-enforced transitions from the CURRENT status), applied immediately via a
-//   confirmation dialog — there's no "unsaved" state to hold it in.
-// - Create (enquiry == null): there's no record yet to PATCH, so the chosen status is just a
-//   plain form field (createStatus/onCreateStatusChange) submitted along with the rest of the
-//   create payload. Any of the 6 statuses may be chosen at creation — picking ORDER_CONFIRMED
-//   creates the customer record immediately, server-side (see enquiries/service.ts create()).
+// In both modes the status is an ordinary form field: picking one only records the choice on the
+// form — no dialog, no request — and nothing leaves the page until Save. On create it rides along in
+// the create payload; on edit the form's submit posts it to PATCH /enquiries/:id/status once the
+// field edits are stored (see onSubmit), where the flow.md §3 Order Confirmed confirmation is also
+// raised. Selecting a status no longer refetches the enquiry mid-edit, so unsaved figures such as
+// Final Budget stay as typed.
 type InitialEnquiryStatus = EnquiryStatus;
 
 interface EnquiryStatusSectionProps {
   control: Control<EnquiryFormValues>;
   enquiry: EnquiryDetail | null;
-  createStatus: InitialEnquiryStatus;
-  onCreateStatusChange: (status: InitialEnquiryStatus) => void;
+  /** Called on every pick, so the page can retract an earlier Order Confirmed acknowledgement. */
+  onStatusPicked: () => void;
 }
 
 const APPOINTMENT_STATUS_OPTIONS: AppointmentStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
@@ -140,99 +140,66 @@ const INITIAL_STATUS_OPTIONS: InitialEnquiryStatus[] = [
   'ORDER_LOST',
 ];
 
-function EnquiryStatusSection({ control, enquiry, createStatus, onCreateStatusChange }: EnquiryStatusSectionProps) {
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
+function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatusSectionProps) {
   // masters/user.md §Enquiries — Change Status and Convert to Order are permissions of their own.
   // Confirming an enquiry is what creates the order, so that one option needs the second permission.
   const canChangeStatus = usePermission('ENQUIRIES', 'canChangeStatus');
   const canConvertToOrder = usePermission('ENQUIRIES', 'canConvertToOrder');
-  const [pendingStatus, setPendingStatus] = useState<EnquiryStatus | null>(null);
-  const [remarks, setRemarks] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
-  // "md files/Enquiry/flow.md" §3 — the pre-condition to confirm past before Order Confirmed.
-  // Shares its cache with the Quotation section above, so no extra request is made.
-  const { data: quotations } = useEnquiryQuotations(enquiry?.id);
-  const orderConfirmWarning =
-    pendingStatus === 'ORDER_CONFIRMED'
-      ? orderConfirmedWarning((quotations?.records ?? []).map((quotation) => quotation.status))
-      : null;
+  // Sits above Status: the follow-up is the step that decides where the enquiry goes next, so it is
+  // read before the status it feeds.
+  const followUpField = (
+    <Controller
+      name="followUpDate"
+      control={control}
+      render={({ field }) => (
+        <DatePickerField
+          label="Follow-up Date"
+          margin="none"
+          value={field.value ? dayjs(field.value) : null}
+          onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+          helperText="When the customer should next be contacted. Leave empty if none is due."
+        />
+      )}
+    />
+  );
 
-  const mutation = useMutation({
-    mutationFn: (input: { status: EnquiryStatus; remarks?: string }) => {
-      if (!enquiry) throw new Error('Enquiry not yet saved.');
-      return enquiryService.changeStatus(enquiry.id, input.status, input.remarks);
-    },
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ['enquiry', enquiry?.id] });
-      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-      setPendingStatus(null);
-      setRemarks('');
-      showToast(`Enquiry status changed to ${resolveStatusConfig('enquiry', updated.status).label}.`);
-    },
-  });
-
-  function closeConfirm() {
-    setPendingStatus(null);
-    setRemarks('');
-    setError(null);
-  }
-
-  async function handleConfirm() {
-    if (!pendingStatus) return;
-    setError(null);
-    try {
-      await mutation.mutateAsync({ status: pendingStatus, remarks: remarks.trim() || undefined });
-    } catch (err) {
-      if (isAxiosError<ApiErrorResponse>(err) && err.response) {
-        setError(err.response.data.message);
-      } else {
-        setError('Unable to change status.');
-      }
-    }
-  }
+  const statusOptions = INITIAL_STATUS_OPTIONS.map((option) => (
+    <MenuItem
+      key={option}
+      value={option}
+      // Moving an enquiry to Order Confirmed converts it, so that option follows the Convert to
+      // Order permission — at creation just as much as on an existing enquiry.
+      disabled={option === 'ORDER_CONFIRMED' && !canConvertToOrder}
+    >
+      {resolveStatusConfig('enquiry', option).label}
+    </MenuItem>
+  ));
 
   if (!enquiry) {
     return (
       <FormSection title="Enquiry Status" subtitle="Choose the status this enquiry should start at." icon={<FlagIcon />}>
-        {/* Sits above Status: the follow-up is the step that decides where the enquiry goes
-            next, so it is read before the status it feeds. Saved with the form like any other
-            enquiry field — unlike Status, which posts its own change immediately. */}
+        {followUpField}
         <Controller
-          name="followUpDate"
+          name="status"
           control={control}
           render={({ field }) => (
-            <DatePickerField
-              label="Follow-up Date"
-              margin="none"
-              value={field.value ? dayjs(field.value) : null}
-              onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
-              helperText="When the customer should next be contacted. Leave empty if none is due."
-            />
+            <TextField
+              select
+              label="Status"
+              fullWidth
+              value={field.value}
+              onChange={(event) => {
+                field.onChange(event.target.value as InitialEnquiryStatus);
+                onStatusPicked();
+              }}
+              helperText="Enquiries usually start as Pending. Choosing Order Confirmed here creates the customer record straight away."
+              sx={{ gridColumn: '1 / -1' }}
+            >
+              {statusOptions}
+            </TextField>
           )}
         />
-        <TextField
-          select
-          label="Status"
-          fullWidth
-          value={createStatus}
-          onChange={(event) => onCreateStatusChange(event.target.value as InitialEnquiryStatus)}
-          helperText="Enquiries usually start as Pending. Choosing Order Confirmed here creates the customer record straight away."
-          sx={{ gridColumn: '1 / -1' }}
-        >
-          {INITIAL_STATUS_OPTIONS.map((option) => (
-            <MenuItem
-              key={option}
-              value={option}
-              // Starting an enquiry at Order Confirmed converts it immediately, so it follows the
-              // same Convert to Order permission as the transition does.
-              disabled={option === 'ORDER_CONFIRMED' && !canConvertToOrder}
-            >
-              {resolveStatusConfig('enquiry', option).label}
-            </MenuItem>
-          ))}
-        </TextField>
       </FormSection>
     );
   }
@@ -245,74 +212,36 @@ function EnquiryStatusSection({ control, enquiry, createStatus, onCreateStatusCh
         </Typography>
         <StatusBadge type="enquiry" status={enquiry.status} />
       </Stack>
-      {/* Sits above Status: the follow-up is the step that decides where the enquiry goes
-          next, so it is read before the status it feeds. Saved with the form like any other
-          enquiry field — unlike Status, which posts its own change immediately. */}
+      {followUpField}
+      {/* Registered through Controller rather than driven by setValue()/watch(): as a bare
+          controlled input the field was not part of the form's field registry, so a pick could be
+          dropped and the select snap back to the stored status. */}
       <Controller
-        name="followUpDate"
+        name="status"
         control={control}
         render={({ field }) => (
-          <DatePickerField
-            label="Follow-up Date"
-            margin="none"
-            value={field.value ? dayjs(field.value) : null}
-            onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
-            helperText="When the customer should next be contacted. Leave empty if none is due."
-          />
-        )}
-      />
-      <TextField
-        select
-        label="Status"
-        fullWidth
-        disabled={!canChangeStatus}
-        value={enquiry.status}
-        onChange={(event) => {
-          const value = event.target.value as EnquiryStatus;
-          if (value === enquiry.status) return;
-          setError(null);
-          setPendingStatus(value);
-        }}
-        helperText={
-          canChangeStatus
-            ? 'Select a new status to update this enquiry.'
-            : 'You do not have permission to change this enquiry’s status.'
-        }
-        sx={{ gridColumn: '1 / -1' }}
-      >
-        {INITIAL_STATUS_OPTIONS.map((option) => (
-          <MenuItem
-            key={option}
-            value={option}
-            disabled={option === 'ORDER_CONFIRMED' && !canConvertToOrder}
+          <TextField
+            select
+            label="Status"
+            fullWidth
+            disabled={!canChangeStatus}
+            value={field.value}
+            onChange={(event) => {
+              field.onChange(event.target.value as EnquiryStatus);
+              onStatusPicked();
+            }}
+            helperText={
+              !canChangeStatus
+                ? 'You do not have permission to change this enquiry’s status.'
+                : field.value !== enquiry.status
+                  ? `Will move from ${resolveStatusConfig('enquiry', enquiry.status).label} to ${resolveStatusConfig('enquiry', field.value).label} when you save.`
+                  : 'Select a new status — it is applied when you save this enquiry.'
+            }
+            sx={{ gridColumn: '1 / -1' }}
           >
-            {resolveStatusConfig('enquiry', option).label}
-          </MenuItem>
-        ))}
-      </TextField>
-
-      <ConfirmDialog
-        open={pendingStatus !== null}
-        title={`Change status to ${pendingStatus ? resolveStatusConfig('enquiry', pendingStatus).label : ''}?`}
-        message={
-          <Stack spacing={1.5}>
-            {error && <Alert severity="error">{error}</Alert>}
-            {/* flow.md §3: a warning, not a block — Yes still goes through. */}
-            {orderConfirmWarning && <Alert severity="warning">{orderConfirmWarning}</Alert>}
-            <TextField
-              label="Remarks"
-              fullWidth
-              multiline
-              rows={2}
-              value={remarks}
-              onChange={(event) => setRemarks(event.target.value)}
-              helperText="Optional"
-            />
-          </Stack>
-        }
-        loading={mutation.isPending}
-        onConfirm={handleConfirm}
-        onClose={closeConfirm}
+            {statusOptions}
+          </TextField>
+        )}
       />
     </FormSection>
   );
@@ -341,14 +270,15 @@ interface QuotationDraftControls {
 // creates both records together (the enquiry first, then the quotation against its new id), and the
 // backend already moves the enquiry to "Quotation to Share" the moment a quotation exists for it.
 function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; draft?: QuotationDraftControls }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const canCreateQuotation = usePermission('QUOTATIONS', 'canCreate');
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
-  const [previewQuotationId, setPreviewQuotationId] = useState<string | null>(null);
-  // "md files/Enquiry/flow.md" §2.3: Create Quotation opens a modal rather than navigating away.
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [previewQuotationId, setPreviewQuotationId] = useState<number | null>(null);
+  // "md files/Enquiry/flow.md" §2.3: Create Quotation opens a modal rather than navigating away —
+  // and so does Edit, on the row's own quotation, so neither action leaves the enquiry.
+  // `null` = closed, 0 = composing a new quotation, any other id = editing that one.
+  const [quotationDialogFor, setQuotationDialogFor] = useState<number | null>(null);
 
   const { data: quotations } = useEnquiryQuotations(enquiry?.id);
 
@@ -360,7 +290,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
   // has no such endpoint, so it's caught client-side with a clear message instead of silently
   // doing nothing.
   const [pendingStatusChange, setPendingStatusChange] = useState<{
-    id: string;
+    id: number;
     quotationNumber: string;
     target: QuotationStatus;
   } | null>(null);
@@ -376,18 +306,18 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
   }
 
   const sendMutation = useMutation({
-    mutationFn: (id: string) => quotationService.changeStatus(id, 'SENT'),
+    mutationFn: (id: number) => quotationService.changeStatus(id, 'SENT'),
     onSuccess: invalidateQuotationQueries,
   });
   const approveMutation = useMutation({
-    mutationFn: (id: string) => quotationService.approve(id),
+    mutationFn: (id: number) => quotationService.approve(id),
     onSuccess: () => {
       invalidateQuotationQueries();
       invalidateEnquiryQueries();
     },
   });
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => quotationService.changeStatus(id, 'REJECTED'),
+    mutationFn: (id: number) => quotationService.changeStatus(id, 'REJECTED'),
     onSuccess: () => {
       invalidateQuotationQueries();
       invalidateEnquiryQueries();
@@ -535,7 +465,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
                 size="small"
                 onClick={(event) => {
                   event.stopPropagation();
-                  navigate(`/quotations/${row.id}/edit`);
+                  setQuotationDialogFor(row.id);
                 }}
               >
                 <EditIcon fontSize="small" />
@@ -558,7 +488,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
               size="small"
               variant="contained"
               startIcon={<RequestQuoteIcon />}
-              onClick={() => setCreateDialogOpen(true)}
+              onClick={() => setQuotationDialogFor(0)}
             >
               Create Quotation
             </Button>
@@ -619,9 +549,11 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
 
         <QuotationPreviewDialog quotationId={previewQuotationId} onClose={() => setPreviewQuotationId(null)} />
 
-        {/* flow.md §2.3: raised in place, and saving returns the user to the Enquiry List. */}
+        {/* flow.md §2.3: raised in place — saving keeps the user on the enquiry, with the table
+            below refreshed from the dialog's own invalidation. */}
         <EnquiryQuotationDialog
-          open={createDialogOpen}
+          open={quotationDialogFor !== null}
+          quotationId={quotationDialogFor || null}
           enquiry={{
             id: enquiry.id,
             enquiryNumber: enquiry.enquiryNumber,
@@ -631,11 +563,8 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
             email: enquiry.prospect?.email ?? null,
             address: enquiry.prospect?.address ?? null,
           }}
-          onClose={() => setCreateDialogOpen(false)}
-          onSaved={() => {
-            setCreateDialogOpen(false);
-            navigate('/enquiries', { state: { highlightId: enquiry.id } });
-          }}
+          onClose={() => setQuotationDialogFor(null)}
+          onSaved={() => setQuotationDialogFor(null)}
         />
       </Box>
     </FormSection>
@@ -697,7 +626,7 @@ function cleanOptional(value: string | undefined): string | undefined {
 function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
   const customer: CustomerInput =
     values.customerType === 'EXISTING'
-      ? { type: 'EXISTING', customerId: values.customerId! }
+      ? { type: 'EXISTING', customerId: toId(values.customerId!) }
       : {
           type: 'NEW',
           customerName: values.customerName!,
@@ -710,7 +639,7 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
 
   return {
     customer,
-    eventTypeId: values.eventTypeId,
+    eventTypeId: toId(values.eventTypeId),
     eventName: cleanOptional(values.eventName),
     eventDate: cleanOptional(values.eventDate),
     eventTime: cleanOptional(values.eventTime) as CreateEnquiryInput['eventTime'],
@@ -727,7 +656,7 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     meetingLocation: cleanOptional(values.meetingLocation),
     appointmentNotes: cleanOptional(values.appointmentNotes),
     appointmentStatus: values.appointmentStatus,
-    assignedUserId: cleanOptional(values.assignedUserId),
+    assignedUserId: toOptionalId(values.assignedUserId),
     followUpDate: cleanOptional(values.followUpDate),
     status: values.status,
   };
@@ -788,7 +717,7 @@ const EMPTY_VALUES: EnquiryFormValues = {
 };
 
 export default function EnquiryFormPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const location = useLocation();
@@ -803,7 +732,7 @@ export default function EnquiryFormPage() {
   // record being worked on instead of dumping the user on the Enquiries list.
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? null;
 
-  function leaveForm(fallbackState?: { highlightId: string }) {
+  function leaveForm(fallbackState?: { highlightId: number }) {
     if (returnTo) navigate(returnTo);
     else navigate('/enquiries', fallbackState ? { state: fallbackState } : undefined);
   }
@@ -835,9 +764,13 @@ export default function EnquiryFormPage() {
 
   const { data: existingEnquiry } = useQuery({
     queryKey: ['enquiry', id],
-    queryFn: () => enquiryService.getById(id!),
+    queryFn: () => enquiryService.getById(id),
     enabled: isEdit,
   });
+
+  // "md files/Enquiry/flow.md" §3 — the quotation statuses behind the Order Confirmed confirmation
+  // raised at save time. Shares its cache key with the Quotation section below, so no extra request.
+  const { data: enquiryQuotations } = useEnquiryQuotations(isEdit ? id : undefined);
 
   const { data: eventTypes } = useQuery({
     queryKey: ['event-types', 'active'],
@@ -871,22 +804,30 @@ export default function EnquiryFormPage() {
     defaultValues: EMPTY_VALUES,
   });
 
+  // Seeded once per enquiry, not on every arrival of ['enquiry', id]: the record is refetched while
+  // the form is open (a quotation's status change invalidates it, as does a bfcache restore), and
+  // re-running reset() on that would throw away everything typed but not yet saved — the status pick
+  // and the Final Budget among them.
+  const seededEnquiryId = useRef<number | null>(null);
+
   useEffect(() => {
     if (!existingEnquiry) return;
+    if (seededEnquiryId.current === existingEnquiry.id) return;
+    seededEnquiryId.current = existingEnquiry.id;
     // A prospect enquiry (no Customer row yet) is edited like a NEW customer — its details live in
     // the `prospect` block and stay editable. A linked enquiry's customer is fixed (EXISTING).
     const isProspect = existingEnquiry.customer.id === null;
     reset({
       ...EMPTY_VALUES,
       customerType: isProspect ? 'NEW' : 'EXISTING',
-      customerId: existingEnquiry.customer.id ?? '',
+      customerId: fromId(existingEnquiry.customer.id),
       customerName: existingEnquiry.prospect?.customerName ?? '',
       mobile: existingEnquiry.prospect?.mobile ?? '',
       whatsapp: existingEnquiry.prospect?.whatsapp ?? '',
       email: existingEnquiry.prospect?.email ?? '',
       address: existingEnquiry.prospect?.address ?? '',
       city: existingEnquiry.prospect?.city ?? '',
-      eventTypeId: existingEnquiry.eventType.id,
+      eventTypeId: fromId(existingEnquiry.eventType.id),
       eventName: existingEnquiry.eventName ?? '',
       eventDate: existingEnquiry.eventDate ?? '',
       eventTime: existingEnquiry.eventTime ?? '',
@@ -901,12 +842,13 @@ export default function EnquiryFormPage() {
       meetingLocation: existingEnquiry.meetingLocation ?? '',
       appointmentNotes: existingEnquiry.appointmentNotes ?? '',
       appointmentStatus: existingEnquiry.appointmentStatus,
-      assignedUserId: existingEnquiry.assignedUser?.id ?? '',
+      assignedUserId: fromId(existingEnquiry.assignedUser?.id),
       followUpDate: existingEnquiry.followUpDate ?? '',
+      status: existingEnquiry.status,
     });
     if (!isProspect) {
       setSelectedCustomer({
-        id: existingEnquiry.customer.id as string,
+        id: existingEnquiry.customer.id as number,
         customerCode: '',
         customerName: existingEnquiry.customer.customerName,
         mobile: existingEnquiry.customer.mobile,
@@ -970,20 +912,19 @@ export default function EnquiryFormPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['enquiries'] }),
   });
 
+  // The cache refresh and the navigation happen in onSubmit instead: a status change chosen on the
+  // form is a second request that has to complete first, and refetching the enquiry between the two
+  // would reset the still-unsaved fields (Final Budget among them) from the server.
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateEnquiryInput) => enquiryService.update(id!, input),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-      queryClient.invalidateQueries({ queryKey: ['enquiry', id] });
-      showToast(`Enquiry ${updated.enquiryNumber} updated.`);
-      // Editing an enquiry can move the quotation's event/customer details, so anything cached for
-      // the record we're returning to has to be re-read.
-      if (returnTo) {
-        queryClient.invalidateQueries({ queryKey: ['quotation'] });
-        queryClient.invalidateQueries({ queryKey: ['quotations-grouped'] });
-      }
-      leaveForm({ highlightId: updated.id });
-    },
+    mutationFn: (input: UpdateEnquiryInput) => enquiryService.update(id, input),
+  });
+
+  // The status picked in the Enquiry Status section, applied on save through the dedicated endpoint
+  // (PATCH /enquiries/:id/status) that PUT /enquiries/:id deliberately does not cover. Posted after
+  // the field edits are stored, so an enquiry confirmed in the same save converts using the budget
+  // figures just entered.
+  const statusMutation = useMutation({
+    mutationFn: (status: EnquiryStatus) => enquiryService.changeStatus(id, status),
   });
 
   // The backend already moves an enquiry to QUOTATION_TO_SHARE the instant a quotation exists for
@@ -994,7 +935,8 @@ export default function EnquiryFormPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotations'] }),
   });
 
-  const saving = createMutation.isPending || updateMutation.isPending || createQuotationMutation.isPending;
+  const saving =
+    createMutation.isPending || updateMutation.isPending || statusMutation.isPending || createQuotationMutation.isPending;
 
   const quotationTotals = quotationDraftTotals(quotationItems, quotationCgst, quotationSgst);
 
@@ -1098,11 +1040,20 @@ export default function EnquiryFormPage() {
       quotationItemsInput = parsed.items;
     }
 
-    // "md files/Enquiry/flow.md" §3 — creating an enquiry straight into Order Confirmed gets the
-    // same confirmation as changing an existing enquiry's status. A new enquiry has no quotation
-    // yet; the inline draft, if enabled, is created unapproved, so it reads as the second case.
-    if (!isEdit && values.status === 'ORDER_CONFIRMED' && !orderConfirmAcknowledged.current) {
-      const warning = orderConfirmedWarning(addQuotationNow ? ['DRAFT'] : []);
+    // "md files/Enquiry/flow.md" §3 — the one confirmation the status still gets, raised here at
+    // save time rather than when the field is picked. Only when the enquiry is actually *moving*
+    // into Order Confirmed: re-saving an already-confirmed enquiry has nothing to confirm. On
+    // create there is no quotation yet; the inline draft, if enabled, is created unapproved, so it
+    // reads as the second case.
+    const movingToOrderConfirmed =
+      values.status === 'ORDER_CONFIRMED' && (!isEdit || existingEnquiry?.status !== 'ORDER_CONFIRMED');
+    if (movingToOrderConfirmed && !orderConfirmAcknowledged.current) {
+      const quotationStatuses = isEdit
+        ? (enquiryQuotations?.records ?? []).map((quotation) => quotation.status)
+        : addQuotationNow
+          ? (['DRAFT'] as QuotationStatus[])
+          : [];
+      const warning = orderConfirmedWarning(quotationStatuses);
       if (warning) {
         setPendingOrderConfirmWarning(warning);
         return;
@@ -1111,7 +1062,32 @@ export default function EnquiryFormPage() {
 
     try {
       if (isEdit) {
-        await updateMutation.mutateAsync(toUpdateInput(values));
+        const updated = await updateMutation.mutateAsync(toUpdateInput(values));
+        // The status is not part of the update payload, so a pick made on the form is applied here.
+        const statusChanged = Boolean(existingEnquiry) && values.status !== existingEnquiry?.status;
+        if (statusChanged) {
+          await statusMutation.mutateAsync(values.status);
+        }
+        queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+        queryClient.invalidateQueries({ queryKey: ['enquiry', id] });
+        if (statusChanged) {
+          // Confirming raises the order and its tracker row, so those lists are refreshed too.
+          queryClient.invalidateQueries({ queryKey: ['enquiry-timeline', id] });
+          queryClient.invalidateQueries({ queryKey: ['orders'] });
+          queryClient.invalidateQueries({ queryKey: ['payment-tracker'] });
+        }
+        // Editing an enquiry can move the quotation's event/customer details, so anything cached for
+        // the record we're returning to has to be re-read.
+        if (returnTo) {
+          queryClient.invalidateQueries({ queryKey: ['quotation'] });
+          queryClient.invalidateQueries({ queryKey: ['quotations-grouped'] });
+        }
+        showToast(
+          statusChanged
+            ? `Enquiry ${updated.enquiryNumber} updated and moved to ${resolveStatusConfig('enquiry', values.status).label}.`
+            : `Enquiry ${updated.enquiryNumber} updated.`,
+        );
+        leaveForm({ highlightId: updated.id });
         return;
       }
 
@@ -1132,10 +1108,12 @@ export default function EnquiryFormPage() {
           items: quotationItemsInput,
         });
         showToast(
-          `Enquiry ${created.enquiryNumber} created — quotation ${quotation.quotationNumber} created and the enquiry moved to Quotation to Share.`,
+          `Enquiry ${created.enquiryNumber} created — quotation ${quotation.quotationNumber} created.`,
         );
-        // flow.md §2.3: saving a quotation raised from an enquiry lands on the Enquiry List.
-        navigate('/enquiries', { state: { highlightId: created.id } });
+        // Lands on the new enquiry's edit page rather than the Enquiry List: the quotation just
+        // raised is listed there, so its status can be moved on and the enquiry's own status set
+        // without navigating back in. `replace` keeps the finished create form out of the history.
+        navigate(`/enquiries/${created.id}/edit`, { replace: true, state: { highlightId: created.id } });
       } catch (quotationError) {
         // The enquiry is already safely saved — surface the quotation failure on its own rather
         // than losing that, and land on the enquiry detail page where Create Quotation can be
@@ -1239,7 +1217,7 @@ export default function EnquiryFormPage() {
                   }}
                   onChange={(_event, value) => {
                     setSelectedCustomer(value);
-                    setValue('customerId', value?.id ?? '', { shouldDirty: true });
+                    setValue('customerId', fromId(value?.id), { shouldDirty: true });
                   }}
                   renderInput={(params) => (
                     <TextField
@@ -1362,7 +1340,7 @@ export default function EnquiryFormPage() {
               helperText={errors.eventTypeId?.message}
             >
               {eventTypes?.map((eventType) => (
-                <MenuItem key={eventType.id} value={eventType.id}>
+                <MenuItem key={eventType.id} value={fromId(eventType.id)}>
                   {eventType.eventName}
                 </MenuItem>
               ))}
@@ -1519,7 +1497,7 @@ export default function EnquiryFormPage() {
             >
               <MenuItem value="">Unassigned</MenuItem>
               {users?.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
+                <MenuItem key={user.id} value={fromId(user.id)}>
                   {user.fullName}
                 </MenuItem>
               ))}
@@ -1583,12 +1561,10 @@ export default function EnquiryFormPage() {
       <EnquiryStatusSection
         control={control}
         enquiry={isEdit ? (existingEnquiry ?? null) : null}
-        createStatus={watch('status')}
-        onCreateStatusChange={(status) => {
-          // Picking a different status retracts an earlier acknowledgement, so coming back to
-          // Order Confirmed asks again rather than saving silently.
+        // Picking a different status retracts an earlier acknowledgement, so coming back to
+        // Order Confirmed asks again rather than saving silently.
+        onStatusPicked={() => {
           orderConfirmAcknowledged.current = false;
-          setValue('status', status, { shouldDirty: true });
         }}
       />
 
