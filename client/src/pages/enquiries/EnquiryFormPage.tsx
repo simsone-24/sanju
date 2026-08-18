@@ -23,6 +23,7 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
+  Skeleton,
   Stack,
   TextField,
   Tooltip,
@@ -526,7 +527,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
               {!statusChangeError && pendingStatusChange && (
                 <Typography variant="body2">
                   {pendingStatusChange.target === 'APPROVED' &&
-                    `Confirm quotation "${pendingStatusChange.quotationNumber}"? This moves the enquiry to Order Confirmed and raises the order. Other quotations stay available as history.`}
+                    `Confirm quotation "${pendingStatusChange.quotationNumber}"? The enquiry keeps its current status — move it to Order Confirmed yourself when the order should be raised. The enquiry's final budget becomes the total of everything confirmed.`}
                   {pendingStatusChange.target === 'SENT' &&
                     `Mark quotation "${pendingStatusChange.quotationNumber}" as shared with the customer?`}
                   {pendingStatusChange.target === 'DRAFT' &&
@@ -798,7 +799,7 @@ export default function EnquiryFormPage() {
     watch,
     reset,
     setValue,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, dirtyFields },
   } = useForm<EnquiryFormValues>({
     resolver: zodResolver(enquiryFormSchema),
     defaultValues: EMPTY_VALUES,
@@ -809,11 +810,14 @@ export default function EnquiryFormPage() {
   // re-running reset() on that would throw away everything typed but not yet saved — the status pick
   // and the Final Budget among them.
   const seededEnquiryId = useRef<number | null>(null);
+  // The stored Final Budget the field currently reflects — see the re-sync effect below.
+  const syncedFinalBudget = useRef<string | null>(null);
 
   useEffect(() => {
     if (!existingEnquiry) return;
     if (seededEnquiryId.current === existingEnquiry.id) return;
     seededEnquiryId.current = existingEnquiry.id;
+    syncedFinalBudget.current = existingEnquiry.finalBudgetAmount ?? '';
     // A prospect enquiry (no Customer row yet) is edited like a NEW customer — its details live in
     // the `prospect` block and stay editable. A linked enquiry's customer is fixed (EXISTING).
     const isProspect = existingEnquiry.customer.id === null;
@@ -858,6 +862,20 @@ export default function EnquiryFormPage() {
       Boolean(existingEnquiry.prospect?.mobile) && existingEnquiry.prospect?.mobile === existingEnquiry.prospect?.whatsapp,
     );
   }, [existingEnquiry, reset]);
+
+  // The one field the server recomputes while this page is open: confirming a quotation sets the
+  // enquiry's Final Budget to the combined total of every confirmed quotation
+  // (quotations/service.ts approve). The seeding above deliberately runs only once, so that new
+  // figure is carried across here instead — unless the user has typed their own, which is an
+  // override the enquiry keeps (enquiries/service.ts update) and must not be overwritten.
+  useEffect(() => {
+    if (!existingEnquiry || seededEnquiryId.current !== existingEnquiry.id) return;
+    const stored = existingEnquiry.finalBudgetAmount ?? '';
+    if (syncedFinalBudget.current === stored) return;
+    syncedFinalBudget.current = stored;
+    if (dirtyFields.finalBudgetAmount) return;
+    setValue('finalBudgetAmount', stored);
+  }, [existingEnquiry, dirtyFields.finalBudgetAmount, setValue]);
 
   const customerType = watch('customerType');
   const mobileValue = watch('mobile');
@@ -1133,6 +1151,31 @@ export default function EnquiryFormPage() {
       }
     }
   });
+
+  // Nothing is editable until the enquiry it is editing has arrived: the fields are seeded from that
+  // response, so anything picked or typed before it lands is overwritten the moment it does — a
+  // status chosen on a still-empty form would silently snap back to the stored one.
+  if (isEdit && !existingEnquiry) {
+    return (
+      <FormPage
+        breadcrumbs={[
+          { label: 'Dashboard', to: '/' },
+          { label: 'Enquiries', to: '/enquiries' },
+          { label: 'Edit Enquiry' },
+        ]}
+        title="Edit Enquiry"
+        subtitle="Update enquiry information."
+        onCancel={() => leaveForm()}
+        onSave={() => undefined}
+        saveDisabled
+        saveLabel="Update Enquiry"
+      >
+        <Skeleton variant="rounded" height={220} sx={{ borderRadius: '16px' }} />
+        <Skeleton variant="rounded" height={220} sx={{ borderRadius: '16px' }} />
+        <Skeleton variant="rounded" height={160} sx={{ borderRadius: '16px' }} />
+      </FormPage>
+    );
+  }
 
   return (
     <FormPage

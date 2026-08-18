@@ -335,8 +335,8 @@ export default function QuotationFormPage() {
     mutationFn: (input: CreateQuotationInput) => quotationService.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
-      // Saving straight into Approved confirms the enquiry and raises the order server-side, so the
-      // same lists the update path refreshes are refreshed here too.
+      // Saving straight into Approved re-sums the enquiry's final budget server-side (and the total of
+      // an order already raised from it), so the same lists the update path refreshes are refreshed here.
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['enquiry'] });
       queryClient.invalidateQueries({ queryKey: ['enquiries'] });
@@ -913,13 +913,14 @@ export default function QuotationFormPage() {
         />
 
         {/* Approving an enquiry-sourced quotation is the confirmation step of the workflow, not a
-            label: the API runs the same action the Confirm button does. Said up front so nobody
-            reaches it by accident from a dropdown. */}
+            label: the API runs the same action the Confirm button does — the enquiry's money, not its
+            status. Said up front so nobody reaches it by accident from a dropdown. */}
         {status === 'APPROVED' && existingQuotation?.status !== 'APPROVED' && source === 'ENQUIRY' && (
           <Box sx={{ gridColumn: '1 / -1' }}>
-            <Alert severity="warning">
-              Saving as Approved confirms the enquiry and raises the order and its payment tracker
-              entry, exactly as the Confirm Quotation action does.
+            <Alert severity="info">
+              Saving as Confirmed sets the enquiry's final budget from the confirmed quotations, exactly
+              as the Confirm Quotation action does. The enquiry's own status is left as it is — move it
+              to Order Confirmed to raise the order.
             </Alert>
           </Box>
         )}

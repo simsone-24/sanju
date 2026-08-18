@@ -83,7 +83,7 @@ export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActions
     mutationFn: () => quotationService.approve(row.id),
     onSuccess: () => {
       invalidate();
-      showToast('Quotation confirmed. The order has been raised.', 'success');
+      showToast("Quotation confirmed. The enquiry's status is unchanged — move it to Order Confirmed to raise the order.", 'success');
     },
     onError: (error) => showToast(errorMessage(error, 'Unable to confirm this quotation.'), 'error'),
   });
@@ -153,7 +153,7 @@ export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActions
       {canApprove && row.status !== 'APPROVED' && (
         <IconButton
           size="sm"
-          title="Confirm — raises the order from this quotation"
+          title="Confirm — sets the enquiry's final budget from this quotation"
           disabled={confirmMutation.isPending}
           onClick={() => confirmMutation.mutate()}
         >

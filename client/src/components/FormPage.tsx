@@ -11,6 +11,8 @@ interface FormPageProps {
   onCancel: () => void;
   onSave: () => void;
   saving?: boolean;
+  /** Disables Save without claiming a save is under way — e.g. while the record is still loading. */
+  saveDisabled?: boolean;
   saveLabel?: string;
   isDirty?: boolean;
   serverError?: string | null;
@@ -40,6 +42,7 @@ export function FormPage({
   onCancel,
   onSave,
   saving = false,
+  saveDisabled = false,
   saveLabel = 'Save',
   isDirty = false,
   serverError,
@@ -144,7 +147,7 @@ export function FormPage({
         <Button onClick={onCancel} disabled={saving} size="large">
           Cancel
         </Button>
-        <Button variant="contained" onClick={onSave} disabled={saving} size="large">
+        <Button variant="contained" onClick={onSave} disabled={saving || saveDisabled} size="large">
           {saving ? 'Saving…' : saveLabel}
         </Button>
       </Stack>

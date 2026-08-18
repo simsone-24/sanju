@@ -889,13 +889,13 @@ const CONFIRM_COPY: Record<PendingAction, ConfirmCopyEntry> = {
   reject: {
     title: 'Reject Quotation?',
     message: (quotation) =>
-      `Mark quotation "${quotation.quotationNumber}" as rejected? The linked enquiry will be marked as lost.`,
+      `Mark quotation "${quotation.quotationNumber}" as rejected? The linked enquiry keeps its current status — mark it Order Lost yourself if that is where it now stands.`,
     danger: true,
   },
   approve: {
     title: 'Confirm Quotation?',
     message: (quotation) =>
-      `Confirm quotation "${quotation.quotationNumber}" (v${quotation.version})? This moves the enquiry to Order Confirmed and raises the order. Other quotations stay available as history, and the enquiry's final budget becomes the total of everything confirmed.`,
+      `Confirm quotation "${quotation.quotationNumber}" (v${quotation.version})? The enquiry keeps its current status — use Convert To Order when the order should be raised. Other quotations stay available as history, and the enquiry's final budget becomes the total of everything confirmed.`,
     confirmLabel: 'Confirm',
   },
   convert: {

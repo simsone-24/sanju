@@ -170,9 +170,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       }
     : { name: null, phone: null, whatsapp: null, email: null, address: null, gst: null };
 
-  // Both paths touch the same records, so they share one refresh: saving into Approved confirms the
-  // enquiry and raises the order, and editing an approved quotation moves that order's total and the
-  // enquiry's final budget (quotations/service.ts create/update).
+  // Both paths touch the same records, so they share one refresh: confirming a quotation re-sums the
+  // enquiry's final budget, and editing a confirmed one moves that figure and the total of an order
+  // already raised (quotations/service.ts create/update). Neither moves the enquiry's own status.
   function invalidateAfterSave() {
     queryClient.invalidateQueries({ queryKey: ['quotations'] });
     queryClient.invalidateQueries({ queryKey: ['quotation'] });
@@ -308,9 +308,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
             </Stack>
 
             {status === 'APPROVED' && existingQuotation?.status !== 'APPROVED' && (
-              <Alert severity="warning">
-                Saving as Approved confirms the enquiry and raises the order and its payment tracker entry,
-                exactly as the Confirm Quotation action does.
+              <Alert severity="info">
+                Saving as Confirmed sets the enquiry's final budget from the confirmed quotations. The
+                enquiry's own status is left as it is — move it to Order Confirmed to raise the order.
               </Alert>
             )}
 

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { EnquiryStatus, OrderStatus, Prisma, QuotationSource, QuotationStatus, SequenceType } from '@prisma/client';
+import { OrderStatus, Prisma, QuotationSource, QuotationStatus, SequenceType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
@@ -8,7 +8,6 @@ import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as enquiriesRepository from '../enquiries/repository';
-import * as enquiriesService from '../enquiries/service';
 import * as customersRepository from '../customers/repository';
 import * as ordersRepository from '../orders/repository';
 import * as settingsRepository from '../settings/repository';
@@ -378,11 +377,11 @@ async function resolveSource(companyId: number, input: CreateQuotationInput) {
 /**
  * Applies a status chosen on the quotation form.
  *
- * APPROVED is never written directly for an enquiry-sourced quotation: approve() is what confirms
- * the enquiry, raises the Order and its Payment Tracker row, and re-sums the enquiry's final
- * budget. Writing the column alone would leave an approved quotation with none of that, so the
- * form's dropdown routes through exactly the same action the Confirm button uses. Customer /
- * Order / Manual quotations have no enquiry to confirm, so for them APPROVED is just a label.
+ * APPROVED is never written directly for an enquiry-sourced quotation: approve() also re-sums the
+ * enquiry's final budget and lifts the total of an order already raised from it. Writing the column
+ * alone would leave a confirmed quotation with none of that, so the form's dropdown routes through
+ * exactly the same action the Confirm button uses. Neither path touches the enquiry's status.
+ * Customer / Order / Manual quotations have no enquiry at all, so for them APPROVED is just a label.
  */
 async function applyFormStatus(
   companyId: number,
@@ -679,10 +678,11 @@ export async function changeStatus(
 /**
  * "Confirm Quotation" — "md files/Enquiry/enq.md" §5.
  *
- * The one manual action that does move the enquiry on: it marks this quotation confirmed, converts
- * the enquiry to Order Confirmed, and lets the existing flow raise the Order and its Payment Tracker
- * row. Other quotations are left exactly as they are, available as history (§5), and any number of
- * them may be confirmed (§2) — the enquiry's committed figure is their combined total.
+ * Marks this quotation confirmed and nothing more on the enquiry's lifecycle: the enquiry keeps the
+ * status it has, and the Order is raised only when the user moves the enquiry to Order Confirmed
+ * itself. What this does carry across is money — the enquiry's quotationAmount/version and its
+ * finalBudgetAmount (the combined total of every confirmed quotation, §2), plus the total of an order
+ * that already exists. Other quotations are left exactly as they are, available as history (§5).
  */
 export async function approve(companyId: number, actorId: number, id: number) {
   const existing = await quotationsRepository.findQuotationById(companyId, id);
@@ -694,7 +694,6 @@ export async function approve(companyId: number, actorId: number, id: number) {
   }
 
   const enquiryId = existing.enquiry.id;
-  const enquiryStatusBefore = existing.enquiry.status;
 
   const { updated, approvedTotal } = await prisma.$transaction(async (tx) => {
     const approved = await quotationsRepository.updateQuotationStatus(id, QuotationStatus.APPROVED, tx);
@@ -721,14 +720,10 @@ export async function approve(companyId: number, actorId: number, id: number) {
     performedById: actorId,
   });
 
-  // Delegated rather than written here: changeStatus() also materialises an unconfirmed prospect
-  // into a Customer, logs the transition, and runs the auto-conversion into Orders/Payment Tracker.
-  // Skipped when the enquiry is already confirmed, so re-confirming a second quotation does not
-  // repeat the transition.
-  if (enquiryStatusBefore !== EnquiryStatus.ORDER_CONFIRMED) {
-    await enquiriesService.changeStatus(companyId, actorId, enquiryId, EnquiryStatus.ORDER_CONFIRMED);
-  }
-
+  // The enquiry's own status is deliberately left alone: confirming a quotation is a statement about
+  // the quotation, not about where the enquiry stands. Moving the enquiry to Order Confirmed — which
+  // is what materialises the prospect into a Customer and raises the Order and its Payment Tracker
+  // row — stays a decision the user makes on the enquiry itself (enquiries/service.ts changeStatus).
   // The order is raised from a single quotation, so once more than one is confirmed its total has to
   // be lifted to the combined figure. Banked payments are untouched — only the total moves, and the
   // balance absorbs the difference (pending = total − paid), as payments/service.ts computes it.
