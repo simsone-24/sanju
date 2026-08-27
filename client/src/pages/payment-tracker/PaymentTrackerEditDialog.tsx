@@ -13,11 +13,7 @@ import { ViewField } from '../../components/ViewField';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
-import type {
-  PaymentTrackerRecord,
-  PaymentTrackerStatus,
-  UpdatePaymentTrackerInput,
-} from '../../types/paymentTracker';
+import type { PaymentTrackerRecord, UpdatePaymentTrackerInput } from '../../types/paymentTracker';
 import { formatCurrency } from '../../utils/format';
 import {
   PAYMENT_STATUS_CHOICES,
@@ -34,12 +30,14 @@ interface PaymentTrackerEditDialogProps {
   onClose: () => void;
 }
 
-// The form's status dropdown value: either "AUTO" (status follows the payments) or a pinned status.
+// The form's status dropdown value — one of the four stored statuses.
 type StatusChoice = (typeof PAYMENT_STATUS_CHOICES)[number];
 
+// The dropdown opens on the status the order already carries, however that status was arrived at —
+// derived from the payments or pinned by hand. An order with no tracker row yet has collected
+// nothing, so it opens on PENDING.
 function currentStatusChoice(record: PaymentTrackerRecord | null): StatusChoice {
-  if (!record?.paymentTracker) return 'AUTO';
-  return record.paymentTracker.statusManual ? record.paymentTracker.paymentStatus : 'AUTO';
+  return record?.paymentTracker?.paymentStatus ?? 'PENDING';
 }
 
 /**
@@ -75,7 +73,7 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
       // Money is nearly always recorded on the day it comes in, so the field opens on today rather
       // than empty. It stays clearable for a receipt being entered late.
       paymentDate: dayjs().format('YYYY-MM-DD'),
-      paymentStatus: 'AUTO',
+      paymentStatus: 'PENDING',
       remarks: '',
     },
   });
@@ -132,11 +130,10 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
             },
           }
         : {}),
-      // Sent only on an actual change, so simply reopening and saving the form never writes a
-      // spurious "status changed" entry into the activity log.
-      ...(statusChoice !== previousStatusChoice
-        ? { paymentStatus: statusChoice === 'AUTO' ? null : (statusChoice as PaymentTrackerStatus) }
-        : {}),
+      // Sent only on an actual change — which keeps the form out of the way of the automatic
+      // status as well as out of the activity log: leaving the dropdown on the status the order
+      // already shows pins nothing, so that order goes on following its payments.
+      ...(statusChoice !== previousStatusChoice ? { paymentStatus: statusChoice } : {}),
       ...(nextRemarks !== (record.paymentTracker?.remarks ?? '') ? { remarks: nextRemarks } : {}),
     };
 
@@ -262,11 +259,11 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
                 select
                 label="Payment Status"
                 fullWidth
-                helperText="Automatic follows the payments. Choosing a status pins it until you switch back."
+                helperText="Opens on the current status. Changing it pins the status, and it stops following the payments."
               >
                 {PAYMENT_STATUS_CHOICES.map((choice) => (
                   <MenuItem key={choice} value={choice}>
-                    {choice === 'AUTO' ? 'Automatic (from payments)' : resolveStatusConfig('paymentTracker', choice).label}
+                    {resolveStatusConfig('paymentTracker', choice).label}
                   </MenuItem>
                 ))}
               </TextField>

@@ -46,6 +46,7 @@ import * as quotationService from '../../services/quotationService';
 import { useToast } from '../../store/ToastContext';
 import type { QuotationListItem } from '../../types/quotation';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
+import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
 import { EnquiryProgressTracker } from './EnquiryProgressTracker';
 import { EnquiryQuotationActions } from './EnquiryQuotationActions';
 import { EnquiryQuotationDialog } from './EnquiryQuotationDialog';
@@ -75,8 +76,12 @@ export default function EnquiryDetailPage() {
   const canViewCustomers = usePermission('CUSTOMERS', 'canView');
   const canChangeStatus = usePermission('ENQUIRIES', 'canChangeStatus');
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  // "md files/Enquiry/flow.md" §2.3: Create Quotation opens a modal rather than navigating away.
-  const [quotationDialogOpen, setQuotationDialogOpen] = useState(false);
+  // "md files/Enquiry/flow.md" §2.3: quotations are worked on in a modal rather than by navigating
+  // away. `null` is closed; `{ quotationId: null }` composes a new one, an id edits that one — the
+  // same dialog either way, so the Quotation module's form page is never reached from here.
+  const [quotationDialog, setQuotationDialog] = useState<{ quotationId: number | null } | null>(null);
+  // Read-only popup for the View action and for clicking a quotation row.
+  const [previewQuotationId, setPreviewQuotationId] = useState<number | null>(null);
   const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
 
   const { data: enquiry, isLoading } = useQuery({
@@ -167,7 +172,11 @@ export default function EnquiryDetailPage() {
       header: 'Actions',
       align: 'right',
       render: (row) => (
-        <EnquiryQuotationActions row={row} onView={(quotationId) => navigate(`/quotations/${quotationId}`)} />
+        <EnquiryQuotationActions
+          row={row}
+          onView={setPreviewQuotationId}
+          onEdit={(quotationId) => setQuotationDialog({ quotationId })}
+        />
       ),
     },
   ];
@@ -265,7 +274,7 @@ export default function EnquiryDetailPage() {
         canEdit={canEdit}
         showCreateQuotation={showCreateQuotation}
         onEdit={() => navigate(`/enquiries/${enquiry.id}/edit`)}
-        onCreateQuotation={() => setQuotationDialogOpen(true)}
+        onCreateQuotation={() => setQuotationDialog({ quotationId: null })}
         onCall={handleCall}
         onWhatsApp={handleWhatsApp}
       />
@@ -378,7 +387,7 @@ export default function EnquiryDetailPage() {
                   size="small"
                   variant="contained"
                   startIcon={<RequestQuoteIcon />}
-                  onClick={() => setQuotationDialogOpen(true)}
+                  onClick={() => setQuotationDialog({ quotationId: null })}
                 >
                   Create Quotation
                 </Button>
@@ -393,7 +402,7 @@ export default function EnquiryDetailPage() {
               limit={50}
               onPageChange={() => undefined}
               onLimitChange={() => undefined}
-              onRowClick={(row) => navigate(`/quotations/${row.id}`)}
+              onRowClick={(row) => setPreviewQuotationId(row.id)}
               exportFileName={`${enquiry.enquiryNumber}-quotations`}
               canExport={canExport}
               emptyState={{
@@ -467,10 +476,11 @@ export default function EnquiryDetailPage() {
         onClose={() => setStatusDialogOpen(false)}
       />
 
-      {/* flow.md §2.3: raised in place — saving keeps the user on the enquiry, whose Quotation table
-          is refreshed by the dialog's own invalidation. */}
+      {/* flow.md §2.3: raised and edited in place — saving keeps the user on the enquiry, whose
+          Quotation table is refreshed by the dialog's own invalidation. */}
       <EnquiryQuotationDialog
-        open={quotationDialogOpen}
+        open={quotationDialog !== null}
+        quotationId={quotationDialog?.quotationId ?? null}
         enquiry={{
           id: enquiry.id,
           enquiryNumber: enquiry.enquiryNumber,
@@ -480,9 +490,13 @@ export default function EnquiryDetailPage() {
           email: enquiry.prospect?.email ?? null,
           address: enquiry.prospect?.address ?? null,
         }}
-        onClose={() => setQuotationDialogOpen(false)}
-        onSaved={() => setQuotationDialogOpen(false)}
+        onClose={() => setQuotationDialog(null)}
+        onSaved={() => setQuotationDialog(null)}
       />
+
+      {/* The View action and a row click open the document read-only here rather than sending the
+          user to the Quotation module — the same preview the Quotations index page uses. */}
+      <QuotationPreviewDialog quotationId={previewQuotationId} onClose={() => setPreviewQuotationId(null)} />
     </Box>
   );
 }

@@ -1,4 +1,3 @@
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
@@ -7,7 +6,6 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Stack } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { useNavigate } from 'react-router-dom';
 import { IconButton } from '../../components/ui/IconButton';
 import { usePermission } from '../../hooks/usePermission';
 import * as quotationService from '../../services/quotationService';
@@ -17,11 +15,14 @@ import type { QuotationListItem } from '../../types/quotation';
 import { buildQuotationWhatsAppLink, canShareQuotation } from '../quotations/quotationActions';
 
 // "md files/Enquiry/enq.md" §9 — the row actions the enquiry's quotation table must offer:
-// View, Edit, Duplicate, Download PDF, Send WhatsApp, Confirm. Only permission gates them; no
-// status may block Edit (§6/§7), and any quotation can be confirmed (§2).
+// View, Edit, Duplicate, Download PDF, Send WhatsApp. Only permission gates them; no
+// status may block Edit (§6/§7).
 interface EnquiryQuotationActionsProps {
   row: QuotationListItem;
+  /** Opens the read-only preview dialog — the enquiry page never navigates to the Quotation module. */
   onView: (id: number) => void;
+  /** Opens the quotation dialog in edit mode, on this page. Also used for a freshly duplicated revision. */
+  onEdit: (id: number) => void;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -29,14 +30,12 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActionsProps) {
-  const navigate = useNavigate();
+export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotationActionsProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
   const canCreate = usePermission('QUOTATIONS', 'canCreate');
-  const canApprove = usePermission('QUOTATIONS', 'canApprove');
   const canPrint = usePermission('QUOTATIONS', 'canPrint');
 
   function invalidate() {
@@ -74,18 +73,9 @@ export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActions
     onSuccess: (created) => {
       invalidate();
       showToast(`Quotation duplicated as v${created.version}.`, 'success');
-      navigate(`/quotations/${created.id}/edit`);
+      onEdit(created.id);
     },
     onError: (error) => showToast(errorMessage(error, 'Unable to duplicate this quotation.'), 'error'),
-  });
-
-  const confirmMutation = useMutation({
-    mutationFn: () => quotationService.approve(row.id),
-    onSuccess: () => {
-      invalidate();
-      showToast("Quotation confirmed. The enquiry's status is unchanged — move it to Order Confirmed to raise the order.", 'success');
-    },
-    onError: (error) => showToast(errorMessage(error, 'Unable to confirm this quotation.'), 'error'),
   });
 
   const downloadMutation = useMutation({
@@ -109,13 +99,20 @@ export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActions
 
   return (
     // IconButton's `title` is both the tooltip and the accessible name, so no Tooltip wrapper.
-    <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+    // The row itself is clickable, so the click is stopped here for the whole group: without it
+    // every action would also fire the row handler and open the preview on top of what was asked for.
+    <Stack
+      direction="row"
+      spacing={0.25}
+      sx={{ justifyContent: 'flex-end' }}
+      onClick={(event) => event.stopPropagation()}
+    >
       <IconButton size="sm" title="View" onClick={() => onView(row.id)}>
         <VisibilityIcon fontSize="small" />
       </IconButton>
 
       {canEdit && (
-        <IconButton size="sm" title="Edit" onClick={() => navigate(`/quotations/${row.id}/edit`)}>
+        <IconButton size="sm" title="Edit" onClick={() => onEdit(row.id)}>
           <EditIcon fontSize="small" />
         </IconButton>
       )}
@@ -150,16 +147,6 @@ export function EnquiryQuotationActions({ row, onView }: EnquiryQuotationActions
         </IconButton>
       )}
 
-      {canApprove && row.status !== 'APPROVED' && (
-        <IconButton
-          size="sm"
-          title="Confirm — sets the enquiry's final budget from this quotation"
-          disabled={confirmMutation.isPending}
-          onClick={() => confirmMutation.mutate()}
-        >
-          <CheckCircleIcon fontSize="small" />
-        </IconButton>
-      )}
     </Stack>
   );
 }

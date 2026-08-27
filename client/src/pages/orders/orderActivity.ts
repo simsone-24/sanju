@@ -19,14 +19,14 @@ function statusChangeTarget(entry: OrderTimelineEntry): OrderStage | null {
  *
  * Every order is created at Yet to Start (Prisma's default on Order.status), so that stage is dated
  * from the order itself; the rest come from the status change that moved it there. Entries arrive
- * oldest first, so a stage revisited later keeps its most recent date — the answer to "when was
- * this closed?" is the last time it was closed, not the first.
+ * newest first, so the first status change for each stage is its most recent — the answer to
+ * "when was this closed?" is the last time it was closed, not the first.
  */
 export function resolveStageDates(createdAt: string, entries: OrderTimelineEntry[]): OrderStageDates {
   const dates: OrderStageDates = { YET_TO_START: createdAt, IN_PROGRESS: null, ORDER_CLOSED: null };
   for (const entry of entries) {
     const target = statusChangeTarget(entry);
-    if (target) dates[target] = entry.performedAt;
+    if (target && dates[target] === null) dates[target] = entry.performedAt;
   }
   return dates;
 }

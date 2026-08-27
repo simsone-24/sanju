@@ -2,10 +2,9 @@ import { z } from 'zod';
 
 const PAYMENT_METHOD_VALUES = ['CASH', 'UPI', 'BANK', 'CARD', 'CHEQUE'] as const;
 
-// "AUTO" is not a server status — it is how the form expresses "stop pinning this and let the
-// payments decide", which the API receives as an explicit null.
+// The four stored statuses, in the order they progress. The dropdown offers exactly these — the
+// form no longer exposes a way to hand the status back to automatic recalculation.
 export const PAYMENT_STATUS_CHOICES = [
-  'AUTO',
   'PENDING',
   'ADVANCE_PAID',
   'PARTIAL_PAYMENT',

@@ -311,7 +311,7 @@ export function listQuotationRevisions(companyId: number, enquiryId: number) {
 export function getQuotationActivityLog(id: number, client: PrismaClientOrTx = prisma) {
   return client.activityLog.findMany({
     where: { module: 'QUOTATIONS', referenceId: id },
-    orderBy: { performedAt: 'asc' },
+    orderBy: { performedAt: 'desc' },
     select: {
       id: true,
       action: true,

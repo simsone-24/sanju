@@ -260,7 +260,7 @@ export async function seedOrderTasksFromTemplates(companyId: number, orderId: nu
 export function getOrderActivityLog(id: number, client: PrismaClientOrTx = prisma) {
   return client.activityLog.findMany({
     where: { module: 'ORDERS', referenceId: id },
-    orderBy: { performedAt: 'asc' },
+    orderBy: { performedAt: 'desc' },
     select: {
       id: true,
       action: true,
