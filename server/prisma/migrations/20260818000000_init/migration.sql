@@ -567,7 +567,7 @@ CREATE TABLE `activity_logs` (
     `reference_id` INTEGER NOT NULL,
     `action` VARCHAR(191) NOT NULL,
     `description` TEXT NULL,
-    `metadata` JSON NULL,
+    `metadata` LONGTEXT NULL,
     `performed_by_id` INTEGER NULL,
     `performed_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 

@@ -15,16 +15,16 @@ interface FormSectionProps {
 // Information, Payment Details, ...) instead of one long unbroken form.
 export function FormSection({ title, subtitle, icon, id, children }: FormSectionProps) {
   return (
-    <Paper id={id} variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 2.5 }}>
+    <Paper id={id} variant="outlined" sx={{ p: { xs: 2, sm: 3.5 } }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: { xs: 2, sm: 2.5 } }}>
         {icon ? (
           <Box
             sx={(theme) => ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 40,
-              height: 40,
+              width: { xs: 34, sm: 40 },
+              height: { xs: 34, sm: 40 },
               borderRadius: '50%',
               flexShrink: 0,
               color: 'primary.main',
@@ -36,7 +36,7 @@ export function FormSection({ title, subtitle, icon, id, children }: FormSection
         ) : (
           <Box sx={{ width: 4, height: 20, borderRadius: 999, bgcolor: 'primary.main', flexShrink: 0 }} />
         )}
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h4">{title}</Typography>
           {subtitle && (
             <Typography variant="body2" color="text.secondary">
@@ -45,7 +45,16 @@ export function FormSection({ title, subtitle, icon, id, children }: FormSection
           )}
         </Box>
       </Stack>
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>{children}</Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: { xs: 2, sm: 2.5 },
+          // minmax(0, …) lets long values and wide inputs shrink instead of stretching the card.
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        {children}
+      </Box>
     </Paper>
   );
 }

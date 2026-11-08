@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
-dotenv.config();
+// NODE_ENV=production loads .env.production; otherwise (or if that file is absent) fall back to .env.
+const envFile = path.resolve(process.cwd(), `.env.${process.env.NODE_ENV ?? 'development'}`);
+dotenv.config({ path: fs.existsSync(envFile) ? envFile : undefined });
 
 function required(name: string): string {
   const value = process.env[name];

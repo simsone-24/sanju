@@ -16,9 +16,9 @@ export const enquiryFormSchema = z
     email: z.string().optional().or(z.literal('')),
     address: z.string().optional().or(z.literal('')),
     city: z.string().optional().or(z.literal('')),
-    eventTypeId: z.string().min(1, 'Select an event type.'),
+    eventTypeId: z.string().optional().or(z.literal('')),
     eventName: z.string().optional().or(z.literal('')),
-    eventDate: z.string().min(1, 'Event date is required.'),
+    eventDate: z.string().optional().or(z.literal('')),
     eventTime: z.enum(['MORNING', 'EVENING']).optional().or(z.literal('')),
     mahal: z.string().optional().or(z.literal('')),
     venue: z.string().optional().or(z.literal('')),
@@ -37,6 +37,7 @@ export const enquiryFormSchema = z
     // Only meaningful on create — see EnquiryFormPage's EnquiryStatusSection. Any of the 6 statuses
     // may be chosen at creation; ORDER_CONFIRMED creates the customer record immediately server-side.
     status: z.enum([
+      'DRAFT',
       'PENDING',
       'APPOINTMENT_FIXED',
       'QUOTATION_TO_SHARE',
@@ -46,6 +47,17 @@ export const enquiryFormSchema = z
     ]),
   })
   .superRefine((data, ctx) => {
+    // A Draft is saved mid-entry — none of the usual required fields apply until it moves to a
+    // real status, mirroring server/src/modules/enquiries/validation.ts's own DRAFT bypass.
+    if (data.status === 'DRAFT') return;
+
+    if (!data.eventTypeId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventTypeId'], message: 'Select an event type.' });
+    }
+    if (!data.eventDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Event date is required.' });
+    }
+
     if (data.customerType === 'EXISTING') {
       if (!data.customerId) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customerId'], message: 'Select a customer.' });

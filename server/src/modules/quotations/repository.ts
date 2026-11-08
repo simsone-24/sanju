@@ -43,6 +43,7 @@ const quotationBaseSelect = {
   // Drives the "Last Updated" column the enquiry's quotation table requires
   // ("md files/Enquiry/enq.md" §9).
   updatedAt: true,
+  advanceAmount: true,
   manualCustomerName: true,
   manualPhone: true,
   manualWhatsapp: true,
@@ -393,6 +394,7 @@ interface CreateQuotationData {
   tax: number;
   totalAmount: number;
   remarks?: string;
+  advanceAmount?: number;
   createdById: number;
   items: QuotationItemWithAmount[];
 }
@@ -433,6 +435,7 @@ export function createQuotation(data: CreateQuotationData, client: PrismaClientO
       tax: data.tax,
       totalAmount: data.totalAmount,
       remarks: data.remarks,
+      advanceAmount: data.advanceAmount,
       createdById: data.createdById,
       status: QuotationStatus.DRAFT,
       items: { create: itemCreateInput(data.items) },
@@ -454,6 +457,7 @@ interface UpdateQuotationData {
   tax?: number;
   totalAmount?: number;
   remarks?: string;
+  advanceAmount?: number;
   manualCustomer?: ManualCustomerData;
 }
 
@@ -478,6 +482,7 @@ export async function updateQuotation(
       tax: data.tax,
       totalAmount: data.totalAmount,
       remarks: data.remarks,
+      advanceAmount: data.advanceAmount,
       ...(data.manualCustomer
         ? {
             manualCustomerName: data.manualCustomer.name,

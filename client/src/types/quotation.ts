@@ -66,6 +66,7 @@ export interface QuotationListItem {
   createdAt: string;
   /** Last edit or status change — the "Last Updated" column on the enquiry's quotation table. */
   updatedAt: string;
+  advanceAmount: string | null;
   recipient: QuotationRecipient;
   event: QuotationEvent | null;
   owner: QuotationOwner | null;
@@ -105,6 +106,8 @@ export interface QuotationDetail extends QuotationListItem {
   convertedOrder: { id: number; orderNumber: string; status: OrderStatus } | null;
   /** The company's standing terms (Settings → Company Info), printed alongside the notes. */
   termsAndConditions: string | null;
+  /** The advance amount agreed for this quotation. */
+  advanceAmount: string | null;
 }
 
 export interface QuotationTimelineEntry {

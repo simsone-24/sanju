@@ -4,10 +4,13 @@ import { idSchema } from '../../utils/parseId';
 
 const mobileSchema = z.string().regex(/^[6-9]\d{9}$/, 'Mobile number must be a valid 10-digit number.');
 
+// Lenient at the schema level — every field a real ("non-draft") enquiry requires is instead
+// enforced in createEnquirySchema's superRefine below, gated on status !== DRAFT. A DRAFT enquiry
+// can be saved with any of these blank or omitted entirely.
 const newCustomerSchema = z.object({
   type: z.literal('NEW'),
-  customerName: z.string().min(1, 'Customer name is required.'),
-  mobile: mobileSchema,
+  customerName: z.string().min(1).optional(),
+  mobile: z.string().optional(),
   whatsapp: z.string().min(1).optional(),
   email: z.string().email().optional(),
   address: z.string().min(1).optional(),
@@ -16,36 +19,76 @@ const newCustomerSchema = z.object({
 
 const existingCustomerSchema = z.object({
   type: z.literal('EXISTING'),
-  customerId: idSchema('A valid customer is required.'),
+  customerId: idSchema().optional(),
 });
 
 const customerInputSchema = z.discriminatedUnion('type', [newCustomerSchema, existingCustomerSchema]);
 
-export const createEnquirySchema = z.object({
-  customer: customerInputSchema,
-  eventTypeId: idSchema('A valid event type is required.'),
-  eventName: z.string().min(1).optional(),
-  eventDate: z.coerce.date({ required_error: 'Event date is required.' }),
-  eventTime: z.nativeEnum(EventTime).optional(),
-  mahal: z.string().min(1).optional(),
-  venue: z.string().min(1).optional(),
-  estimatedBudget: z.coerce.number().min(0).optional(),
-  // Settable at creation, not edit-only: the form shows the Final Budget section on a new enquiry
-  // too, and an enquiry logged straight into Order Confirmed converts immediately — these are the
-  // figures the resulting order's budget and opening advance are built from (orders/service.ts).
-  finalBudgetAmount: z.coerce.number().min(0).optional(),
-  advanceAmount: z.coerce.number().min(0).optional(),
-  notes: z.string().min(1).optional(),
-  appointmentDate: z.coerce.date().optional(),
-  appointmentTime: z.string().min(1).optional(),
-  meetingLocation: z.string().min(1).optional(),
-  appointmentNotes: z.string().min(1).optional(),
-  appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
-  assignedUserId: idSchema().optional(),
-  // When the customer should next be contacted — the optional Follow-up step of the workflow.
-  followUpDate: z.coerce.date().optional(),
-  status: z.nativeEnum(EnquiryStatus).optional(),
-});
+export const createEnquirySchema = z
+  .object({
+    // Omitted entirely for a DRAFT saved before any customer type was picked.
+    customer: customerInputSchema.optional(),
+    eventTypeId: idSchema().optional(),
+    eventName: z.string().min(1).optional(),
+    eventDate: z.coerce.date().optional(),
+    eventTime: z.nativeEnum(EventTime).optional(),
+    mahal: z.string().min(1).optional(),
+    venue: z.string().min(1).optional(),
+    estimatedBudget: z.coerce.number().min(0).optional(),
+    // Settable at creation, not edit-only: the form shows the Final Budget section on a new enquiry
+    // too, and an enquiry logged straight into Order Confirmed converts immediately — these are the
+    // figures the resulting order's budget and opening advance are built from (orders/service.ts).
+    finalBudgetAmount: z.coerce.number().min(0).optional(),
+    advanceAmount: z.coerce.number().min(0).optional(),
+    notes: z.string().min(1).optional(),
+    appointmentDate: z.coerce.date().optional(),
+    appointmentTime: z.string().min(1).optional(),
+    meetingLocation: z.string().min(1).optional(),
+    appointmentNotes: z.string().min(1).optional(),
+    appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
+    assignedUserId: idSchema().optional(),
+    // When the customer should next be contacted — the optional Follow-up step of the workflow.
+    followUpDate: z.coerce.date().optional(),
+    status: z.nativeEnum(EnquiryStatus).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // A DRAFT enquiry is deliberately incomplete — it exists so a half-filled form can be saved and
+    // finished later, so none of the fields a real enquiry needs are required here.
+    if (data.status === EnquiryStatus.DRAFT) return;
+
+    if (!data.eventTypeId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventTypeId'], message: 'A valid event type is required.' });
+    }
+    if (!data.eventDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Event date is required.' });
+    }
+    if (!data.customer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Customer details are required.' });
+    } else if (data.customer.type === 'EXISTING') {
+      if (!data.customer.customerId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customer', 'customerId'],
+          message: 'A valid customer is required.',
+        });
+      }
+    } else {
+      if (!data.customer.customerName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customer', 'customerName'],
+          message: 'Customer name is required.',
+        });
+      }
+      if (!data.customer.mobile || !mobileSchema.safeParse(data.customer.mobile).success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customer', 'mobile'],
+          message: 'Mobile number must be a valid 10-digit number.',
+        });
+      }
+    }
+  });
 
 export const updateEnquirySchema = z
   .object({

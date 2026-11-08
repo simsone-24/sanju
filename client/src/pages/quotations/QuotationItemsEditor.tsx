@@ -11,6 +11,8 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
+  type Theme,
 } from '@mui/material';
 import { formatCurrency } from '../../utils/format';
 import {
@@ -29,6 +31,12 @@ interface QuotationItemsEditorProps {
   onSgstChange: (value: string) => void;
   totals: QuotationDraftTotals;
   error?: string | null;
+  /**
+   * Optional advance recorded against the quotation. When provided, an Advance field is offered
+   * beside the tax percentages and the amount is deducted from the Grand Total.
+   */
+  advanceAmount?: string;
+  onAdvanceChange?: (value: string) => void;
 }
 
 // The item table, tax percentages and totals of a quotation being composed — the same grid the
@@ -43,9 +51,81 @@ export function QuotationItemsEditor({
   onSgstChange,
   totals,
   error,
+  advanceAmount,
+  onAdvanceChange,
 }: QuotationItemsEditorProps) {
+  // Four fixed-width numeric columns do not fit a phone, so below `sm` each item becomes a stacked
+  // card instead of a table row.
+  const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down('sm'));
+
+  const advance = Number(advanceAmount) || 0;
+  // The customer's outstanding balance: the tax-inclusive total less whatever was paid up front.
+  const grandTotal = totals.total - advance;
+
   return (
     <Box>
+      {isMobile ? (
+        <Stack spacing={1.5}>
+          {items.map((item, index) => {
+            const rowTotal = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+            const isTrailingEmpty = index === items.length - 1 && !item.itemName.trim();
+            const canDelete = items.length > 1 && !isTrailingEmpty;
+            return (
+              <Box
+                key={index}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, display: 'grid', gap: 1.5 }}
+              >
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Item"
+                    placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
+                    value={item.itemName}
+                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'itemName', event.target.value))}
+                  />
+                  {canDelete && (
+                    <IconButton
+                      size="small"
+                      color="error"
+                      title="Delete item"
+                      onClick={() => onItemsChange(removeQuotationDraftItem(items, index))}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Stack>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5 }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Quantity"
+                    value={item.quantity}
+                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'quantity', event.target.value))}
+                    slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Unit Price"
+                    value={item.rate}
+                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'rate', event.target.value))}
+                    slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                  />
+                </Box>
+                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Sub Total
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {rowTotal ? formatCurrency(rowTotal) : '—'}
+                  </Typography>
+                </Stack>
+              </Box>
+            );
+          })}
+        </Stack>
+      ) : (
       <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         <Table size="small">
           <TableHead>
@@ -105,6 +185,7 @@ export function QuotationItemsEditor({
                     {items.length > 1 && !isTrailingEmpty && (
                       <IconButton
                         size="small"
+                        color="error"
                         title="Delete item"
                         onClick={() => onItemsChange(removeQuotationDraftItem(items, index))}
                       >
@@ -118,6 +199,7 @@ export function QuotationItemsEditor({
           </TableBody>
         </Table>
       </TableContainer>
+      )}
 
       {error && (
         <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
@@ -125,7 +207,7 @@ export function QuotationItemsEditor({
         </Typography>
       )}
 
-      <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 2, flexWrap: 'wrap', rowGap: 1.5 }}>
         <TextField
           label="CGST %"
           type="number"
@@ -144,6 +226,17 @@ export function QuotationItemsEditor({
           onChange={(event) => onSgstChange(event.target.value)}
           slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
         />
+        {onAdvanceChange && (
+          <TextField
+            label="Advance Amount"
+            type="number"
+            size="small"
+            sx={{ width: 170 }}
+            value={advanceAmount ?? ''}
+            onChange={(event) => onAdvanceChange(event.target.value)}
+            slotProps={{ htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right' } } }}
+          />
+        )}
       </Stack>
 
       <Stack sx={{ mt: 1.5, alignItems: 'flex-end', gap: 0.5 }}>
@@ -175,10 +268,20 @@ export function QuotationItemsEditor({
             </Typography>
           </Stack>
         )}
+        {advance > 0 && (
+          <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Advance
+            </Typography>
+            <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
+              - {formatCurrency(advance)}
+            </Typography>
+          </Stack>
+        )}
         <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', alignItems: 'baseline', gap: 1 }}>
           <Typography variant="h4">Grand Total</Typography>
           <Typography variant="h4" sx={{ minWidth: 120, textAlign: 'right' }}>
-            {formatCurrency(totals.total)}
+            {formatCurrency(grandTotal)}
           </Typography>
         </Stack>
       </Stack>

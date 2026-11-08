@@ -40,7 +40,7 @@ export async function getForOrder(companyId: number, actorId: number, orderId: n
       orderNumber: source.orderNumber,
       eventDate: source.eventDate,
       venue: source.venue,
-      eventName: source.enquiry?.eventName || source.enquiry?.eventType.eventName || '',
+      eventName: source.enquiry?.eventName || source.enquiry?.eventType?.eventName || '',
     },
     customer: source.customer,
     quotationNumber: quotation?.quotationNumber ?? null,

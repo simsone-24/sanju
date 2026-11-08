@@ -105,14 +105,18 @@ export async function listEnquiries(params: ListEnquiriesParams) {
   // objects with the same key into one literal makes the later one silently win instead of
   // combining — which was dropping whichever filter got merged in first.
   const conditions = buildEnquiryConditions(params);
+  // A DRAFT isn't a real enquiry yet, so every group below excludes it the same way it excludes
+  // ORDER_LOST — same reasoning as getEnquiryStats.
   for (const group of params.statusGroup ?? []) {
-    if (group === 'ACTIVE') conditions.push({ status: { not: EnquiryStatus.ORDER_LOST } });
+    if (group === 'ACTIVE') conditions.push({ status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_LOST] } });
     if (group === 'CONFIRMED') conditions.push({ status: EnquiryStatus.ORDER_CONFIRMED });
     if (group === 'PENDING') {
-      conditions.push({ status: { notIn: [EnquiryStatus.ORDER_CONFIRMED, EnquiryStatus.ORDER_LOST] } });
+      conditions.push({
+        status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_CONFIRMED, EnquiryStatus.ORDER_LOST] },
+      });
     }
     if (group === 'APPOINTMENT_PENDING') {
-      conditions.push({ status: { not: EnquiryStatus.ORDER_LOST } });
+      conditions.push({ status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_LOST] } });
       conditions.push({ appointmentStatus: { in: [AppointmentStatus.PENDING, AppointmentStatus.IN_PROGRESS] } });
     }
   }
@@ -148,15 +152,21 @@ export async function getEnquiryStats(params: EnquiryStatsParams) {
     AND: [...conditions, ...extra],
   });
 
+  // A DRAFT isn't a real enquiry yet (md files/enquiry.md — saved mid-entry, no fields required),
+  // so it is excluded from every dashboard pipeline count below, the same way ORDER_LOST is.
   const [totalEnquiries, confirmedEnquiries, pendingEnquiries, appointmentPending] = await Promise.all([
-    prisma.enquiry.count({ where: withGroup({ status: { not: EnquiryStatus.ORDER_LOST } }) }),
+    prisma.enquiry.count({
+      where: withGroup({ status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_LOST] } }),
+    }),
     prisma.enquiry.count({ where: withGroup({ status: EnquiryStatus.ORDER_CONFIRMED }) }),
     prisma.enquiry.count({
-      where: withGroup({ status: { notIn: [EnquiryStatus.ORDER_CONFIRMED, EnquiryStatus.ORDER_LOST] } }),
+      where: withGroup({
+        status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_CONFIRMED, EnquiryStatus.ORDER_LOST] },
+      }),
     }),
     prisma.enquiry.count({
       where: withGroup(
-        { status: { not: EnquiryStatus.ORDER_LOST } },
+        { status: { notIn: [EnquiryStatus.DRAFT, EnquiryStatus.ORDER_LOST] } },
         { appointmentStatus: { in: [AppointmentStatus.PENDING, AppointmentStatus.IN_PROGRESS] } },
       ),
     }),

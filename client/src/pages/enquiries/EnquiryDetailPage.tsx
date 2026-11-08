@@ -216,9 +216,9 @@ export default function EnquiryDetailPage() {
   return (
     <Box>
       <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 1, sm: 2 }}
+        sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}
       >
         <Breadcrumbs
           items={[
@@ -227,17 +227,26 @@ export default function EnquiryDetailPage() {
             { label: enquiry.enquiryNumber },
           ]}
         />
-        <Button
-          size="small"
-          variant="outlined"
-          endIcon={<MoreVertIcon />}
-          aria-haspopup="menu"
-          aria-expanded={actionsAnchor ? 'true' : undefined}
-          onClick={(event) => setActionsAnchor(event.currentTarget)}
-          sx={{ mb: 1.25 }}
-        >
-          Actions
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: { xs: 0.5, sm: 1.25 }, marginLeft: 'auto' }}>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/enquiries')}
+          >
+            Back
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            endIcon={<MoreVertIcon />}
+            aria-haspopup="menu"
+            aria-expanded={actionsAnchor ? 'true' : undefined}
+            onClick={(event) => setActionsAnchor(event.currentTarget)}
+          >
+            Actions
+          </Button>
+        </Stack>
         <Menu anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={closeActions}>
           {canChangeStatus && (
             <MenuItem
@@ -295,17 +304,19 @@ export default function EnquiryDetailPage() {
         <Stack spacing={2.5} sx={{ minWidth: 0 }}>
           <Paper variant="outlined" sx={CARD_SX}>
             <Stack
-              direction="row"
-              spacing={2}
-              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', rowGap: 1 }}
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={{ xs: 1, sm: 2 }}
+              sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', rowGap: 1 }}
             >
               <Typography variant="h4" component="h2">
                 Customer &amp; Event
               </Typography>
-              {customerRecord && <Chip size="small" variant="outlined" label={customerRecord.customerCode} />}
-              {!enquiry.customer.id && (
-                <Chip size="small" variant="outlined" label="Prospect — added on Order Confirmed" />
-              )}
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                {customerRecord && <Chip size="small" variant="outlined" label={customerRecord.customerCode} />}
+                {!enquiry.customer.id && (
+                  <Chip size="small" variant="outlined" label="Prospect — added on Order Confirmed" />
+                )}
+              </Stack>
             </Stack>
 
             <Box
@@ -372,9 +383,9 @@ export default function EnquiryDetailPage() {
 
           <Paper variant="outlined" sx={CARD_SX}>
             <Stack
-              direction="row"
-              spacing={2}
-              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', rowGap: 1 }}
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={{ xs: 1, sm: 2 }}
+              sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', rowGap: 1 }}
             >
               <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
                 <RequestQuoteIcon fontSize="small" sx={{ color: 'primary.main' }} />
@@ -388,6 +399,7 @@ export default function EnquiryDetailPage() {
                   variant="contained"
                   startIcon={<RequestQuoteIcon />}
                   onClick={() => setQuotationDialog({ quotationId: null })}
+                  sx={{ alignSelf: { xs: 'flex-start', sm: 'auto' } }}
                 >
                   Create Quotation
                 </Button>
@@ -489,6 +501,7 @@ export default function EnquiryDetailPage() {
           whatsapp: enquiry.prospect?.whatsapp ?? enquiry.customer.mobile,
           email: enquiry.prospect?.email ?? null,
           address: enquiry.prospect?.address ?? null,
+          eventDate: enquiry.eventDate,
         }}
         onClose={() => setQuotationDialog(null)}
         onSaved={() => setQuotationDialog(null)}

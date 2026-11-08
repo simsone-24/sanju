@@ -227,7 +227,7 @@ export default function QuotationDetailPage() {
           It may have been deleted, or the link is no longer valid.
         </p>
         <Button variant="primary" startIcon={<ArrowBackIcon fontSize="small" />} onClick={() => navigate('/quotations')}>
-          Back to Quotations
+              Back
         </Button>
       </div>
     );
@@ -336,7 +336,7 @@ export default function QuotationDetailPage() {
               </span>
             </div>
             <p className="tw-mb-0 tw-mt-1 tw-text-[0.8125rem] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              {formatDate(quotation.quotationDate)}
+              {quotation.event?.eventDate ? formatDate(quotation.event.eventDate) : 'Event date not set'}
               {enquiry ? ` · Enquiry ${enquiry.enquiryNumber}` : ''}
               {quotation.owner ? ` · ${quotation.owner.fullName}` : ''}
             </p>

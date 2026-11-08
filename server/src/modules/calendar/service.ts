@@ -11,7 +11,15 @@ type CalendarOrder = {
   venue: string | null;
   status: OrderStatus;
   customer: { customerName: string };
-  enquiry: { eventName: string | null; eventTime: EventTime | null; mahal: string | null; eventType: { eventName: string } };
+  enquiry: {
+    eventName: string | null;
+    eventTime: EventTime | null;
+    mahal: string | null;
+    // Nullable on the model for a DRAFT enquiry saved with no event type — but an order only ever
+    // exists for an enquiry that reached ORDER_CONFIRMED, which requires one, so this is always set
+    // in practice.
+    eventType: { eventName: string } | null;
+  };
 };
 
 type DatedCalendarOrder = CalendarOrder & { eventDate: Date };
@@ -28,8 +36,8 @@ function toCalendarEvent(order: DatedCalendarOrder): CalendarEvent {
     id: order.id,
     orderNumber: order.orderNumber,
     customerName: order.customer.customerName,
-    eventName: order.enquiry.eventName || order.enquiry.eventType.eventName,
-    eventType: order.enquiry.eventType.eventName,
+    eventName: order.enquiry.eventName || order.enquiry.eventType?.eventName || 'Event',
+    eventType: order.enquiry.eventType?.eventName ?? 'Not set',
     eventDate: order.eventDate,
     eventTime: order.enquiry.eventTime,
     mahal: order.enquiry.mahal,

@@ -4,6 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
@@ -59,6 +60,7 @@ const APPOINTMENT_STATUS_OPTIONS: AppointmentStatus[] = ['PENDING', 'IN_PROGRESS
 // in statusConfig.ts, as literal hex values since DataTable's rowAccentColor callback returns a
 // bare CSS color rather than a class.
 const ENQUIRY_ROW_ACCENT: Record<EnquiryStatus, string> = {
+  DRAFT: '#94A3B8',
   PENDING: '#64748B',
   APPOINTMENT_FIXED: '#8B5CF6',
   QUOTATION_TO_SHARE: '#F59E0B',
@@ -73,11 +75,6 @@ const ENQUIRY_ROW_ACCENT: Record<EnquiryStatus, string> = {
 const QUICK_FILTERS: readonly DateRangePreset[] = [...EVENT_DATE_PRESETS, 'UPCOMING'];
 
 const STATUS_GROUP_KEYS = new Set<string>(['ACTIVE', 'CONFIRMED', 'PENDING', 'APPOINTMENT_PENDING']);
-
-// Filter controls grow to share the row's width rather than sitting at a fixed size and stranding
-// empty space at its right edge. The basis is the width they settle at once the row is full enough
-// to wrap.
-const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[150px]';
 
 function parseParamDate(value: string | null): Dayjs | null {
   if (!value) return null;
@@ -161,6 +158,7 @@ export default function EnquiryListPage() {
   const dateRangeValue: DateRangeValue = quickFilter ?? (eventDateFrom || eventDateTo ? CUSTOM_DATE_RANGE : '');
 
   const [advancedOpen, setAdvancedOpen] = useState(appointmentFilterCount > 0);
+  const [filtersOpen, setFiltersOpen] = useState(appointmentFilterCount > 0 || Boolean(status) || Boolean(appointmentStatus) || Boolean(customerId) || Boolean(quickFilter) || Boolean(eventDateFrom || eventDateTo));
   const [deletingEnquiry, setDeletingEnquiry] = useState<EnquiryListItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<number | undefined>(
@@ -424,24 +422,30 @@ export default function EnquiryListPage() {
       header: 'Event',
       align: 'center' as const,
       width: 105,
-      render: (row) => (
-        <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-2">
-          <span
-            aria-hidden
-            className="tw-h-2 tw-w-2 tw-shrink-0 tw-rounded-full"
-            style={{ backgroundColor: row.eventType.colorCode ?? '#2563EB' }}
-          />
-          <div className="tw-min-w-0">
-            <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.eventType.eventName}</div>
-            {row.eventName && (
-              <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                {row.eventName}
+      render: (row) => {
+        const eventType = row.eventType ?? null;
+        const colorCode = eventType?.colorCode ?? '#2563EB';
+        return (
+          <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-2">
+            <span
+              aria-hidden
+              className="tw-h-2 tw-w-2 tw-shrink-0 tw-rounded-full"
+              style={{ backgroundColor: colorCode }}
+            />
+            <div className="tw-min-w-0">
+              <div className="tw-truncate tw-font-semibold tw-leading-tight">
+                {eventType?.eventName ?? 'Not set'}
               </div>
-            )}
+              {row.eventName && (
+                <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                  {row.eventName}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ),
-      exportValue: (row) => `${row.eventType.eventName}${row.eventName ? ` – ${row.eventName}` : ''}`,
+        );
+      },
+      exportValue: (row) => `${row.eventType?.eventName ?? 'Not set'}${row.eventName ? ` – ${row.eventName}` : ''}`,
     },
     {
       key: 'eventDate',
@@ -580,7 +584,7 @@ export default function EnquiryListPage() {
 
         <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Enquiries' }]} className="tw-mb-1.5" />
 
-        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-2">
+        <div className="tw-relative tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-items-center sm:tw-justify-between">
           <div className="tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
             <h1 className="tw-m-0 tw-text-2xl tw-font-bold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
               Enquiries
@@ -590,15 +594,26 @@ export default function EnquiryListPage() {
                 {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
               </span>
             )}
+            {/* Phones: the freshness indicator sits beside the record count; from `sm` it moves to the actions. */}
+            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} className="tw-text-[11px] sm:tw-hidden" />
           </div>
 
-          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2.5">
-            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />
+          <div className="tw-flex tw-items-center tw-gap-1.5 sm:tw-justify-end sm:tw-gap-2.5">
+            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} className="tw-hidden sm:tw-inline-flex sm:tw-text-xs" />
+            <Button
+              variant="ghost"
+              size="md"
+              className="tw-h-9 sm:tw-h-10"
+              startIcon={<FilterListIcon fontSize="small" />}
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              {filtersOpen ? 'Hide Filters' : 'Show Filters'}
+            </Button>
             {canCreate && (
               <Button
                 variant="primary"
                 size="md"
-                className="tw-h-10 tw-px-5 tw-shadow-md"
+                className="tw-h-9 tw-px-3 tw-shadow-md sm:tw-h-10 sm:tw-px-5"
                 startIcon={<AddIcon fontSize="small" />}
                 onClick={() => navigate('/enquiries/new')}
               >
@@ -612,14 +627,15 @@ export default function EnquiryListPage() {
 
         {/* Filter toolbar, integrated into the page header so it reads as one chrome band with
             the title rather than a separate card eating vertical space above the table. */}
+        {filtersOpen && (
         <div className="tw-mt-3 tw-flex tw-flex-col tw-gap-2.5">
           {/* Filters in the order the list is actually read: pick the event window first, then
               narrow by where the enquiry stands, then by who it is for. Everything runs at the
               standard 40px filter height so the date pickers sit level with the dropdowns, and each
               control keeps its label block above the box so the row bottom-aligns. */}
-          <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
+          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-flex-wrap sm:tw-items-end">
             <DateRangeFilter
-              className={FILTER_FIELD_WIDTH}
+              className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
               label="Event Date Range"
               presets={QUICK_FILTERS}
               value={dateRangeValue}
@@ -628,7 +644,7 @@ export default function EnquiryListPage() {
             />
 
             <SelectField
-              className={FILTER_FIELD_WIDTH}
+              className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
               label="Enquiry Status"
               emptyLabel="All"
               value={status}
@@ -641,7 +657,7 @@ export default function EnquiryListPage() {
 
             {/* The two bounds of the window the dropdown names — editing either is what "Custom
                 Range" means, so both handlers drop the named window. */}
-            <div className="tw-flex-1 tw-basis-[145px]">
+            <div className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[145px]">
               <DatePickerField
                 label="Event From"
                 margin="none"
@@ -651,7 +667,7 @@ export default function EnquiryListPage() {
                 }
               />
             </div>
-            <div className="tw-flex-1 tw-basis-[145px]">
+            <div className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[145px]">
               <DatePickerField
                 label="Event To"
                 margin="none"
@@ -664,7 +680,7 @@ export default function EnquiryListPage() {
             </div>
 
             <SelectField
-              className={FILTER_FIELD_WIDTH}
+              className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
               label="Appointment Status"
               emptyLabel="All"
               value={appointmentStatus}
@@ -679,7 +695,7 @@ export default function EnquiryListPage() {
                 gives customer names room the fixed-width dropdowns don't need. */}
             {canViewCustomers && (
               <CustomerFilter
-                className="tw-w-full tw-flex-[2] sm:tw-basis-[240px]"
+                className="tw-w-full sm:tw-w-auto sm:tw-flex-[2] sm:tw-basis-[240px]"
                 value={customer}
                 onChange={(next) => patchParams({ customer: next ? String(next.id) : null })}
               />
@@ -689,7 +705,7 @@ export default function EnquiryListPage() {
                 handled by the active-filter chips below. */}
             <Button
               variant="ghost"
-              className="tw-h-10"
+              className="tw-h-10 tw-w-full sm:tw-w-auto"
               onClick={() => setAdvancedOpen((previous) => !previous)}
               startIcon={<TuneIcon fontSize="small" />}
               endIcon={
@@ -763,17 +779,17 @@ export default function EnquiryListPage() {
             </>
           )}
         </div>
+        )}
       </section>
 
       {/* Pipeline summary tiles — each is also a one-click filter: click to apply the group, click
-          again to clear it. The subtext states what each count means so the cards read at a glance. */}
-      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-4">
+          again to clear it. */}
+      <div className="tw-mb-4 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-gap-3 lg:tw-grid-cols-4 lg:tw-gap-4">
         <StatCard
           label="Total Enquiries"
           value={stats?.totalEnquiries ?? 0}
           icon={<ListAltIcon />}
           tone="blue"
-          subtext="Active pipeline, excluding lost"
           loading={statsLoading}
           onClick={() => toggleStatusGroupCard('ACTIVE')}
           selected={statusGroups.includes('ACTIVE')}
@@ -783,7 +799,6 @@ export default function EnquiryListPage() {
           value={stats?.confirmedEnquiries ?? 0}
           icon={<CheckCircleIcon />}
           tone="green"
-          subtext="Converted to orders"
           loading={statsLoading}
           onClick={() => toggleStatusGroupCard('CONFIRMED')}
           selected={statusGroups.includes('CONFIRMED')}
@@ -793,7 +808,6 @@ export default function EnquiryListPage() {
           value={stats?.pendingEnquiries ?? 0}
           icon={<HourglassTopIcon />}
           tone="amber"
-          subtext="Awaiting confirmation"
           loading={statsLoading}
           onClick={() => toggleStatusGroupCard('PENDING')}
           selected={statusGroups.includes('PENDING')}
@@ -803,7 +817,6 @@ export default function EnquiryListPage() {
           value={stats?.appointmentPending ?? 0}
           icon={<PendingActionsIcon />}
           tone="violet"
-          subtext="Awaiting appointment"
           loading={statsLoading}
           onClick={() => toggleStatusGroupCard('APPOINTMENT_PENDING')}
           selected={statusGroups.includes('APPOINTMENT_PENDING')}

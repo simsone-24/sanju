@@ -1,3 +1,4 @@
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -17,7 +18,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { usePermission } from '../../hooks/usePermission';
 import * as quotationService from '../../services/quotationService';
@@ -30,8 +31,9 @@ import type {
   QuotationStatus,
   UpdateQuotationInput,
 } from '../../types/quotation';
-import { formatDate } from '../../utils/format';
+import { formatDate, getPublicAssetUrl } from '../../utils/format';
 import { QUOTATION_CREATE_STATUSES, QUOTATION_EDIT_STATUSES } from '../../validation/quotationSchemas';
+import { ImageThumb } from '../quotations/ImageThumb';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
 import {
@@ -54,6 +56,7 @@ interface EnquiryQuotationDialogProps {
     whatsapp: string | null;
     email: string | null;
     address: string | null;
+    eventDate: string | null;
   } | null;
   /**
    * The quotation to edit. `null`/omitted composes a new one — the same dialog either way, so
@@ -88,6 +91,10 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   // Shown by default — mirrors the Quotation form's live preview so this dialog produces the same
   // WYSIWYG check before saving.
   const [previewOpen, setPreviewOpen] = useState(true);
+  const [stagedImages, setStagedImages] = useState<File[]>([]);
+  // Object URLs for previewing staged (not-yet-uploaded) images.
+  const stagedUrls = useMemo(() => stagedImages.map((file) => URL.createObjectURL(file)), [stagedImages]);
+  useEffect(() => () => stagedUrls.forEach((url) => URL.revokeObjectURL(url)), [stagedUrls]);
 
   const isEdit = Boolean(quotationId);
 
@@ -117,6 +124,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       setCgstPercent('');
       setSgstPercent('');
       setQuotationDate(todayISO());
+      setStagedImages([]);
       setStatus('DRAFT');
       setItemsError(null);
       setServerError(null);
@@ -195,6 +203,36 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
 
   const saving = createMutation.isPending || updateMutation.isPending;
 
+  const uploadImagesMutation = useMutation({
+    mutationFn: (files: File[]) => quotationService.uploadImages(quotationId!, files),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] });
+      showToast('Images added.');
+    },
+  });
+
+  const deleteImageMutation = useMutation({
+    mutationFn: (imageId: number) => quotationService.deleteImage(quotationId!, imageId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] }),
+  });
+
+  async function handleImageFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!files.length) return;
+    if (quotationId) {
+      try {
+        await uploadImagesMutation.mutateAsync(files);
+      } catch (error) {
+        if (isAxiosError<ApiErrorResponse>(error) && error.response) showToast(error.response.data.message, 'error');
+        else showToast('Unable to upload images.', 'error');
+      }
+    } else {
+      // No quotation ID yet, so the files are held and uploaded right after the quotation is created.
+      setStagedImages((prev) => [...prev, ...files].slice(0, 12));
+    }
+  }
+
   async function handleSave() {
     if (!enquiry) return;
     setServerError(null);
@@ -232,6 +270,13 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
         sgstPercent: totals.sgstPercent,
         items: parsed.items,
       });
+      if (stagedImages.length) {
+        try {
+          await quotationService.uploadImages(created.id, stagedImages);
+        } catch {
+          showToast('Quotation saved, but some images failed to upload.', 'error');
+        }
+      }
       showToast(`Quotation ${created.quotationNumber} created for enquiry ${enquiry.enquiryNumber}.`);
       onSaved(created);
     } catch (error) {
@@ -280,12 +325,10 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
-                label="Quotation Date"
-                type="date"
+                label="Event Date"
                 fullWidth
-                value={quotationDate}
-                onChange={(event) => setQuotationDate(event.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                value={enquiry?.eventDate ? formatDate(enquiry.eventDate) : 'Not set'}
+                slotProps={{ input: { readOnly: true } }}
               />
               <TextField
                 select
@@ -325,11 +368,55 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
               error={itemsError}
             />
 
-            {!isEdit && (
-              <Typography variant="caption" color="text.secondary">
-                Sample decor images can be added once the quotation is saved.
-              </Typography>
-            )}
+            <Box>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  startIcon={<AddPhotoAlternateIcon />}
+                  disabled={uploadImagesMutation.isPending || saving || (isEdit && !existingQuotation)}
+                >
+                  {uploadImagesMutation.isPending ? 'Uploading…' : 'Add Sample Decor Images'}
+                  <input hidden type="file" accept="image/jpeg,image/png" multiple onChange={handleImageFiles} />
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  JPEG or PNG, up to 12 images.
+                </Typography>
+              </Stack>
+              {(isEdit ? (existingQuotation?.images.length ?? 0) : stagedImages.length) > 0 && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                    gap: 1.5,
+                    mt: 2,
+                  }}
+                >
+                  {isEdit
+                    ? (existingQuotation?.images ?? []).map((image) => (
+                        <ImageThumb
+                          key={image.id}
+                          src={getPublicAssetUrl(image.filePath)}
+                          alt={image.fileName}
+                          onRemove={() => deleteImageMutation.mutate(image.id)}
+                        />
+                      ))
+                    : stagedUrls.map((url, index) => (
+                        <ImageThumb
+                          key={url}
+                          src={url}
+                          alt={`decor ${index + 1}`}
+                          onRemove={() => setStagedImages((prev) => prev.filter((_, i) => i !== index))}
+                        />
+                      ))}
+                </Box>
+              )}
+              {!isEdit && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                  Images upload automatically when you save the quotation.
+                </Typography>
+              )}
+            </Box>
           </Stack>
 
           {previewOpen && (
@@ -342,7 +429,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   company={branding}
                   recipient={previewRecipient}
                   quotationNumber={existingQuotation ? existingQuotation.quotationNumber : 'Auto-generated'}
-                  quotationDate={quotationDate ? formatDate(quotationDate) : formatDate(todayISO())}
+                  quotationDate={enquiry?.eventDate ? formatDate(enquiry.eventDate) : ''}
                   items={items
                     .filter((item) => item.itemName.trim() !== '')
                     .map((item) => ({
@@ -357,7 +444,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   cgstAmount={totals.cgstAmount}
                   sgstAmount={totals.sgstAmount}
                   total={totals.total}
-                  images={[]}
+                  images={
+                    isEdit ? (existingQuotation?.images ?? []).map((image) => getPublicAssetUrl(image.filePath)) : stagedUrls
+                  }
                 />
               </Box>
             </Box>

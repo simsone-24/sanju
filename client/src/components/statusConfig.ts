@@ -22,6 +22,7 @@ function titleCase(value: string): string {
 // (its `secondary` is grey), and "md files/Enquiry/indexUI.md" §UI Color Suggestions specifies
 // #8B5CF6 — the same hue the enquiry list already draws its row accent stripe in.
 const ENQUIRY_STATUS_CONFIG: Record<string, StatusConfigEntry> = {
+  DRAFT: { label: 'Draft', color: 'default' },
   PENDING: { label: 'Pending', color: 'warning' },
   APPOINTMENT_FIXED: { label: 'Appointment Fixed', color: '#8B5CF6' },
   QUOTATION_TO_SHARE: { label: 'Quotation to Share', color: 'warning' },

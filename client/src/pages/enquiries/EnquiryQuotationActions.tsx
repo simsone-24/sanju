@@ -1,3 +1,5 @@
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
@@ -15,7 +17,7 @@ import type { QuotationListItem } from '../../types/quotation';
 import { buildQuotationWhatsAppLink, canShareQuotation } from '../quotations/quotationActions';
 
 // "md files/Enquiry/enq.md" §9 — the row actions the enquiry's quotation table must offer:
-// View, Edit, Duplicate, Download PDF, Send WhatsApp. Only permission gates them; no
+// View, Edit, Confirm, Duplicate, Download PDF, Send WhatsApp. Only permission gates them; no
 // status may block Edit (§6/§7).
 interface EnquiryQuotationActionsProps {
   row: QuotationListItem;
@@ -37,6 +39,7 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
   const canCreate = usePermission('QUOTATIONS', 'canCreate');
   const canPrint = usePermission('QUOTATIONS', 'canPrint');
+  const canApprove = usePermission('QUOTATIONS', 'canApprove');
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['quotations'] });
@@ -78,6 +81,15 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
     onError: (error) => showToast(errorMessage(error, 'Unable to duplicate this quotation.'), 'error'),
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: () => quotationService.approve(row.id),
+    onSuccess: () => {
+      invalidate();
+      showToast(`Quotation confirmed. The enquiry's status is unchanged — move it to Order Confirmed to raise the order.`, 'success');
+    },
+    onError: (error) => showToast(errorMessage(error, 'Unable to confirm this quotation.'), 'error'),
+  });
+
   const downloadMutation = useMutation({
     mutationFn: () => quotationService.downloadPdf(row.id, `${row.quotationNumber}-v${row.version}.pdf`),
     onError: (error) => showToast(errorMessage(error, 'Unable to download the PDF.'), 'error'),
@@ -114,6 +126,12 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
       {canEdit && (
         <IconButton size="sm" title="Edit" onClick={() => onEdit(row.id)}>
           <EditIcon fontSize="small" />
+        </IconButton>
+      )}
+
+      {canApprove && row.status !== 'APPROVED' && (
+        <IconButton size="sm" title="Confirm" disabled={confirmMutation.isPending} onClick={() => confirmMutation.mutate()}>
+          <CheckCircleIcon fontSize="small" />
         </IconButton>
       )}
 

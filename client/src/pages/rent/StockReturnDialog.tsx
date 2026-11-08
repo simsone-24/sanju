@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -19,6 +20,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
+import { IsoDatePickerField } from '../../components/DatePickerField';
 import { useToast } from '../../store/ToastContext';
 import * as rentService from '../../services/rentService';
 import type { StockOutDetail } from '../../types/rent';
@@ -148,15 +150,9 @@ export function StockReturnDialog({ open, stockOut, onClose }: StockReturnDialog
         ) : (
           <>
             <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 2 }}>
-              <TextField
-                type="date"
-                size="small"
-                label="Return Date"
-                sx={{ width: 190 }}
-                value={returnDate}
-                onChange={(event) => setReturnDate(event.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
+              <Box sx={{ width: 190 }}>
+                <IsoDatePickerField label="Return Date" margin="none" value={returnDate} onChange={setReturnDate} />
+              </Box>
               <TextField
                 size="small"
                 label="Notes"

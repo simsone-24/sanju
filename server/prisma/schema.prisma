@@ -41,6 +41,11 @@ enum EventTypeStatus {
 // customer's details live in the prospect_* columns on the Enquiry itself. ORDER_LOST is the
 // terminal "lost" bucket, reachable from any non-terminal status.
 enum EnquiryStatus {
+  // Saved mid-entry — the user backed out of the form before finishing it. No field is required to
+  // reach or stay at this status (enquiries/validation.ts skips its usual required-field checks
+  // whenever status is DRAFT); it is excluded from the dashboard's pipeline counts (repository.ts
+  // getEnquiryStats) since it isn't a real enquiry yet.
+  DRAFT
   PENDING
   APPOINTMENT_FIXED
   QUOTATION_TO_SHARE
@@ -451,7 +456,8 @@ model Enquiry {
   // Customer is created (or matched by mobile) and linked here. EXISTING-customer enquiries set
   // this immediately and leave the prospect_* columns empty.
   customerId    Int?   @map("customer_id")
-  eventTypeId   Int    @map("event_type_id")
+  // Nullable: a DRAFT enquiry may be saved before the user has picked an event type at all.
+  eventTypeId   Int?   @map("event_type_id")
 
   // Prospective (unconfirmed) customer details — populated only for NEW-customer enquiries that
   // have not yet reached ORDER_CONFIRMED. Once confirmed, these are copied into a Customer row.
@@ -513,7 +519,7 @@ model Enquiry {
 
   company      Company           @relation(fields: [companyId], references: [id])
   customer     Customer?         @relation(fields: [customerId], references: [id])
-  eventType    EventType         @relation(fields: [eventTypeId], references: [id])
+  eventType    EventType?        @relation(fields: [eventTypeId], references: [id])
   assignedUser User?             @relation("EnquiryAssignedUser", fields: [assignedUserId], references: [id])
   followUps    EnquiryFollowUp[]
   quotations   Quotation[]

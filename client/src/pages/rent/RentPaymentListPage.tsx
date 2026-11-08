@@ -26,6 +26,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { StatCard } from '../../components/StatCard';
 import { usePermission } from '../../hooks/usePermission';
+import { IsoDatePickerField } from '../../components/DatePickerField';
 import * as rentService from '../../services/rentService';
 import { useToast } from '../../store/ToastContext';
 import { RENT_PAYMENT_MODES, type RentPayment, type RentPaymentMode } from '../../types/rent';
@@ -338,24 +339,22 @@ export default function RentPaymentListPage() {
             onChange={applyDateRange}
             custom
           />
-          <TextField
-            type="date"
-            size="small"
-            label="From"
-            sx={{ width: 160 }}
-            value={effectiveFrom}
-            onChange={(event) => applyCustomBound({ from: event.target.value })}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            type="date"
-            size="small"
-            label="To"
-            sx={{ width: 160 }}
-            value={effectiveTo}
-            onChange={(event) => applyCustomBound({ to: event.target.value })}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
+          <Box sx={{ width: 160 }}>
+            <IsoDatePickerField
+              label="From"
+              margin="none"
+              value={effectiveFrom}
+              onChange={(value) => applyCustomBound({ from: value })}
+            />
+          </Box>
+          <Box sx={{ width: 160 }}>
+            <IsoDatePickerField
+              label="To"
+              margin="none"
+              value={effectiveTo}
+              onChange={(value) => applyCustomBound({ to: value })}
+            />
+          </Box>
         </Stack>
       </Paper>
 

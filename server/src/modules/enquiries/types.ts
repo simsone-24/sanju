@@ -2,8 +2,11 @@ import { AppointmentStatus, EnquiryStatus, EventTime } from '@prisma/client';
 
 export interface NewCustomerInput {
   type: 'NEW';
-  customerName: string;
-  mobile: string;
+  // Required for a real enquiry, but left as plain optional strings here rather than split into a
+  // separate "draft customer" variant — a DRAFT enquiry may submit this shape with either field
+  // blank, since validation.ts skips the required-field checks entirely when status is DRAFT.
+  customerName?: string;
+  mobile?: string;
   whatsapp?: string;
   email?: string;
   address?: string;
@@ -12,14 +15,17 @@ export interface NewCustomerInput {
 
 export interface ExistingCustomerInput {
   type: 'EXISTING';
-  customerId: number;
+  customerId?: number;
 }
 
 export type CustomerInput = NewCustomerInput | ExistingCustomerInput;
 
 export interface CreateEnquiryInput {
-  customer: CustomerInput;
-  eventTypeId: number;
+  // Omitted entirely only for a DRAFT saved before any customer type was picked.
+  customer?: CustomerInput;
+  // Nullable/omitted for a DRAFT saved before an event type was picked (enquiries.event_type_id is
+  // a nullable column for exactly this reason).
+  eventTypeId?: number;
   eventName?: string;
   eventDate?: Date;
   eventTime?: EventTime;

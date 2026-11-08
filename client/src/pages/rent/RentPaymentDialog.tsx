@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { ViewField, ViewFieldGroup } from '../../components/ViewField';
+import { IsoDatePickerField } from '../../components/DatePickerField';
 import * as rentService from '../../services/rentService';
 import { useToast } from '../../store/ToastContext';
 import { RENT_PAYMENT_MODES, type StockOutSummary } from '../../types/rent';
@@ -213,13 +214,12 @@ export function RentPaymentDialog({ open, onClose, stockOut }: RentPaymentDialog
           </Stack>
 
           <Stack direction="row" spacing={2}>
-            <TextField
-              type="date"
-              label="Payment Date"
-              size="small"
-              fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
-              {...form.register('paymentDate')}
+            <Controller
+              name="paymentDate"
+              control={form.control}
+              render={({ field }) => (
+                <IsoDatePickerField label="Payment Date" margin="none" value={field.value ?? ''} onChange={field.onChange} />
+              )}
             />
             <TextField label="Reference Number" size="small" fullWidth {...form.register('referenceNo')} />
           </Stack>

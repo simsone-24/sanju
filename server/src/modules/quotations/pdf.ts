@@ -17,6 +17,8 @@ export interface QuotationPdfData {
   quotationNumber: string;
   version: number;
   quotationDate: Date;
+  // The event the quotation is for; printed in the Date field when present.
+  eventDate?: Date | null;
   status: string;
   recipient: CustomerSnapshot;
   items: QuotationPdfItem[];
@@ -105,7 +107,7 @@ export async function generateQuotationPdf(
   // ---- Meta: Date / Quote No ---------------------------------------------
   let y = bandHeight + 20;
   doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('Date', left, y);
-  doc.font('Helvetica-Bold').fillColor(INK).text(formatDate(data.quotationDate), left + 55, y);
+  doc.font('Helvetica-Bold').fillColor(INK).text(formatDate(data.eventDate ?? data.quotationDate), left + 55, y);
   doc.font('Helvetica').fillColor(MUTED).text('Quote No', left, y + 14);
   doc.font('Helvetica-Bold').fillColor(INK).text(`${data.quotationNumber} (v${data.version})`, left + 55, y + 14);
 

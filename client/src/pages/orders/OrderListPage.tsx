@@ -3,6 +3,7 @@ import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
 import EditIcon from '@mui/icons-material/Edit';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import EventIcon from '@mui/icons-material/Event';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -103,6 +104,7 @@ export default function OrderListPage() {
   const [paymentStatus, setPaymentStatus] = useState<string>('');
   const [quickRange, setQuickRange] = useState<DateRangePreset | null>(null);
   const [month, setMonth] = useState<Dayjs | null>(null);
+  const [showFilters, setShowFilters] = useState(Boolean(status) || Boolean(paymentStatus) || Boolean(customer) || Boolean(quickRange) || Boolean(month));
   const [pendingStatus, setPendingStatus] = useState<{ row: OrderListItem; target: OrderStatus } | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -485,40 +487,44 @@ export default function OrderListPage() {
 
   return (
     <Box>
-      {/* Premium hero header — a soft brand wash and a decorative ring make the page open like a
-          dashboard, and the record-count pill keeps the running total right beside the title. */}
-      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-4 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
+      {/* Compact page header — breadcrumb trail, title with its record-count pill, and the
+          actions on one tight band so the filters and table below get the screen room. */}
+      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-3 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
         <div
           aria-hidden
           className="tw-pointer-events-none tw-absolute -tw-right-20 -tw-top-24 tw-h-60 tw-w-60 tw-rounded-full tw-bg-gradient-to-br tw-from-brand/15 tw-to-cyan-400/10 tw-blur-2xl"
         />
-        <div
-          aria-hidden
-          className="tw-pointer-events-none tw-absolute -tw-bottom-24 tw-right-48 tw-h-44 tw-w-44 tw-rounded-[2rem] tw-border tw-border-brand/10"
-        />
 
-        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Orders' }]} />
+        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Orders' }]} className="tw-mb-1.5" />
 
-        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-3">
+        <div className="tw-relative tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-items-center sm:tw-justify-between">
           <div className="tw-min-w-0">
             <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
-              <h1 className="tw-m-0 tw-text-[1.75rem] tw-font-extrabold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
+              <h1 className="tw-m-0 tw-text-2xl tw-font-bold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
                 Orders
               </h1>
               {data?.meta?.totalRecords !== undefined && (
-                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
+                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
                   {data.meta.totalRecords} {data.meta.totalRecords === 1 ? 'record' : 'records'}
                 </span>
               )}
             </div>
-            <p className="tw-m-0 tw-mt-1.5 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              Track confirmed events from planning through to completion.
-            </p>
+          </div>
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5 sm:tw-justify-end">
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FilterListIcon fontSize="small" />}
+              onClick={() => setShowFilters((prev) => !prev)}
+              sx={{ height: 36 }}
+            >
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </Button>
           </div>
         </div>
       </section>
 
-      <div className="tw-mb-6 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-3 xl:tw-grid-cols-6">
+      <div className="tw-mb-6 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-grid-cols-2 lg:tw-grid-cols-3 xl:tw-grid-cols-6 sm:tw-gap-4">
         <StatCard
           label="Total Orders"
           value={stats?.total ?? 0}
@@ -572,6 +578,7 @@ export default function OrderListPage() {
         />
       </div>
 
+      {showFilters && (
       <Paper
         variant="outlined"
         sx={(t) => ({
@@ -583,9 +590,9 @@ export default function OrderListPage() {
         })}
       >
         <Stack spacing={2}>
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', flexWrap: 'wrap', rowGap: 2 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', sm: 'flex-end' }, flexWrap: 'wrap', rowGap: 2 }}>
             <CustomerFilter
-              sx={{ width: 220 }}
+              sx={{ width: { xs: '100%', sm: 220 } }}
               value={customer}
               onChange={(next) => {
                 setCustomer(next);
@@ -596,12 +603,12 @@ export default function OrderListPage() {
             <DateRangeFilter
               variant="floating"
               label="Event Date Range"
-              sx={{ width: 180 }}
+              sx={{ width: { xs: '100%', sm: 180 } }}
               value={quickRange ?? ''}
               onChange={applyDateRange}
             />
 
-            <Box sx={{ width: 175 }}>
+            <Box sx={{ width: { xs: '100%', sm: 175 } }}>
               <TextField
                 select
                 fullWidth
@@ -622,7 +629,7 @@ export default function OrderListPage() {
               </TextField>
             </Box>
 
-            <Box sx={{ width: 150 }}>
+            <Box sx={{ width: { xs: '100%', sm: 150 } }}>
               <TextField
                 select
                 fullWidth
@@ -643,9 +650,10 @@ export default function OrderListPage() {
               </TextField>
             </Box>
 
-            <Box sx={{ width: 160 }}>
+            <Box sx={{ width: { xs: '100%', sm: 160 } }}>
               <DatePicker
                 label="Month"
+                format="MM/YYYY"
                 views={['year', 'month']}
                 openTo="month"
                 value={month}
@@ -661,7 +669,7 @@ export default function OrderListPage() {
             <Button
               variant="outlined"
               size="small"
-              sx={{ height: 40 }}
+              sx={{ height: 40, alignSelf: { xs: 'flex-start', sm: 'flex-end' } }}
               disabled={activeFilters.length === 0}
               onClick={resetFilters}
             >
@@ -684,6 +692,7 @@ export default function OrderListPage() {
           )}
         </Stack>
       </Paper>
+      )}
 
       {canView ? (
         <DataTable

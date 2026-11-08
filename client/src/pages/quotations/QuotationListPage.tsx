@@ -5,6 +5,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PrintIcon from '@mui/icons-material/Print';
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
@@ -69,11 +70,6 @@ const QUOTATION_ROW_ACCENT: Record<QuotationStatus, string> = {
   REJECTED: '#EF4444',
   REVISED: '#F59E0B',
 };
-
-// Filter controls grow to share whatever width the search bar leaves, rather than sitting at a
-// fixed size and stranding empty space at the row's right edge. The basis is the width they settle
-// at once the row is full enough to wrap.
-const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[150px]';
 
 interface PendingAction {
   id: number;
@@ -211,6 +207,11 @@ export default function QuotationListPage() {
   const dateRangeValue: DateRangeValue = dateRangePreset ?? (dateFrom || dateTo ? CUSTOM_DATE_RANGE : '');
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
   const limit = Number(searchParams.get('limit')) || 20;
+  // Hidden until asked for, like the Enquiries list — but open straight away when the URL already
+  // carries a filter, so a shared or bookmarked link never hides what is narrowing the list.
+  const [filtersOpen, setFiltersOpen] = useState(
+    Boolean(search || status || sourceFilter || customerId || assignedUserId || dateRangeValue),
+  );
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -553,20 +554,25 @@ export default function QuotationListPage() {
       exportValue: (row) => row.status,
     },
     {
-      key: 'quotationDate',
-      header: 'Quotation Date',
-      sortable: true,
+      key: 'eventDate',
+      header: 'Event Date',
       align: 'center',
       width: 130,
       render: (row) => (
         <div className="tw-min-w-0">
-          <div className="tw-truncate tw-font-semibold">{formatDate(row.quotationDate)}</div>
-          <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-            {dayjs(row.quotationDate).fromNow()}
-          </div>
+          {row.eventDate ? (
+            <>
+              <div className="tw-truncate tw-font-semibold">{formatDate(row.eventDate)}</div>
+              <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                {dayjs(row.eventDate).format('ddd')}
+              </div>
+            </>
+          ) : (
+            <span className="tw-text-ink-muted dark:tw-text-ink-dark-muted">Not set</span>
+          )}
         </div>
       ),
-      exportValue: (row) => formatDate(row.quotationDate),
+      exportValue: (row) => row.eventDate ? formatDate(row.eventDate) : '',
     },
     {
       key: 'actions',
@@ -619,44 +625,48 @@ export default function QuotationListPage() {
 
   return (
     <div>
-      {/* Premium hero header — a soft brand wash and a decorative ring make the page open like a
-          dashboard, and the record-count pill keeps the running total right beside the title. */}
-      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-4 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
+      {/* Compact page header — breadcrumb trail, title with its record-count pill, and the
+          actions on one tight band so the filters and table below get the screen room. */}
+      <section className="tw-relative tw-mb-4 tw-overflow-hidden tw-rounded-card tw-border tw-border-hairline tw-bg-white tw-px-4 tw-py-3 tw-shadow-card dark:tw-border-hairline-dark dark:tw-bg-surface-dark sm:tw-px-5">
         <div
           aria-hidden
           className="tw-pointer-events-none tw-absolute -tw-right-20 -tw-top-24 tw-h-60 tw-w-60 tw-rounded-full tw-bg-gradient-to-br tw-from-brand/15 tw-to-cyan-400/10 tw-blur-2xl"
         />
-        <div
-          aria-hidden
-          className="tw-pointer-events-none tw-absolute -tw-bottom-24 tw-right-48 tw-h-44 tw-w-44 tw-rounded-[2rem] tw-border tw-border-brand/10"
-        />
 
-        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Quotations' }]} />
+        <Breadcrumbs items={[{ label: 'Dashboard', to: '/' }, { label: 'Quotations' }]} className="tw-mb-1.5" />
 
-        <div className="tw-relative tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-4 tw-gap-y-3">
+        <div className="tw-relative tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-items-center sm:tw-justify-between">
           <div className="tw-min-w-0">
             <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
-              <h1 className="tw-m-0 tw-text-[1.75rem] tw-font-extrabold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
+              <h1 className="tw-m-0 tw-text-2xl tw-font-bold tw-leading-tight tw-tracking-tight tw-text-ink dark:tw-text-ink-dark">
                 Quotation Management
               </h1>
               {totalRecords !== undefined && (
-                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
+                <span className="tw-inline-flex tw-items-center tw-rounded-full tw-border tw-border-brand/20 tw-bg-brand/10 tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-brand dark:tw-border-brand-light/30 dark:tw-bg-brand-light/15 dark:tw-text-brand-light">
                   {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
                 </span>
               )}
+              {/* Phones: the freshness indicator sits beside the record count; from `sm` it moves to the actions. */}
+              <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} className="tw-text-[11px] sm:tw-hidden" />
             </div>
-            <p className="tw-m-0 tw-mt-1.5 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              Manage customer quotations, revisions and approvals.
-            </p>
           </div>
 
-          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2.5">
-            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />
+          <div className="tw-flex tw-items-center tw-gap-1.5 sm:tw-justify-end sm:tw-gap-2.5">
+            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} className="tw-hidden sm:tw-inline-flex sm:tw-text-xs" />
+            <Button
+              variant="ghost"
+              size="md"
+              className="tw-h-9 sm:tw-h-10"
+              startIcon={<FilterListIcon fontSize="small" />}
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              {filtersOpen ? 'Hide Filters' : 'Show Filters'}
+            </Button>
             {canCreate && (
               <Button
                 variant="primary"
                 size="md"
-                className="tw-h-10 tw-px-5 tw-shadow-md"
+                className="tw-h-9 tw-px-3 tw-shadow-md sm:tw-h-10 sm:tw-px-5"
                 startIcon={<AddIcon fontSize="small" />}
                 onClick={() => navigate('/quotations/new')}
               >
@@ -669,7 +679,7 @@ export default function QuotationListPage() {
 
       {/* Summary tiles, matching the Orders index. Each status metric doubles as a one-click
           filter; Revenue is a total, not a filter, so it carries no onClick. */}
-      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-2 lg:tw-grid-cols-5">
+      <div className="tw-mb-4 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-grid-cols-3 sm:tw-gap-4 lg:tw-grid-cols-5">
         <StatCard
           label="Draft"
           value={stats?.draft ?? 0}
@@ -729,9 +739,10 @@ export default function QuotationListPage() {
       {/* Compact filter bar: everything on one line, wrapping only when the viewport forces it.
           Filters apply as they change, so there is no Apply button — clearing is handled by the
           active-filter chips below. */}
-      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-3 tw-px-4 tw-py-3`}>
-        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
-          <div className="tw-flex-[2] tw-basis-[220px]">
+      {filtersOpen && (
+      <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-3 tw-px-3 tw-py-2.5 sm:tw-px-4 sm:tw-py-3`}>
+        <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-flex-wrap sm:tw-items-end">
+          <div className="tw-w-full sm:tw-flex-[2] sm:tw-basis-[220px]">
             <SearchBar
               fullWidth
               value={search}
@@ -742,7 +753,7 @@ export default function QuotationListPage() {
           </div>
 
           <SelectField
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
             label="Status"
             emptyLabel="All"
             value={status}
@@ -754,7 +765,7 @@ export default function QuotationListPage() {
           />
 
           <SelectField
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
             label="Source"
             emptyLabel="All"
             value={sourceFilter}
@@ -764,7 +775,7 @@ export default function QuotationListPage() {
 
           {canViewCustomers && (
             <SelectField
-              className={FILTER_FIELD_WIDTH}
+              className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
               label="Customer"
               emptyLabel="All"
               value={customerId}
@@ -777,7 +788,7 @@ export default function QuotationListPage() {
           )}
 
           <SelectField
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
             label="Assigned User"
             emptyLabel="All"
             value={assignedUserId}
@@ -786,14 +797,14 @@ export default function QuotationListPage() {
           />
 
           <DateRangeFilter
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
             presets={TRANSACTION_DATE_PRESETS}
             value={dateRangeValue}
             onChange={applyDateRange}
             custom
           />
 
-          <div className="tw-flex-1 tw-basis-[145px]">
+          <div className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[145px]">
             <DatePickerField
               label="Date From"
               margin="none"
@@ -801,7 +812,7 @@ export default function QuotationListPage() {
               onChange={(value) => applyCustomBound({ from: value })}
             />
           </div>
-          <div className="tw-flex-1 tw-basis-[145px]">
+          <div className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[145px]">
             <DatePickerField
               label="Date To"
               margin="none"
@@ -811,7 +822,7 @@ export default function QuotationListPage() {
             />
           </div>
 
-          <Button variant="outlined" className="tw-h-10" onClick={resetFilters}>
+          <Button variant="outlined" className="tw-h-10 tw-w-full sm:tw-w-auto" onClick={resetFilters}>
             Reset
           </Button>
         </div>
@@ -841,6 +852,7 @@ export default function QuotationListPage() {
           </>
         )}
       </div>
+      )}
 
       <DataTable
         columns={columns}

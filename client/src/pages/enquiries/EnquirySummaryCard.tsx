@@ -113,7 +113,7 @@ export function EnquirySummaryCard({
         {
           icon: <CelebrationIcon sx={{ fontSize: 16 }} />,
           label: 'Event Type',
-          value: enquiry.eventType.eventName,
+          value: enquiry.eventType?.eventName ?? 'Not set',
         },
         { icon: <EventIcon sx={{ fontSize: 16 }} />, label: 'Event Date', value: formatDate(enquiry.eventDate) },
         { icon: <CalendarMonthIcon sx={{ fontSize: 16 }} />, label: 'Appointment', value: appointment },

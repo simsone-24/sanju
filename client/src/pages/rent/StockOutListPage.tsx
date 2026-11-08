@@ -22,6 +22,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
+import { IsoDatePickerField } from '../../components/DatePickerField';
 import * as rentService from '../../services/rentService';
 import type { RentPaymentStatus, StockOutSummary, StockReturnStatus } from '../../types/rent';
 import { DATE_RANGE_LABELS, dateRangeParams, TRANSACTION_DATE_PRESETS } from '../../utils/dateRange';
@@ -401,24 +402,22 @@ export default function StockOutListPage() {
               custom
             />
 
-            <TextField
-              type="date"
-              size="small"
-              label="From"
-              sx={{ width: 160 }}
-              value={effectiveFrom}
-              onChange={(event) => applyCustomBound({ from: event.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
-              type="date"
-              size="small"
-              label="To"
-              sx={{ width: 160 }}
-              value={effectiveTo}
-              onChange={(event) => applyCustomBound({ to: event.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
+            <Box sx={{ width: 160 }}>
+              <IsoDatePickerField
+                label="From"
+                margin="none"
+                value={effectiveFrom}
+                onChange={(value) => applyCustomBound({ from: value })}
+              />
+            </Box>
+            <Box sx={{ width: 160 }}>
+              <IsoDatePickerField
+                label="To"
+                margin="none"
+                value={effectiveTo}
+                onChange={(value) => applyCustomBound({ to: value })}
+              />
+            </Box>
 
             <Button
               variant="outlined"

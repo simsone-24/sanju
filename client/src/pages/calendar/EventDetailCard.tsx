@@ -27,7 +27,7 @@ export default function EventDetailCard({ event, anchorEl, onClose, onViewOrder 
       slotProps={{ paper: { sx: { borderRadius: 4, boxShadow: '0 12px 32px rgba(15, 23, 42, 0.16)' } } }}
     >
       {event && color && (
-        <Box sx={{ width: 280, p: 2.5 }}>
+        <Box sx={{ width: 280, maxWidth: 'calc(100vw - 48px)', p: 2.5 }}>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, pr: 1 }}>
               {event.eventName}

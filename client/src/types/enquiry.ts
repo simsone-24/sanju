@@ -1,4 +1,5 @@
 export type EnquiryStatus =
+  | 'DRAFT'
   | 'PENDING'
   | 'APPOINTMENT_FIXED'
   | 'QUOTATION_TO_SHARE'
@@ -22,7 +23,8 @@ export interface EnquiryListItem {
   createdAt: string;
   // id is null while the enquiry is still an unconfirmed prospect (no Customer row yet).
   customer: { id: number | null; customerName: string; mobile: string };
-  eventType: { id: number; eventName: string; colorCode: string | null };
+  // Nullable: a DRAFT enquiry may be saved before an event type is picked.
+  eventType: { id: number; eventName: string; colorCode: string | null } | null;
   assignedUser: { id: number; fullName: string } | null;
 }
 
@@ -70,8 +72,9 @@ export interface EnquiryDetail extends EnquiryListItem {
 
 export interface NewCustomerInput {
   type: 'NEW';
-  customerName: string;
-  mobile: string;
+  // Optional: a DRAFT enquiry may be saved with either left blank.
+  customerName?: string;
+  mobile?: string;
   whatsapp?: string;
   email?: string;
   address?: string;
@@ -80,14 +83,15 @@ export interface NewCustomerInput {
 
 export interface ExistingCustomerInput {
   type: 'EXISTING';
-  customerId: number;
+  customerId?: number;
 }
 
 export type CustomerInput = NewCustomerInput | ExistingCustomerInput;
 
 export interface CreateEnquiryInput {
-  customer: CustomerInput;
-  eventTypeId: number;
+  // Omitted entirely only for a DRAFT saved before any customer type was picked.
+  customer?: CustomerInput;
+  eventTypeId?: number;
   eventName?: string;
   eventDate?: string;
   eventTime?: EventTime;

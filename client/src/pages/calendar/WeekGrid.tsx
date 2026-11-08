@@ -33,7 +33,8 @@ export default function WeekGrid({ referenceDate, events, onEventClick }: WeekGr
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
+          // One day per row on phones — seven columns leave each event a sliver of text.
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(7, minmax(0, 1fr))' },
           border: 1,
           borderColor: 'divider',
           borderRadius: 2,
@@ -51,10 +52,11 @@ export default function WeekGrid({ referenceDate, events, onEventClick }: WeekGr
             <Box
               key={key}
               sx={{
-                minHeight: 220,
+                minHeight: { xs: 0, md: 220 },
                 display: 'flex',
                 flexDirection: 'column',
-                borderRight: isLastColumn ? 0 : 1,
+                borderRight: { xs: 0, md: isLastColumn ? 0 : 1 },
+                borderBottom: { xs: isLastColumn ? 0 : 1, md: 0 },
                 borderColor: 'divider',
                 outline: isToday ? '1.5px solid' : 'none',
                 outlineColor: 'primary.main',
@@ -68,7 +70,10 @@ export default function WeekGrid({ referenceDate, events, onEventClick }: WeekGr
                   bgcolor: isToday ? 'primary.main' : isWeekend ? 'background.default' : 'transparent',
                   borderBottom: 1,
                   borderColor: 'divider',
-                  textAlign: 'center',
+                  textAlign: { xs: 'left', md: 'center' },
+                  display: { xs: 'flex', md: 'block' },
+                  alignItems: 'baseline',
+                  gap: 1,
                 }}
               >
                 <Typography variant="caption" sx={{ color: isToday ? 'primary.contrastText' : 'text.secondary', fontWeight: 600 }}>
@@ -108,7 +113,7 @@ export default function WeekGrid({ referenceDate, events, onEventClick }: WeekGr
                   );
                 })}
                 {dayEvents.length === 0 && (
-                  <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center', mt: { xs: 0, md: 2 } }}>
                     No events
                   </Typography>
                 )}

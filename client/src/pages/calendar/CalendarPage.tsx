@@ -106,7 +106,7 @@ export default function CalendarPage() {
       <Paper
         variant="outlined"
         sx={{
-          p: 2,
+          p: { xs: 1.5, sm: 2 },
           mb: 2,
           display: 'flex',
           justifyContent: 'space-between',
@@ -115,7 +115,7 @@ export default function CalendarPage() {
           gap: 1.5,
         }}
       >
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Stack direction="row" spacing={{ xs: 0.5, sm: 1 }} sx={{ alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
           <IconButton onClick={() => shift(-1)} size="small">
             <ChevronLeftIcon fontSize="small" />
           </IconButton>
@@ -124,7 +124,7 @@ export default function CalendarPage() {
               keep the plain range label, which is a span rather than a single name. */}
           <Typography
             variant="h2"
-            sx={{ minWidth: { xs: 160, sm: 230 }, textAlign: 'center', fontSize: { xs: 22, sm: 30 }, letterSpacing: '-0.02em' }}
+            sx={{ flex: { xs: 1, sm: 'none' }, minWidth: { sm: 230 }, textAlign: 'center', fontSize: { xs: 18, sm: 30 }, letterSpacing: '-0.02em' }}
           >
             {view === 'month' ? (
               <>
@@ -153,14 +153,16 @@ export default function CalendarPage() {
           value={view}
           onChange={(_event, next: ViewMode | null) => next && patchParams({ view: next })}
           sx={{
+            width: { xs: '100%', sm: 'auto' },
             bgcolor: 'background.default',
             borderRadius: 999,
             p: 0.5,
             gap: 0.25,
             '& .MuiToggleButtonGroup-grouped': {
+              flex: { xs: 1, sm: 'none' },
               border: 0,
               borderRadius: '999px !important',
-              px: 2,
+              px: { xs: 1, sm: 2 },
               py: 0.5,
               fontWeight: 600,
               color: 'text.secondary',
@@ -193,7 +195,7 @@ export default function CalendarPage() {
       {isLoading ? (
         <Skeleton variant="rounded" height={view === 'day' ? 320 : 480} />
       ) : (
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', lg: 'flex-start' } }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {view === 'month' && (
               <MonthGrid referenceDate={referenceDate} events={events ?? []} onEventClick={handleEventClick} />

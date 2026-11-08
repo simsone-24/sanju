@@ -1,4 +1,5 @@
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import DownloadIcon from '@mui/icons-material/Download';
 import FlagIcon from '@mui/icons-material/Flag';
@@ -154,9 +155,9 @@ export default function OrderDetailPage() {
   return (
     <Box>
       <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 1, sm: 2 }}
+        sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, flexWrap: 'wrap', rowGap: 1 }}
       >
         <Breadcrumbs
           items={[
@@ -167,17 +168,26 @@ export default function OrderDetailPage() {
         />
         {/* Whole-order actions that aren't the three the header card carries. Status lives here
             rather than as a control buried at the bottom of a tab. */}
-        <Button
-          size="small"
-          variant="outlined"
-          endIcon={<MoreVertIcon />}
-          aria-haspopup="menu"
-          aria-expanded={actionsAnchor ? 'true' : undefined}
-          onClick={(event) => setActionsAnchor(event.currentTarget)}
-          sx={{ mb: 1.25 }}
-        >
-          Actions
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: { xs: 0.5, sm: 1.25 }, marginLeft: { xs: 0, sm: 'auto' }, alignSelf: { xs: 'flex-end', sm: 'center' } }}>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/orders')}
+          >
+            Back
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            endIcon={<MoreVertIcon />}
+            aria-haspopup="menu"
+            aria-expanded={actionsAnchor ? 'true' : undefined}
+            onClick={(event) => setActionsAnchor(event.currentTarget)}
+          >
+            Actions
+          </Button>
+        </Stack>
         <Menu anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={closeActions}>
           {canChangeStatus && (
             <MenuItem

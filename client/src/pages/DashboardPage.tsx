@@ -106,14 +106,14 @@ export default function DashboardPage() {
       <Box
         sx={{
           display: 'grid',
-          // Capped at four tiles per row — seven across one line squeezes each card too narrow for
-          // its label and dated subtext, so the row wraps to 4 + 3 on wide screens.
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)', xl: 'repeat(4, 1fr)' },
-          gap: 2,
+          // Phones: two equal columns filling the width, so no card is stranded alone in a row.
+          // From `sm` up each column is capped at 220px rather than stretching to fill the row, so
+          // the cards stay narrow and as many fit per row as the screen allows.
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(auto-fill, minmax(170px, 220px))' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         <StatCard
-          size="md"
           label="Today's Events"
           value={todayEvents?.length ?? 0}
           subtext={dayjs(today).format('ddd, D MMM YYYY')}
@@ -123,7 +123,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=day&date=${today}`)}
         />
         <StatCard
-          size="md"
           label="Tomorrow's Events"
           value={tomorrowEvents?.length ?? 0}
           subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}
@@ -133,7 +132,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=day&date=${tomorrow}`)}
         />
         <StatCard
-          size="md"
           label="Events This Week"
           value={weekEvents?.length ?? 0}
           subtext={`${weekStart.format('D MMM')} – ${weekEnd.format('D MMM YYYY')}`}
@@ -143,7 +141,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=week&date=${today}`)}
         />
         <StatCard
-          size="md"
           label="Events This Month"
           value={monthEvents?.length ?? 0}
           subtext={monthReference.format('MMMM YYYY')}
@@ -153,7 +150,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/calendar?view=month&date=${today}`)}
         />
         <StatCard
-          size="md"
           label="Upcoming Events"
           value={allUpcomingEvents?.summary.totalEvents ?? 0}
           subtext="All future dates"
@@ -163,7 +159,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/reports?tab=events&from=${today}`)}
         />
         <StatCard
-          size="md"
           label="Today's Appointments"
           value={todayAppointments?.meta.totalRecords ?? 0}
           subtext={dayjs(today).format('ddd, D MMM YYYY')}
@@ -173,7 +168,6 @@ export default function DashboardPage() {
           onClick={() => navigate(`/enquiries?apptFrom=${today}&apptTo=${today}`)}
         />
         <StatCard
-          size="md"
           label="Tomorrow's Appointments"
           value={tomorrowAppointments?.meta.totalRecords ?? 0}
           subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}

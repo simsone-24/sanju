@@ -193,6 +193,8 @@ export default function AppLayout() {
   useScrollToAnchor(mainRef);
 
   const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
+  // The collapsed rail is a desktop-only state; the mobile drawer is always full width.
+  const footerCollapsed = collapsed && !isMobile;
   const isDarkMode = (mode === 'system' ? systemMode : mode) === 'dark';
 
   function toggleColorScheme() {
@@ -435,18 +437,18 @@ export default function AppLayout() {
           ))}
         </Box>
 
-        {!isMobile && <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />}
+        <Divider sx={{ borderColor: SIDEBAR_BORDER, position: 'relative' }} />
 
         {/* Footer — the signed-in account and its actions read as one grouped panel rather than
-            loose rows, so they sit apart from the navigation above. */}
-        {!isMobile && (
+            loose rows, so they sit apart from the navigation above. Shown in the mobile drawer too,
+            where it is the only way to reach the profile, theme switch and Sign out. */}
         <Box sx={{ position: 'relative', p: 1.5 }}>
           <Box
             sx={{
               borderRadius: 3,
               overflow: 'hidden',
-              backgroundColor: collapsed ? 'transparent' : 'rgba(255, 255, 255, 0.04)',
-              border: collapsed ? 'none' : `1px solid ${SIDEBAR_BORDER}`,
+              backgroundColor: footerCollapsed ? 'transparent' : 'rgba(255, 255, 255, 0.04)',
+              border: footerCollapsed ? 'none' : `1px solid ${SIDEBAR_BORDER}`,
             }}
           >
             <ButtonBase
@@ -457,14 +459,14 @@ export default function AppLayout() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.25,
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                px: collapsed ? 0 : 1.25,
+                justifyContent: footerCollapsed ? 'center' : 'flex-start',
+                px: footerCollapsed ? 0 : 1.25,
                 py: 1.25,
                 '&:hover': { backgroundColor: SIDEBAR_HOVER_BG },
               }}
             >
               <Avatar sx={{ width: 34, height: 34, bgcolor: '#3B82F6', fontSize: '0.9rem' }}>{userInitial}</Avatar>
-              {!collapsed && (
+              {!footerCollapsed && (
                 <>
                   <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                     <Typography
@@ -504,7 +506,7 @@ export default function AppLayout() {
               )}
             </ButtonBase>
 
-            <Collapse in={accountOpen || collapsed}>
+            <Collapse in={accountOpen || footerCollapsed}>
               {/* Theme switch reads as a labelled preference here, not a bare icon toggle — the
                   label states which mode is active, matching the rest of the panel's rows. */}
               <ButtonBase
@@ -514,15 +516,15 @@ export default function AppLayout() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1.25,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  px: collapsed ? 0 : 1.25,
+                  justifyContent: footerCollapsed ? 'center' : 'flex-start',
+                  px: footerCollapsed ? 0 : 1.25,
                   py: 0.75,
                   color: SIDEBAR_TEXT_MUTED,
                   '&:hover': { backgroundColor: SIDEBAR_HOVER_BG, color: SIDEBAR_TEXT },
                 }}
               >
                 {isDarkMode ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
-                {!collapsed && (
+                {!footerCollapsed && (
                   <>
                     <Typography sx={{ flex: 1, textAlign: 'left', fontSize: '0.85rem' }}>
                       {isDarkMode ? 'Dark Mode' : 'Light Mode'}
@@ -547,20 +549,19 @@ export default function AppLayout() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1.25,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  px: collapsed ? 0 : 1.25,
+                  justifyContent: footerCollapsed ? 'center' : 'flex-start',
+                  px: footerCollapsed ? 0 : 1.25,
                   py: 1,
                   color: SIDEBAR_TEXT_MUTED,
                   '&:hover': { backgroundColor: SIDEBAR_HOVER_BG, color: SIDEBAR_TEXT },
                 }}
               >
                 <LogoutIcon fontSize="small" />
-                {!collapsed && <Typography sx={{ fontSize: '0.85rem' }}>Sign out</Typography>}
+                {!footerCollapsed && <Typography sx={{ fontSize: '0.85rem' }}>Sign out</Typography>}
               </ButtonBase>
             </Collapse>
           </Box>
         </Box>
-        )}
       </Drawer>
 
       {/* Main Content */}

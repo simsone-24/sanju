@@ -265,7 +265,7 @@ export function DataTable<T>({
       {/* Top bar: how much of the result set is on screen, how much to show at a time, and the
           table-level tools. Page size sits with the range label it changes, rather than at the far
           end of the table where the user would have to scroll past every row to reach it. */}
-      <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-hairline tw-px-4 tw-py-2 dark:tw-border-hairline-dark">
+      <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-hairline tw-px-2 tw-py-2 dark:tw-border-hairline-dark sm:tw-px-4">
         <span className="tw-inline-flex tw-items-center tw-gap-2 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-ink-muted dark:tw-text-ink-dark-muted">
           {rangeLabel && <span aria-hidden className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-brand/60" />}
           {rangeLabel}
@@ -273,7 +273,7 @@ export function DataTable<T>({
         <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
           {meta && (
             <div className="tw-flex tw-items-center tw-gap-2">
-              <span className="tw-text-xs tw-font-medium tw-text-ink-muted dark:tw-text-ink-dark-muted">
+              <span className="tw-hidden tw-text-xs tw-font-medium tw-text-ink-muted dark:tw-text-ink-dark-muted sm:tw-inline">
                 Rows per page:
               </span>
               <SelectField

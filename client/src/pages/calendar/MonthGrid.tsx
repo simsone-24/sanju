@@ -1,4 +1,4 @@
-import { Box, Popover, Stack, Typography } from '@mui/material';
+import { Box, Popover, Stack, Typography, useMediaQuery, type Theme } from '@mui/material';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import type { CalendarEvent } from '../../types/calendar';
@@ -74,6 +74,10 @@ export default function MonthGrid({ referenceDate, events, onEventClick }: Month
   const gridStart = startOfWeekMonday(monthStart);
   const gridEnd = startOfWeekMonday(monthEnd).add(6, 'day');
 
+  // Seven columns are too narrow on a phone for event pills, so below `sm` each day shows coloured
+  // dots and tapping the day opens its events in the same popover the "+N more" link uses.
+  const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down('sm'));
+
   const [overflowAnchor, setOverflowAnchor] = useState<{ element: HTMLElement; key: string } | null>(null);
   const [detailEvent, setDetailEvent] = useState<{ event: CalendarEvent; element: HTMLElement } | null>(null);
 
@@ -142,9 +146,15 @@ export default function MonthGrid({ referenceDate, events, onEventClick }: Month
           return (
             <Box
               key={key}
+              onClick={
+                isMobile && dayEvents.length > 0
+                  ? (clickEvent) => setOverflowAnchor({ element: clickEvent.currentTarget as HTMLElement, key })
+                  : undefined
+              }
               sx={{
-                minHeight: 128,
-                p: 1,
+                minHeight: { xs: 60, sm: 128 },
+                p: { xs: 0.5, sm: 1 },
+                cursor: isMobile && dayEvents.length > 0 ? 'pointer' : 'default',
                 display: 'flex',
                 flexDirection: 'column',
                 bgcolor: isWeekend && inMonth ? 'background.default' : 'background.paper',
@@ -157,7 +167,7 @@ export default function MonthGrid({ referenceDate, events, onEventClick }: Month
                 outlineOffset: -1.5,
               }}
             >
-              <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 0.75 }}>
+              <Box sx={{ display: 'flex', justifyContent: { xs: 'center', sm: 'flex-start' }, mb: 0.75 }}>
                 <Box
                   sx={{
                     width: 24,
@@ -181,6 +191,21 @@ export default function MonthGrid({ referenceDate, events, onEventClick }: Month
                   </Typography>
                 </Box>
               </Box>
+              {isMobile ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <Box
+                      key={event.id}
+                      sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: CALENDAR_COLORS[event.color].hex }}
+                    />
+                  ))}
+                  {dayEvents.length > 3 && (
+                    <Typography variant="caption" sx={{ fontSize: 9, lineHeight: '7px', fontWeight: 700 }}>
+                      +{dayEvents.length - 3}
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
                 {dayEvents.slice(0, MAX_VISIBLE_PER_DAY).map((event) => (
                   <EventPill key={event.id} event={event} onClick={(element) => setDetailEvent({ event, element })} />
@@ -198,6 +223,7 @@ export default function MonthGrid({ referenceDate, events, onEventClick }: Month
                   </Typography>
                 )}
               </Box>
+              )}
             </Box>
           );
         })}

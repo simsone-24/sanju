@@ -100,4 +100,7 @@ export const router = createBrowserRouter(
       <Route path="*" element={<Navigate to="/" replace />} />
     </>,
   ),
+  // BASE_URL mirrors VITE_APP_BASE ("/sanju/" in production, "/" locally); React Router wants no
+  // trailing slash, and "/" must stay as-is.
+  { basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/' },
 );

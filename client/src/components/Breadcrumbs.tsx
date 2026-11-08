@@ -9,7 +9,7 @@ export interface BreadcrumbItem {
 
 // md files/UI-2.md "Breadcrumb": every page shows Dashboard > Module > Page.
 //
-// The trail also carries the page's Back control, so every page that has a breadcrumb gets one
+// The trail also carries the page's Back control, pinned to its right end, so every page that has a breadcrumb gets one
 // from a single place. It navigates to the parent crumb rather than through history: the
 // destination is then the same however the page was reached, and it can't dead-end when the page
 // was opened from a pasted URL or a new tab. A trail with no parent — the Dashboard, the root of
@@ -23,29 +23,6 @@ export function Breadcrumbs({ items, className = '' }: { items: BreadcrumbItem[]
       aria-label="Breadcrumb"
       className={`tw-mb-2.5 tw-flex tw-flex-wrap tw-items-center tw-gap-2 ${className}`}
     >
-      {parent?.to && (
-        <>
-          <button
-            type="button"
-            onClick={() => navigate(parent.to as string)}
-            aria-label={`Back to ${parent.label}`}
-            className={[
-              'tw-inline-flex tw-shrink-0 tw-items-center tw-gap-1 tw-rounded-control tw-border',
-              'tw-border-hairline dark:tw-border-hairline-dark',
-              'tw-bg-white dark:tw-bg-surface-dark',
-              'tw-px-2 tw-py-1 tw-text-[0.8125rem] tw-font-medium',
-              'tw-text-ink-muted dark:tw-text-ink-dark-muted',
-              'tw-cursor-pointer tw-transition-colors tw-duration-150',
-              'hover:tw-border-brand/40 hover:tw-text-brand',
-              'focus:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-brand/20',
-            ].join(' ')}
-          >
-            <ArrowBackIcon aria-hidden sx={{ fontSize: 16 }} />
-            Back
-          </button>
-          <span aria-hidden className="tw-h-4 tw-w-px tw-bg-hairline dark:tw-bg-hairline-dark" />
-        </>
-      )}
       <ol className="tw-m-0 tw-flex tw-list-none tw-flex-wrap tw-items-center tw-gap-1.5 tw-p-0 tw-text-[0.8125rem]">
         <li className="tw-flex tw-items-center tw-text-ink-muted dark:tw-text-ink-dark-muted">
           <SpaceDashboardOutlinedIcon aria-hidden fontSize="small" />
@@ -75,6 +52,26 @@ export function Breadcrumbs({ items, className = '' }: { items: BreadcrumbItem[]
           );
         })}
       </ol>
+      {parent?.to && (
+        <button
+          type="button"
+          onClick={() => navigate(parent.to as string)}
+          aria-label={`Back to ${parent.label}`}
+          className={[
+            'tw-ml-auto tw-inline-flex tw-shrink-0 tw-items-center tw-gap-1 tw-rounded-control tw-border',
+            'tw-border-hairline dark:tw-border-hairline-dark',
+            'tw-bg-white dark:tw-bg-surface-dark',
+            'tw-px-2 tw-py-1 tw-text-[0.8125rem] tw-font-medium',
+            'tw-text-ink-muted dark:tw-text-ink-dark-muted',
+            'tw-cursor-pointer tw-transition-colors tw-duration-150',
+            'hover:tw-border-brand/40 hover:tw-text-brand',
+            'focus:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-brand/20',
+          ].join(' ')}
+        >
+          <ArrowBackIcon aria-hidden sx={{ fontSize: 16 }} />
+          Back
+        </button>
+      )}
     </nav>
   );
 }

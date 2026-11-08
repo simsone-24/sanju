@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         refreshPromise = null;
         useAuthStore.getState().clearSession();
-        window.location.assign('/login');
+        window.location.assign(`${import.meta.env.BASE_URL}login`);
         return Promise.reject(refreshError);
       }
     }

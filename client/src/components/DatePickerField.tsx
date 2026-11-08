@@ -1,6 +1,9 @@
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useState, type KeyboardEvent } from 'react';
+
+// Every date field in the app is typed and shown as dd/mm/yyyy.
+export const DATE_INPUT_FORMAT = 'DD/MM/YYYY';
 
 interface DatePickerFieldProps {
   label: string;
@@ -57,6 +60,7 @@ export function DatePickerField({
   return (
     <DatePicker
       label={label}
+      format={DATE_INPUT_FORMAT}
       value={value}
       onChange={onChange}
       minDate={minDate}
@@ -77,6 +81,26 @@ export function DatePickerField({
         },
         field: { clearable: true, onClear: () => onChange(null) },
       }}
+    />
+  );
+}
+
+interface IsoDatePickerFieldProps extends Omit<DatePickerFieldProps, 'value' | 'onChange' | 'minDate' | 'maxDate'> {
+  /** 'YYYY-MM-DD', or '' when no date is chosen. */
+  value: string;
+  onChange: (value: string) => void;
+}
+
+// For state that holds the date as a 'YYYY-MM-DD' string (filters, query params, plain inputs):
+// the same picker and dd/mm/yyyy display as DatePickerField, in place of a native <input type="date">
+// whose format follows the browser's locale.
+export function IsoDatePickerField({ value, onChange, ...rest }: IsoDatePickerFieldProps) {
+  const parsed = value ? dayjs(value) : null;
+  return (
+    <DatePickerField
+      {...rest}
+      value={parsed?.isValid() ? parsed : null}
+      onChange={(date) => onChange(date?.isValid() ? date.format('YYYY-MM-DD') : '')}
     />
   );
 }

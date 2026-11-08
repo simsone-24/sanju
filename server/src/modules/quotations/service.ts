@@ -83,8 +83,8 @@ function buildSnapshot(record: QuotationBaseRecord): CustomerSnapshot {
 function buildEvent(record: QuotationBaseRecord) {
   if (!record.enquiry) return null;
   return {
-    eventType: record.enquiry.eventType.eventName,
-    colorCode: record.enquiry.eventType.colorCode,
+    eventType: record.enquiry.eventType?.eventName ?? 'Not set',
+    colorCode: record.enquiry.eventType?.colorCode ?? null,
     eventName: record.enquiry.eventName,
     eventDate: record.enquiry.eventDate,
     mahal: record.enquiry.mahal,
@@ -176,6 +176,7 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       quotationNumber: record.quotationNumber,
       version: record.version,
       quotationDate: record.quotationDate,
+      eventDate: record.enquiry?.eventDate ?? null,
       status: record.status,
       recipient: snapshot,
       items: record.items.map((item) => ({
@@ -252,8 +253,8 @@ export async function listGrouped(params: ListQuotationsParams) {
         enquiryNumber: enquiry.enquiryNumber,
         customerName: enquiry.customer?.customerName ?? enquiry.prospectName ?? '',
         customerMobile: enquiry.customer?.mobile ?? enquiry.prospectMobile ?? '',
-        eventType: enquiry.eventType.eventName,
-        colorCode: enquiry.eventType.colorCode,
+        eventType: enquiry.eventType?.eventName ?? 'Not set',
+        colorCode: enquiry.eventType?.colorCode ?? null,
         eventName: enquiry.eventName,
         eventDate: enquiry.eventDate,
         assignedUser: enquiry.assignedUser,

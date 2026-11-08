@@ -8,6 +8,8 @@ interface LastUpdatedProps {
   refreshing?: boolean;
   /** Makes the indicator a button that triggers a refetch. Read-only text when omitted. */
   onRefresh?: () => void;
+  /** Extra classes for the root element, e.g. to reorder or resize it in a header. */
+  className?: string;
 }
 
 // The label ages on its own between fetches, so it has to re-render on a timer rather than only
@@ -27,7 +29,7 @@ function relativeLabel(timestamp: number): string {
 
 // Data-freshness indicator for index-page headers: tells the user how stale the table is and
 // doubles as a refresh control, so "is this current?" never needs a full page reload.
-export function LastUpdated({ timestamp, refreshing = false, onRefresh }: LastUpdatedProps) {
+export function LastUpdated({ timestamp, refreshing = false, onRefresh, className: extraClassName = '' }: LastUpdatedProps) {
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -45,13 +47,14 @@ export function LastUpdated({ timestamp, refreshing = false, onRefresh }: LastUp
         fontSize="small"
         style={{ animation: refreshing ? 'data-table-spin 900ms linear infinite' : undefined }}
       />
-      <span className="tw-whitespace-nowrap tw-text-[0.8125rem]">{label}</span>
+      <span className="tw-whitespace-nowrap tw-text-[11px] sm:tw-text-[0.8125rem]">{label}</span>
     </>
   );
 
   const className = [
     'tw-inline-flex tw-items-center tw-gap-1.5 tw-rounded-full tw-border-0 tw-bg-transparent tw-px-2.5 tw-py-1',
     'tw-font-sans tw-text-ink-muted dark:tw-text-ink-dark-muted tw-transition-colors tw-duration-200',
+    extraClassName,
   ].join(' ');
 
   if (!interactive) return <div className={className}>{content}</div>;

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -32,7 +33,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Controller, useForm, type Control } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -69,13 +70,14 @@ import type {
   QuotationStatus,
 } from '../../types/quotation';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { fromId, toId, toOptionalId } from '../../utils/ids';
+import { fromId, toOptionalId } from '../../utils/ids';
 import { enquiryFormSchema, type EnquiryFormValues } from '../../validation/enquirySchemas';
 import { CustomerEditDialog } from './CustomerEditDialog';
 import { EnquiryCustomerDetailsCard } from './EnquiryCustomerDetailsCard';
 import { orderConfirmedWarning } from './enquiryOrderConfirmGuard';
 import { EnquiryQuotationDialog } from './EnquiryQuotationDialog';
 import { useEnquiryQuotations } from './useEnquiryQuotations';
+import { ImageThumb } from '../quotations/ImageThumb';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
@@ -133,6 +135,7 @@ interface EnquiryStatusSectionProps {
 const APPOINTMENT_STATUS_OPTIONS: AppointmentStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
 const INITIAL_STATUS_OPTIONS: InitialEnquiryStatus[] = [
+  'DRAFT',
   'PENDING',
   'APPOINTMENT_FIXED',
   'QUOTATION_TO_SHARE',
@@ -261,6 +264,13 @@ interface QuotationDraftControls {
   onSgstChange: (value: string) => void;
   totals: QuotationDraftTotals;
   error: string | null;
+  /** Shares the enquiry form's Advance Amount, so the Final Budget and Quotation fields stay in step. */
+  advanceAmount: string;
+  onAdvanceChange: (value: string) => void;
+  /** Object URLs of the staged (not-yet-uploaded) sample decor images. */
+  imageUrls: string[];
+  onImagesAdd: (files: File[]) => void;
+  onImageRemove: (index: number) => void;
 }
 
 // md files/enquiry.md "Quotation Section": a Quotation section is available from the enquiry so a
@@ -271,6 +281,9 @@ interface QuotationDraftControls {
 // creates both records together (the enquiry first, then the quotation against its new id), and the
 // backend already moves the enquiry to "Quotation to Share" the moment a quotation exists for it.
 function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; draft?: QuotationDraftControls }) {
+  // Defaulted here rather than trusting the prop: a hot-reloaded parent can briefly still hold the
+  // previous draft object (without staged images), which otherwise crashed the whole page.
+  const draftImageUrls = draft?.imageUrls ?? [];
   const queryClient = useQueryClient();
   const canCreateQuotation = usePermission('QUOTATIONS', 'canCreate');
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
@@ -382,7 +395,50 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
                 onSgstChange={draft.onSgstChange}
                 totals={draft.totals}
                 error={draft.error}
+                advanceAmount={draft.advanceAmount}
+                onAdvanceChange={draft.onAdvanceChange}
               />
+
+              <Box sx={{ mt: 2 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Button component="label" variant="outlined" startIcon={<AddPhotoAlternateIcon />}>
+                    Add Sample Decor Images
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      multiple
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files ?? []);
+                        event.target.value = '';
+                        if (files.length) draft.onImagesAdd?.(files);
+                      }}
+                    />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">
+                    JPEG or PNG, up to 12 images. Uploaded when you save.
+                  </Typography>
+                </Stack>
+                {draftImageUrls.length > 0 && (
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      gap: 1.5,
+                      mt: 2,
+                    }}
+                  >
+                    {draftImageUrls.map((url, index) => (
+                      <ImageThumb
+                        key={url}
+                        src={url}
+                        alt={`decor ${index + 1}`}
+                        onRemove={() => draft.onImageRemove?.(index)}
+                      />
+                    ))}
+                  </Box>
+                )}
+              </Box>
 
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
                 Saving the enquiry will also create this quotation and move the enquiry to "Quotation to Share".
@@ -430,7 +486,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
                 if (target === displayStatus) return;
                 setPendingStatusChange({ id: row.id, quotationNumber: row.quotationNumber, target });
               }}
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: { xs: 150, sm: 200 } }}
             >
               {options.map((option) => (
                 <MenuItem key={option} value={option}>
@@ -563,6 +619,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
             whatsapp: enquiry.prospect?.whatsapp ?? enquiry.customer.mobile,
             email: enquiry.prospect?.email ?? null,
             address: enquiry.prospect?.address ?? null,
+            eventDate: enquiry.eventDate,
           }}
           onClose={() => setQuotationDialogFor(null)}
           onSaved={() => setQuotationDialogFor(null)}
@@ -575,7 +632,6 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
 interface CustomerTypeCardProps {
   icon: ReactNode;
   title: string;
-  description: string;
   selected: boolean;
   onSelect: () => void;
 }
@@ -583,19 +639,20 @@ interface CustomerTypeCardProps {
 // enquiry.md §Step 1 offers two ways to start an enquiry (New Customer / Existing Customer). It's
 // the first decision on the form and changes which fields follow, so it's a pair of explanatory
 // cards rather than a pair of small toggle buttons.
-function CustomerTypeCard({ icon, title, description, selected, onSelect }: CustomerTypeCardProps) {
+function CustomerTypeCard({ icon, title, selected, onSelect }: CustomerTypeCardProps) {
   return (
     <ButtonBase
       onClick={onSelect}
       aria-pressed={selected}
       sx={(theme) => ({
-        flex: '1 1 240px',
+        // The parent stacks in a column on phones, where a flex-basis is a height, not a width.
+        flex: { xs: '0 0 auto', sm: '1 1 200px' },
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: 1.5,
-        p: 2,
-        borderRadius: '14px',
+        gap: 1,
+        p: 1.25,
+        borderRadius: '12px',
         border: '1px solid',
         borderColor: selected ? 'primary.main' : 'divider',
         backgroundColor: selected
@@ -606,13 +663,12 @@ function CustomerTypeCard({ icon, title, description, selected, onSelect }: Cust
         '&:hover': { borderColor: 'primary.main', transform: 'translateY(-1px)' },
       })}
     >
-      <Box sx={{ display: 'flex', color: selected ? 'primary.main' : 'text.secondary' }}>{icon}</Box>
+      <Box sx={{ display: 'flex', color: selected ? 'primary.main' : 'text.secondary', '& svg': { fontSize: 20 } }}>
+        {icon}
+      </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>
           {title}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          {description}
         </Typography>
       </Box>
       {selected && <CheckCircleIcon color="primary" fontSize="small" sx={{ ml: 'auto', flexShrink: 0 }} />}
@@ -625,13 +681,16 @@ function cleanOptional(value: string | undefined): string | undefined {
 }
 
 function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
+  // toOptionalId/cleanOptional rather than the required toId(): a DRAFT enquiry can reach here with
+  // any of these left blank (validation.ts on both ends skips the usual required-field checks for
+  // status DRAFT), and a blank field must be omitted, not sent as an invalid 0 or empty string.
   const customer: CustomerInput =
     values.customerType === 'EXISTING'
-      ? { type: 'EXISTING', customerId: toId(values.customerId!) }
+      ? { type: 'EXISTING', customerId: toOptionalId(values.customerId) }
       : {
           type: 'NEW',
-          customerName: values.customerName!,
-          mobile: values.mobile!,
+          customerName: cleanOptional(values.customerName),
+          mobile: cleanOptional(values.mobile),
           whatsapp: cleanOptional(values.whatsapp),
           email: cleanOptional(values.email),
           address: cleanOptional(values.address),
@@ -640,7 +699,7 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
 
   return {
     customer,
-    eventTypeId: toId(values.eventTypeId),
+    eventTypeId: toOptionalId(values.eventTypeId),
     eventName: cleanOptional(values.eventName),
     eventDate: cleanOptional(values.eventDate),
     eventTime: cleanOptional(values.eventTime) as CreateEnquiryInput['eventTime'],
@@ -755,6 +814,14 @@ export default function EnquiryFormPage() {
   const [quotationCgst, setQuotationCgst] = useState('');
   const [quotationSgst, setQuotationSgst] = useState('');
   const [quotationItemsError, setQuotationItemsError] = useState<string | null>(null);
+  const [quotationImages, setQuotationImages] = useState<File[]>([]);
+  // Object URLs for previewing staged (not-yet-uploaded) images — uploaded once the linked
+  // quotation exists, since images hang off a quotation id.
+  const quotationImageUrls = useMemo(
+    () => quotationImages.map((file) => URL.createObjectURL(file)),
+    [quotationImages],
+  );
+  useEffect(() => () => quotationImageUrls.forEach((url) => URL.revokeObjectURL(url)), [quotationImageUrls]);
   const [quotationPreviewOpen, setQuotationPreviewOpen] = useState(true);
 
   // "md files/Enquiry/flow.md" §3 — create mode's Order Confirmed confirmation. The message is
@@ -799,6 +866,7 @@ export default function EnquiryFormPage() {
     watch,
     reset,
     setValue,
+    getValues,
     formState: { errors, isSubmitting, isDirty, dirtyFields },
   } = useForm<EnquiryFormValues>({
     resolver: zodResolver(enquiryFormSchema),
@@ -831,7 +899,7 @@ export default function EnquiryFormPage() {
       email: existingEnquiry.prospect?.email ?? '',
       address: existingEnquiry.prospect?.address ?? '',
       city: existingEnquiry.prospect?.city ?? '',
-      eventTypeId: fromId(existingEnquiry.eventType.id),
+      eventTypeId: fromId(existingEnquiry.eventType?.id),
       eventName: existingEnquiry.eventName ?? '',
       eventDate: existingEnquiry.eventDate ?? '',
       eventTime: existingEnquiry.eventTime ?? '',
@@ -887,6 +955,8 @@ export default function EnquiryFormPage() {
   const customerNameValue = watch('customerName');
   const emailValue = watch('email');
   const addressValue = watch('address');
+  const eventDateValue = watch('eventDate');
+  const advanceAmountValue = watch('advanceAmount');
 
   // Runs with an empty term as soon as the "Existing Customer" picker is shown so the dropdown
   // already lists the customer master; typing narrows it down server-side. Previous results are
@@ -967,6 +1037,16 @@ export default function EnquiryFormPage() {
     setQuotationCgst('');
     setQuotationSgst('');
     setQuotationItemsError(null);
+    setQuotationImages([]);
+  }
+
+  // Capped at the same 12-image limit the server enforces on quotation image uploads.
+  function addQuotationImages(files: File[]) {
+    setQuotationImages((prev) => [...prev, ...files].slice(0, 12));
+  }
+
+  function removeQuotationImage(index: number) {
+    setQuotationImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   // Mirrors whichever customer source is currently selected, so the preview's "To:" line matches
@@ -1002,7 +1082,7 @@ export default function EnquiryFormPage() {
           company={quotationBranding}
           recipient={quotationPreviewRecipient}
           quotationNumber="Auto-generated"
-          quotationDate={formatDate(new Date().toISOString())}
+          quotationDate={eventDateValue ? formatDate(eventDateValue) : ''}
           items={quotationItems
             .filter((item) => item.itemName.trim() !== '')
             .map((item) => ({
@@ -1017,11 +1097,11 @@ export default function EnquiryFormPage() {
           cgstAmount={quotationTotals.cgstAmount}
           sgstAmount={quotationTotals.sgstAmount}
           total={quotationTotals.total}
-          images={[]}
+          images={quotationImageUrls}
         />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', flexShrink: 0 }}>
-        Sample decor images can be added once the quotation is saved.
+        Sample decor images added to the quotation appear here.
       </Typography>
     </>
   );
@@ -1125,6 +1205,13 @@ export default function EnquiryFormPage() {
           sgstPercent: quotationTotals.sgstPercent,
           items: quotationItemsInput,
         });
+        if (quotationImages.length) {
+          try {
+            await quotationService.uploadImages(quotation.id, quotationImages);
+          } catch {
+            showToast('Quotation created, but some images failed to upload.', 'error');
+          }
+        }
         showToast(
           `Enquiry ${created.enquiryNumber} created — quotation ${quotation.quotationNumber} created.`,
         );
@@ -1151,6 +1238,33 @@ export default function EnquiryFormPage() {
       }
     }
   });
+
+  // The "Save Draft or Leave?" prompt's Save Draft action (FormPage's onSaveDraft, raised by
+  // useUnsavedChangesGuard when navigating away with unsaved changes). Reads the form's current,
+  // unvalidated values directly rather than going through handleSubmit — a Draft is exactly the
+  // enquiry saved with whatever was typed, incomplete or not (validation.ts skips its usual
+  // required-field checks whenever status is DRAFT, both here and server-side). Rethrows on failure
+  // so FormPage knows not to navigate away and to keep the changes on screen.
+  //
+  // Create mode only — an existing enquiry already has a real status (possibly Order Confirmed with
+  // an order raised from it), and silently downgrading that to Draft on the way out would be far more
+  // destructive than the create-mode case this is for, so the option isn't offered there at all
+  // (see the FormPage element below, where onSaveDraft is passed only when !isEdit).
+  async function saveAsDraft() {
+    setServerError(null);
+    const values = { ...getValues(), status: 'DRAFT' as const };
+    try {
+      const created = await createMutation.mutateAsync(toCreateInput(values));
+      showToast(`Enquiry ${created.enquiryNumber} saved as a draft.`);
+    } catch (error) {
+      const message =
+        isAxiosError<ApiErrorResponse>(error) && error.response
+          ? error.response.data.message
+          : 'Unable to save this enquiry as a draft. Please try again.';
+      setServerError(message);
+      throw error;
+    }
+  }
 
   // Nothing is editable until the enquiry it is editing has arrived: the fields are seeded from that
   // response, so anything picked or typed before it lands is overwritten the moment it does — a
@@ -1191,6 +1305,7 @@ export default function EnquiryFormPage() {
       saving={saving || isSubmitting}
       saveLabel={isEdit ? 'Update Enquiry' : 'Save Enquiry'}
       isDirty={isDirty}
+      onSaveDraft={!isEdit ? saveAsDraft : undefined}
       serverError={serverError}
       headerActions={showQuotationPreview ? quotationPreviewToggleButton : undefined}
       sidePanel={showQuotationPreview && quotationPreviewOpen ? quotationPreviewPanel : undefined}
@@ -1221,14 +1336,12 @@ export default function EnquiryFormPage() {
                 <CustomerTypeCard
                   icon={<PersonAddIcon />}
                   title="New Customer"
-                  description="Visiting for the first time — enter their details below."
                   selected={customerType === 'NEW'}
                   onSelect={() => setValue('customerType', 'NEW', { shouldDirty: true })}
                 />
                 <CustomerTypeCard
                   icon={<PersonSearchIcon />}
                   title="Existing Customer"
-                  description="Search the customer master — no duplicate record is created."
                   selected={customerType === 'EXISTING'}
                   onSelect={() => setValue('customerType', 'EXISTING', { shouldDirty: true })}
                 />
@@ -1566,6 +1679,11 @@ export default function EnquiryFormPage() {
                 onSgstChange: setQuotationSgst,
                 totals: quotationTotals,
                 error: quotationItemsError,
+                advanceAmount: advanceAmountValue ?? '',
+                onAdvanceChange: (value) => setValue('advanceAmount', value, { shouldDirty: true }),
+                imageUrls: quotationImageUrls,
+                onImagesAdd: addQuotationImages,
+                onImageRemove: removeQuotationImage,
               }
         }
       />

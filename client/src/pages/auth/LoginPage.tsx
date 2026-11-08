@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Alert, Box, Button, TextField, Typography } from '@mui/material';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { Alert, Box, Button, IconButton, InputAdornment, TextField, Typography } from '@mui/material';
 import { isAxiosError } from 'axios';
 import { useLogin } from '../../hooks/useAuth';
 import type { ApiErrorResponse } from '../../types/api';
@@ -10,6 +12,7 @@ import { loginSchema, type LoginFormValues } from '../../validation/authSchemas'
 export default function LoginPage() {
   const loginMutation = useLogin();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -54,13 +57,29 @@ export default function LoginPage() {
       />
       <TextField
         label="Password"
-        type="password"
+        type={showPassword ? 'text' : 'password'}
         fullWidth
         margin="normal"
         autoComplete="current-password"
         error={Boolean(errors.password)}
         helperText={errors.password?.message}
         {...register('password')}
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  edge="end"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
+        }}
       />
 
       <Button

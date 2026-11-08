@@ -109,7 +109,13 @@ async function resolveCustomerColumns(
     prospectCity: null,
   };
 
+  // A DRAFT saved before any customer type was picked at all.
+  if (!input) {
+    return { customerId: null, ...emptyProspect };
+  }
+
   if (input.type === 'EXISTING') {
+    if (!input.customerId) return { customerId: null, ...emptyProspect };
     const customer = await customersRepository.findCustomerById(companyId, input.customerId, client);
     if (!customer) {
       throw new AppError(400, 'Selected customer does not exist.', [
@@ -121,8 +127,8 @@ async function resolveCustomerColumns(
 
   return {
     customerId: null,
-    prospectName: input.customerName,
-    prospectMobile: input.mobile,
+    prospectName: input.customerName ?? null,
+    prospectMobile: input.mobile ?? null,
     prospectWhatsapp: input.whatsapp ?? null,
     prospectEmail: input.email ?? null,
     prospectAddress: input.address ?? null,
@@ -149,11 +155,14 @@ async function findOrCreateCustomerId(
 }
 
 export async function create(companyId: number, actorId: number, input: CreateEnquiryInput) {
-  const eventType = await enquiriesRepository.findEventTypeForCompany(companyId, input.eventTypeId);
-  if (!eventType) {
-    throw new AppError(400, 'Selected event type does not exist.', [
-      { field: 'eventTypeId', message: 'Selected event type does not exist.' },
-    ]);
+  // Only checked when given — a DRAFT enquiry may be saved with no event type picked yet.
+  if (input.eventTypeId) {
+    const eventType = await enquiriesRepository.findEventTypeForCompany(companyId, input.eventTypeId);
+    if (!eventType) {
+      throw new AppError(400, 'Selected event type does not exist.', [
+        { field: 'eventTypeId', message: 'Selected event type does not exist.' },
+      ]);
+    }
   }
 
   if (input.assignedUserId) {
@@ -178,14 +187,16 @@ export async function create(companyId: number, actorId: number, input: CreateEn
   // (there's no prospect stage to defer it to) — done in a transaction with the enquiry insert.
   const enquiry = await prisma.$transaction(async (tx) => {
     const customerColumns = await resolveCustomerColumns(companyId, input.customer, tx);
+    // customerName/mobile are guaranteed present here — validation.ts requires them for any
+    // non-DRAFT enquiry, which is the only case that can reach ORDER_CONFIRMED at creation.
     const finalColumns =
-      initialStatus === EnquiryStatus.ORDER_CONFIRMED && input.customer.type === 'NEW'
+      initialStatus === EnquiryStatus.ORDER_CONFIRMED && input.customer?.type === 'NEW'
         ? {
             customerId: await findOrCreateCustomerId(
               companyId,
               {
-                customerName: input.customer.customerName,
-                mobile: input.customer.mobile,
+                customerName: input.customer.customerName!,
+                mobile: input.customer.mobile!,
                 whatsapp: input.customer.whatsapp,
                 email: input.customer.email,
                 address: input.customer.address,

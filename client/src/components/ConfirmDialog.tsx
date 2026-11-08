@@ -11,6 +11,9 @@ interface ConfirmDialogProps {
   loading?: boolean;
   onConfirm: () => void;
   onClose: () => void;
+  /** An optional third button, rendered between Cancel and Confirm — e.g. the enquiry form's
+   *  unsaved-changes prompt offering "Save Draft" alongside Stay/Leave. Omitted everywhere else. */
+  extraAction?: { label: string; onClick: () => void; disabled?: boolean };
 }
 
 // Matches docs/06_UI_UX_GUIDELINES.md §14's "Delete Order? Yes/No" pattern.
@@ -24,6 +27,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onClose,
+  extraAction,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
@@ -35,6 +39,11 @@ export function ConfirmDialog({
         <Button onClick={onClose} disabled={loading}>
           {cancelLabel}
         </Button>
+        {extraAction && (
+          <Button onClick={extraAction.onClick} variant="outlined" disabled={loading || extraAction.disabled}>
+            {extraAction.label}
+          </Button>
+        )}
         <Button onClick={onConfirm} color={danger ? 'error' : 'primary'} variant="contained" disabled={loading}>
           {confirmLabel}
         </Button>

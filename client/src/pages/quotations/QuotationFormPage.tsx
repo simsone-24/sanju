@@ -61,6 +61,7 @@ import {
   type QuotationFormSource,
   type QuotationFormValues,
 } from '../../validation/quotationSchemas';
+import { ImageThumb } from './ImageThumb';
 
 const EMPTY_ITEM = { itemName: '', quantity: '', rate: '' };
 
@@ -247,7 +248,6 @@ export default function QuotationFormPage() {
 
   // useWatch gives live, re-rendering values for the item rows (drives totals, preview, auto-row).
   const items = (useWatch({ control, name: 'items' }) ?? []) as QuotationFormValues['items'];
-  const quotationDate = watch('quotationDate');
   const cgstValue = watch('cgstPercent');
   const sgstValue = watch('sgstPercent');
 
@@ -604,7 +604,13 @@ export default function QuotationFormPage() {
           company={branding}
           recipient={previewRecipient}
           quotationNumber={existingQuotation?.quotationNumber ?? 'Auto-generated'}
-          quotationDate={quotationDate ? formatDate(quotationDate) : formatDate(todayISO())}
+          quotationDate={
+            existingQuotation?.event?.eventDate
+              ? formatDate(existingQuotation.event.eventDate)
+              : selectedEnquiry?.eventDate
+                ? formatDate(selectedEnquiry.eventDate)
+                : ''
+          }
           items={items
             .filter((item) => item.itemName.trim() !== '')
             .map((item) => ({
@@ -880,13 +886,14 @@ export default function QuotationFormPage() {
           </>
         )}
 
-        <TextField
-          label="Quotation Date"
-          type="date"
-          fullWidth
-          slotProps={{ inputLabel: { shrink: true } }}
-          {...register('quotationDate')}
-        />
+        {selectedEnquiry?.eventDate && (
+          <TextField
+            label="Event Date"
+            value={formatDate(selectedEnquiry.eventDate)}
+            fullWidth
+            slotProps={{ input: { readOnly: true } }}
+          />
+        )}
 
         <Controller
           name="status"
@@ -1043,7 +1050,7 @@ export default function QuotationFormPage() {
                       </TableCell>
                       <TableCell sx={{ width: 48 }}>
                         {fields.length > 1 && !isTrailingEmpty && (
-                          <IconButton size="small" title="Delete item" onClick={() => remove(index)}>
+                          <IconButton size="small" color="error" title="Delete item" onClick={() => remove(index)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         )}
@@ -1127,25 +1134,3 @@ export default function QuotationFormPage() {
   );
 }
 
-function ImageThumb({ src, alt, onRemove }: { src: string; alt: string; onRemove: () => void }) {
-  return (
-    <Box sx={{ position: 'relative', borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
-      <Box component="img" src={src} alt={alt} sx={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
-      <IconButton
-        size="small"
-        title="Remove image"
-        onClick={onRemove}
-        sx={{
-          position: 'absolute',
-          top: 2,
-          right: 2,
-          bgcolor: 'rgba(0,0,0,0.55)',
-          color: '#fff',
-          '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
-        }}
-      >
-        <DeleteIcon fontSize="small" />
-      </IconButton>
-    </Box>
-  );
-}

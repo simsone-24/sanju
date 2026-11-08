@@ -114,7 +114,7 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
             company={branding}
             recipient={quotation.recipient}
             quotationNumber={`${quotation.quotationNumber} (v${quotation.version})`}
-            quotationDate={formatDate(quotation.quotationDate)}
+            quotationDate={quotation.event?.eventDate ? formatDate(quotation.event.eventDate) : ''}
             items={quotation.items.map((item) => ({
               itemName: item.itemName,
               quantity: Number(item.quantity),

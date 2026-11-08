@@ -1,6 +1,7 @@
 import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '../../components/SearchBar';
+import { IsoDatePickerField } from '../../components/DatePickerField';
 import * as rentService from '../../services/rentService';
 import { toOptionalId } from '../../utils/ids';
 import {
@@ -77,24 +78,22 @@ export function RentReportFilterBar({ config, filters, onChange }: RentReportFil
 
         {config.dateRange && (
           <>
-            <TextField
-              type="date"
-              size="small"
-              label="From"
-              sx={{ width: 160 }}
-              value={filters.dateFrom ?? ''}
-              onChange={(event) => set('dateFrom', event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
-              type="date"
-              size="small"
-              label="To"
-              sx={{ width: 160 }}
-              value={filters.dateTo ?? ''}
-              onChange={(event) => set('dateTo', event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
+            <Box sx={{ width: 160 }}>
+              <IsoDatePickerField
+                label="From"
+                margin="none"
+                value={filters.dateFrom ?? ''}
+                onChange={(value) => set('dateFrom', value)}
+              />
+            </Box>
+            <Box sx={{ width: 160 }}>
+              <IsoDatePickerField
+                label="To"
+                margin="none"
+                value={filters.dateTo ?? ''}
+                onChange={(value) => set('dateTo', value)}
+              />
+            </Box>
           </>
         )}
 

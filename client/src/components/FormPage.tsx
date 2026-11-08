@@ -15,6 +15,12 @@ interface FormPageProps {
   saveDisabled?: boolean;
   saveLabel?: string;
   isDirty?: boolean;
+  /** Enquiry form only: saves the current fields as a Draft (no validation) instead of discarding
+   *  them, offered as a third option alongside Stay/Leave when navigating away with unsaved changes.
+   *  FormPage awaits it and only then proceeds with the navigation that triggered the prompt — a
+   *  rejection (e.g. a failed save request) leaves the dialog open instead of losing the changes. */
+  onSaveDraft?: () => Promise<void>;
+  saveDraftLabel?: string;
   serverError?: string | null;
   // Content width cap for the standard single-column layout. Ignored when a sidePanel is provided.
   maxWidth?: number | string;
@@ -45,6 +51,8 @@ export function FormPage({
   saveDisabled = false,
   saveLabel = 'Save',
   isDirty = false,
+  onSaveDraft,
+  saveDraftLabel = 'Save Draft',
   serverError,
   maxWidth = 1100,
   sidePanel,
@@ -56,6 +64,23 @@ export function FormPage({
   children,
 }: FormPageProps) {
   const blocker = useUnsavedChangesGuard(isDirty && !saving);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  async function handleSaveDraft() {
+    if (!onSaveDraft) return;
+    setSavingDraft(true);
+    try {
+      // A rejection means the save itself failed — the caller is expected to have already surfaced
+      // that (e.g. a toast), so here it only means "don't navigate": the dialog stays open with the
+      // changes intact rather than losing them.
+      await onSaveDraft();
+      if (blocker.state === 'blocked') blocker.proceed();
+    } catch {
+      // Swallowed deliberately — see above.
+    } finally {
+      setSavingDraft(false);
+    }
+  }
 
   // Draggable divider for the side panel: width is seeded from localStorage (if a storage key is
   // given) so the user's chosen size survives a reload, then only ever adjusted via the handle.
@@ -116,23 +141,36 @@ export function FormPage({
     if (sidePanelStorageKey) localStorage.removeItem(sidePanelStorageKey);
   }
 
+  // The title row carries page-level actions (e.g. the Hide/Show Preview toggle), so it sticks to
+  // the top of the scroll container — otherwise those controls disappear as soon as the form is
+  // scrolled. Pages without header actions keep the plain, non-sticky header.
+  const titleRow = (
+    <Stack
+      direction="row"
+      sx={{ alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}
+    >
+      <Box>
+        <Typography variant="h1">{title}</Typography>
+        {subtitle && (
+          <Typography variant="body2" color="text.secondary">
+            {subtitle}
+          </Typography>
+        )}
+      </Box>
+      {headerActions}
+    </Stack>
+  );
+
   const header = (
     <>
       <Breadcrumbs items={breadcrumbs} />
-      <Stack
-        direction="row"
-        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}
-      >
-        <Box>
-          <Typography variant="h1">{title}</Typography>
-          {subtitle && (
-            <Typography variant="body2" color="text.secondary">
-              {subtitle}
-            </Typography>
-          )}
+      {headerActions ? (
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: 'background.default' }}>
+          {titleRow}
         </Box>
-        {headerActions}
-      </Stack>
+      ) : (
+        titleRow
+      )}
     </>
   );
 
@@ -142,12 +180,18 @@ export function FormPage({
       <Stack
         direction="row"
         spacing={1.5}
-        sx={{ justifyContent: 'flex-end', py: 2, backgroundColor: 'background.default' }}
+        sx={{ justifyContent: { xs: 'stretch', sm: 'flex-end' }, py: 2, backgroundColor: 'background.default' }}
       >
-        <Button onClick={onCancel} disabled={saving} size="large">
+        <Button onClick={onCancel} disabled={saving} size="large" sx={{ flex: { xs: 1, sm: '0 0 auto' } }}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={onSave} disabled={saving || saveDisabled} size="large">
+        <Button
+          variant="contained"
+          onClick={onSave}
+          disabled={saving || saveDisabled}
+          size="large"
+          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+        >
           {saving ? 'Saving…' : saveLabel}
         </Button>
       </Stack>
@@ -158,10 +202,16 @@ export function FormPage({
     <ConfirmDialog
       open={blocker.state === 'blocked'}
       title="Unsaved Changes"
-      message="You have unsaved changes. Are you sure you want to leave?"
+      message={
+        onSaveDraft
+          ? 'You have unsaved changes. Save them as a Draft, or leave without saving?'
+          : 'You have unsaved changes. Are you sure you want to leave?'
+      }
       confirmLabel="Leave"
       cancelLabel="Stay"
       danger
+      loading={savingDraft}
+      extraAction={onSaveDraft ? { label: saveDraftLabel, onClick: handleSaveDraft, disabled: savingDraft } : undefined}
       onConfirm={() => blocker.state === 'blocked' && blocker.proceed()}
       onClose={() => blocker.state === 'blocked' && blocker.reset()}
     />

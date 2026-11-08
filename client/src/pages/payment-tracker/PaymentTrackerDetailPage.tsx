@@ -1,4 +1,5 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BadgeIcon from '@mui/icons-material/Badge';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
@@ -98,7 +99,12 @@ export default function PaymentTrackerDetailPage() {
   if (isError || !data) {
     return (
       <Box>
-        <Breadcrumbs items={breadcrumbs} />
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1, mb: 1 }}>
+          <Breadcrumbs items={breadcrumbs} />
+          <Button size="small" variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/payment-tracker')}>
+            Back
+          </Button>
+        </Stack>
         <Alert severity="error">This payment record could not be loaded.</Alert>
       </Box>
     );
@@ -151,22 +157,26 @@ export default function PaymentTrackerDetailPage() {
   return (
     <Box>
       <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 1, sm: 2 }}
+        sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, flexWrap: 'wrap', rowGap: 1, mb: 2 }}
       >
         <Breadcrumbs items={breadcrumbs} />
-        <Button
-          size="small"
-          variant="outlined"
-          endIcon={<MoreVertIcon />}
-          aria-haspopup="menu"
-          aria-expanded={actionsAnchor ? 'true' : undefined}
-          onClick={(event) => setActionsAnchor(event.currentTarget)}
-          sx={{ mb: 1.25 }}
-        >
-          Actions
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', marginLeft: { xs: 0, sm: 'auto' }, alignSelf: { xs: 'flex-end', sm: 'center' } }}>
+          <Button size="small" variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/payment-tracker')}>
+            Back
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            endIcon={<MoreVertIcon />}
+            aria-haspopup="menu"
+            aria-expanded={actionsAnchor ? 'true' : undefined}
+            onClick={(event) => setActionsAnchor(event.currentTarget)}
+          >
+            Actions
+          </Button>
+        </Stack>
         <Menu anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={closeActions}>
           <MenuItem
             onClick={() => {

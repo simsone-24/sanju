@@ -2,6 +2,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -71,11 +72,6 @@ const DATE_RANGE_PRESETS: readonly DateRangePreset[] = [
   'NEXT_MONTH',
 ];
 
-
-// Filter controls grow to share the row's width rather than sitting at a fixed size and stranding
-// empty space at its right edge.
-const FILTER_FIELD_WIDTH = 'tw-w-full tw-flex-1 sm:tw-basis-[170px]';
-
 function trackerStatus(row: PaymentTrackerRecord): PaymentTrackerStatus {
   return row.paymentTracker?.paymentStatus ?? 'PENDING';
 }
@@ -101,6 +97,7 @@ export default function PaymentTrackerListPage() {
   const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
   const [customTo, setCustomTo] = useState<Dayjs | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(Boolean(customer) || Boolean(paymentStatus) || Boolean(orderStatus) || Boolean(dateRange) || Boolean(customFrom || customTo));
   const [editRecord, setEditRecord] = useState<PaymentTrackerRecord | null>(null);
   const [historyRecord, setHistoryRecord] = useState<PaymentTrackerRecord | null>(null);
 
@@ -138,6 +135,14 @@ export default function PaymentTrackerListPage() {
     enabled: canView,
     placeholderData: keepPreviousData,
   });
+
+  // Compute subtext for Collected Amount card
+  const advanceCount = stats?.advanceCount ?? 0;
+  const partialCount = stats?.partialCount ?? 0;
+  const completedCount = stats?.completedCount ?? 0;
+  const collectedSubtext = advanceCount > 0 || partialCount > 0 || completedCount > 0
+    ? [advanceCount > 0 && `${advanceCount} advance`, partialCount > 0 && `${partialCount} partial`, completedCount > 0 && `${completedCount} completed`].filter(Boolean).join(' | ')
+    : '';
 
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: [
@@ -182,13 +187,32 @@ export default function PaymentTrackerListPage() {
     setPage(1);
   }
 
-  // Editing either date field is what "Custom Range" means, so the dropdown follows the edit
-  // rather than leaving a named window selected that no longer describes the list.
-  function applyCustomRange(next: { from?: Dayjs | null; to?: Dayjs | null }) {
-    if (next.from !== undefined) setCustomFrom(next.from);
-    if (next.to !== undefined) setCustomTo(next.to);
-    setDateRange(CUSTOM_DATE_RANGE);
-    setPage(1);
+  // Editing either date field is what "Custom Range" means. The bound the user did not touch is
+  // carried over from whatever is on screen, so switching off a named window narrows the range instead
+  // of half-clearing it.
+  function applyCustomBound(patch: { from?: Dayjs | null; to?: Dayjs | null }) {
+    patchParams({
+      from: patch.from !== undefined ? patch.from : customFrom,
+      to: patch.to !== undefined ? patch.to : customTo,
+      range: null,
+    });
+  }
+
+  // Any filter change sends the user back to page 1 — staying on page 7 of a result set that just
+  // shrank to 2 pages would show an empty table. `page`/`limit` patches opt out of that reset.
+  function patchParams(patch: Record<string, string | null>) {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === null || value === '') next.delete(key);
+          else next.set(key, value);
+        });
+        if (!('page' in patch)) next.delete('page');
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   // Everything currently narrowing the list, as individually removable chips — so an unexpected
@@ -325,8 +349,8 @@ export default function PaymentTrackerListPage() {
       render: (row) => (
         <span
           className={`tw-tabular-nums tw-font-semibold ${
-            Number(row.paidAmount) > 0 ? 'tw-text-success' : 'tw-text-ink dark:tw-text-ink-dark'
-          }`}
+            Number(row.paidAmount) > 0 ? 'tw-text-success' : 'tw-text-ink dark:tw-text-ink-dark'}
+          }
         >
           {formatCurrency(row.paidAmount)}
         </span>
@@ -341,8 +365,8 @@ export default function PaymentTrackerListPage() {
       render: (row) => (
         <span
           className={`tw-tabular-nums tw-font-semibold ${
-            Number(row.pendingAmount) > 0 ? 'tw-text-warning' : 'tw-text-ink-muted dark:tw-text-ink-dark-muted'
-          }`}
+            Number(row.pendingAmount) > 0 ? 'tw-text-warning' : 'tw-text-ink-muted dark:tw-text-ink-dark-muted'}
+          `}
         >
           {formatCurrency(row.pendingAmount)}
         </span>
@@ -428,7 +452,6 @@ export default function PaymentTrackerListPage() {
     <div>
       <PageHeader
         title="Payment Tracker"
-        subtitle="Budget, collections and outstanding balance for every confirmed order."
         breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Payment Tracker' }]}
         titleAdornment={
           totalRecords === undefined ? undefined : (
@@ -437,27 +460,38 @@ export default function PaymentTrackerListPage() {
             </span>
           )
         }
-        actions={<LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />}
+        titleAdornmentAlign="right"
+        actions={
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5 sm:tw-gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tw-h-8 sm:tw-h-9"
+              startIcon={<FilterListIcon fontSize="small" />}
+              onClick={() => setShowFilters((prev) => !prev)}
+            >
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </Button>
+            <LastUpdated timestamp={dataUpdatedAt} refreshing={isFetching} onRefresh={() => void refetch()} />
+          </div>
+        }
       />
 
-      {/* §Dashboard Cards — three money totals, each with a subtext breakdown of the orders behind
-          it. Plain summary tiles rather than click-filters: the toolbar's own Payment Status /
-          Order Status dropdowns already cover that, and these three narrow along with whatever is
-          set there (see the stats query above). */}
-      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-4 sm:tw-grid-cols-3">
+      {/* §Dashboard Cards — three money totals. Plain summary tiles rather than click-filters. */}
+      <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-2 sm:tw-grid-cols-3 sm:tw-gap-4">
         <StatCard
           label="Total Expected Amount"
           value={formatCurrency(stats?.totalExpectedAmount ?? 0)}
-          subtext={`${stats?.totalOrders ?? 0} Total Orders`}
           icon={<SavingsIcon />}
           tone="cyan"
+          subtext={stats?.totalOrders > 0 ? `${stats.totalOrders} orders` : ''}
         />
         <StatCard
           label="Collected Amount"
           value={formatCurrency(stats?.totalCollected ?? 0)}
-          subtext={`Advance ${stats?.advanceCount ?? 0} · Partial ${stats?.partialCount ?? 0} · Completed ${stats?.completedCount ?? 0}`}
           icon={<TrendingUpIcon />}
           tone="green"
+          subtext={collectedSubtext}
         />
         <StatCard
           label="Pending Amount"
@@ -467,15 +501,16 @@ export default function PaymentTrackerListPage() {
         />
       </div>
 
+      {showFilters && (
       <div className={`${CARD_SURFACE} tw-mb-4 tw-flex tw-flex-col tw-gap-2.5 tw-px-3 tw-py-2.5`}>
         {/* Primary row: always visible. The dropdowns carry a label block above the box, so
             everything bottom-aligns and the input boxes themselves stay on one line. Advanced
             Filters closes the row on the right. */}
-        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5">
+        <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-flex-wrap sm:tw-items-end">
           {/* The shared customer type-ahead — an MUI control, but its fixed 40px height keeps its
               bottom edge level with the Tailwind fields it sits beside. */}
           <CustomerFilter
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[170px]"
             value={customer}
             onChange={(next) => {
               setCustomer(next);
@@ -484,7 +519,7 @@ export default function PaymentTrackerListPage() {
           />
 
           <SelectField
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[170px]"
             label="Payment Status"
             emptyLabel="All"
             value={paymentStatus}
@@ -499,7 +534,7 @@ export default function PaymentTrackerListPage() {
           />
 
           <SelectField
-            className={FILTER_FIELD_WIDTH}
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[170px]"
             label="Order Status"
             emptyLabel="All"
             value={orderStatus}
@@ -514,8 +549,7 @@ export default function PaymentTrackerListPage() {
           />
 
           <DateRangeFilter
-            className={FILTER_FIELD_WIDTH}
-            label="Event Date Range"
+            className="tw-w-full sm:tw-w-auto sm:tw-flex-1 sm:tw-basis-[150px]"
             presets={DATE_RANGE_PRESETS}
             value={dateRange}
             onChange={applyDateRange}
@@ -524,7 +558,7 @@ export default function PaymentTrackerListPage() {
 
           <Button
             variant="ghost"
-            onClick={() => setAdvancedOpen((previous) => !previous)}
+            className="tw-w-full sm:tw-w-auto"
             startIcon={<TuneIcon fontSize="small" />}
             endIcon={
               <ExpandMoreIcon
@@ -532,75 +566,75 @@ export default function PaymentTrackerListPage() {
                 className={`tw-transition-transform tw-duration-200 ${advancedOpen ? 'tw-rotate-180' : ''}`}
               />
             }
-          >
-            Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
-          </Button>
-        </div>
+            >
+              Advanced Filters{dateFilterCount > 0 ? ` (${dateFilterCount})` : ''}
+            </Button>
+          </div>
 
-        {/* Advanced row: custom event-date range, collapsed by default. The 0fr→1fr grid track
-            animates the reveal without needing a measured pixel height. */}
-        <div
-          className={`tw-grid tw-transition-all tw-duration-200 ${
-            advancedOpen ? 'tw-grid-rows-[1fr] tw-opacity-100' : '-tw-mt-2.5 tw-grid-rows-[0fr] tw-opacity-0'
-          }`}
-        >
-          <div className="tw-overflow-hidden">
-            <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5 tw-pt-0.5">
-              <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Event Date From"
-                    margin="none"
-                    value={customFrom}
-                    onChange={(value) => applyCustomRange({ from: value })}
-                  />
-                </div>
-                <div className="tw-flex-1">
-                  <DatePickerField
-                    label="Event Date To"
-                    margin="none"
-                    minDate={customFrom ?? undefined}
-                    value={customTo}
-                    onChange={(value) => applyCustomRange({ to: value })}
-                  />
+          {/* Advanced row: custom event-date range, collapsed by default. The 0fr→1fr grid track
+              animates the reveal without needing a measured pixel height. */}
+          <div
+            className={`tw-grid tw-transition-all tw-duration-200 ${
+              advancedOpen ? 'tw-grid-rows-[1fr] tw-opacity-100' : '-tw-mt-2.5 tw-grid-rows-[0fr] tw-opacity-0'
+            }`}
+          >
+            <div className="tw-overflow-hidden">
+              <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-2.5 tw-pt-0.5">
+                <div className="tw-flex tw-flex-1 tw-basis-[320px] tw-gap-2">
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Event Date From"
+                      margin="none"
+                      value={customFrom}
+                      onChange={(value) => applyDateRange({ from: value })}
+                    />
+                  </div>
+                  <div className="tw-flex-1">
+                    <DatePickerField
+                      label="Event Date To"
+                      margin="none"
+                      minDate={customFrom ?? undefined}
+                      value={customTo}
+                      onChange={(value) => applyDateRange({ to: value })}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {activeFilters.length > 0 && (
-          <>
-            <hr className="tw-my-0 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
-            <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
-              <span className="tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                Active filters
-              </span>
-              {activeFilters.map((filter) => (
-                <span
-                  key={filter.key}
-                  className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-hairline tw-bg-white tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-text-slate-600 dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark"
-                >
-                  {filter.label}
-                  <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
-                    <CloseIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
+          {activeFilters.length > 0 && (
+            <>
+              <hr className="tw-my-0 tw-border-b tw-border-hairline dark:tw-border-hairline-dark" />
+              <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+                <span className="tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                  Active filters
                 </span>
-              ))}
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Clear all
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
+                {activeFilters.map((filter) => (
+                  <span
+                    key={filter.key}
+                    className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-hairline tw-bg-white tw-py-1 tw-pl-3 tw-pr-1 tw-text-xs tw-text-slate-600 dark:tw-border-hairline-dark dark:tw-bg-surface-dark dark:tw-text-ink-dark"
+                  >
+                    {filter.label}
+                    <IconButton title={`Remove filter: ${filter.label}`} size="xs" onClick={filter.onClear}>
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </span>
+                ))}
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  Clear all
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {canView ? (
         <DataTable
           columns={columns}
           rows={data?.records ?? []}
           getRowId={(row) => row.id}
-          loading={isLoading}
           meta={data?.meta}
           page={page}
           limit={limit}
@@ -624,10 +658,15 @@ export default function PaymentTrackerListPage() {
               activeFilters.length > 0
                 ? 'Try widening the date range or clearing a filter.'
                 : 'Records appear here automatically once an enquiry is confirmed as an order.',
-            action: <Button onClick={resetFilters}>Reset Filters</Button>,
-          }}
-          exportFileName="payment-tracker"
-          canExport={canExport}
+            action:
+              activeFilters.length > 0 ? (
+                <Button onClick={resetFilters}>Reset Filters</Button>
+              ) : canCreate ? (
+                <Button variant="primary" startIcon={<AddIcon fontSize="small" />} onClick={() => navigate('/payment-tracker/new')}>
+                  Create Payment
+                </Button>
+              ) : undefined,
+          )}
         />
       ) : (
         <p className="tw-mt-2 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">
