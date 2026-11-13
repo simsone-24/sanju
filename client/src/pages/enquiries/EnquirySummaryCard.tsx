@@ -129,6 +129,10 @@ export function EnquirySummaryCard({
           value: enquiry.finalBudgetAmount ? formatCurrency(enquiry.finalBudgetAmount) : 'Not finalised',
         },
         {
+          label: 'Advance Amount',
+          value: enquiry.advanceAmount ? formatCurrency(enquiry.advanceAmount) : 'Not recorded',
+        },
+        {
           label: 'Estimated Budget',
           value: enquiry.estimatedBudget ? formatCurrency(enquiry.estimatedBudget) : '—',
         },

@@ -586,6 +586,10 @@ model Quotation {
   sgstPercent     Decimal         @default(0) @map("sgst_percent") @db.Decimal(5, 2)
   tax             Decimal         @default(0) @db.Decimal(12, 2)
   totalAmount     Decimal         @map("total_amount") @db.Decimal(12, 2)
+  // Advance agreed against this quotation. Informational on the document — it is not deducted from
+  // totalAmount (the printed total stays the full quote) and creates no payment. When the quotation
+  // becomes an order, the enquiry's advanceAmount remains what funds the opening receipt.
+  advanceAmount   Decimal?        @map("advance_amount") @db.Decimal(12, 2)
   remarks         String?         @db.Text
   status          QuotationStatus @default(DRAFT)
   pdfPath         String?         @map("pdf_path")

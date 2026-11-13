@@ -502,6 +502,7 @@ export default function EnquiryDetailPage() {
           email: enquiry.prospect?.email ?? null,
           address: enquiry.prospect?.address ?? null,
           eventDate: enquiry.eventDate,
+          advanceAmount: enquiry.advanceAmount,
         }}
         onClose={() => setQuotationDialog(null)}
         onSaved={() => setQuotationDialog(null)}

@@ -106,7 +106,6 @@ interface FlatRow {
   eventType: string | null;
   eventColor: string | null;
   eventName: string | null;
-  eventDate: string | null;
   ownerName: string | null;
   totalAmount: string;
   status: QuotationStatus;
@@ -130,7 +129,6 @@ function flatten(row: QuotationGroupedRow): FlatRow {
       eventType: row.enquiry.eventType,
       eventColor: row.enquiry.colorCode,
       eventName: row.enquiry.eventName,
-      eventDate: row.enquiry.eventDate,
       ownerName: row.enquiry.assignedUser?.fullName ?? null,
       totalAmount: row.latestQuotation.totalAmount,
       status: row.latestQuotation.status,
@@ -153,7 +151,6 @@ function flatten(row: QuotationGroupedRow): FlatRow {
     eventType: quotation.event?.eventType ?? null,
     eventColor: quotation.event?.colorCode ?? null,
     eventName: quotation.event?.eventName ?? null,
-    eventDate: quotation.event?.eventDate ?? null,
     ownerName: quotation.owner?.fullName ?? null,
     totalAmount: quotation.totalAmount,
     status: quotation.status,
@@ -503,7 +500,7 @@ export default function QuotationListPage() {
             <div className="tw-min-w-0">
               <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.eventType}</div>
               <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                {row.eventName || (row.eventDate ? formatDate(row.eventDate) : 'Date not set')}
+                {row.eventName || formatDate(row.quotationDate)}
               </div>
             </div>
           </div>
@@ -560,19 +557,13 @@ export default function QuotationListPage() {
       width: 130,
       render: (row) => (
         <div className="tw-min-w-0">
-          {row.eventDate ? (
-            <>
-              <div className="tw-truncate tw-font-semibold">{formatDate(row.eventDate)}</div>
-              <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-                {dayjs(row.eventDate).format('ddd')}
-              </div>
-            </>
-          ) : (
-            <span className="tw-text-ink-muted dark:tw-text-ink-dark-muted">Not set</span>
-          )}
+          <div className="tw-truncate tw-font-semibold">{formatDate(row.quotationDate)}</div>
+          <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
+            {dayjs(row.quotationDate).format('ddd')}
+          </div>
         </div>
       ),
-      exportValue: (row) => row.eventDate ? formatDate(row.eventDate) : '',
+      exportValue: (row) => formatDate(row.quotationDate),
     },
     {
       key: 'actions',

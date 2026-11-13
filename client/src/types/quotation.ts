@@ -27,7 +27,13 @@ export interface QuotationRecipient {
 }
 
 export interface QuotationLink {
-  enquiry: { id: number; enquiryNumber: string; status: EnquiryStatus } | null;
+  enquiry: {
+    id: number;
+    enquiryNumber: string;
+    status: EnquiryStatus;
+    /** The enquiry's Final Budget advance, used to seed/align the quotation's advance. */
+    advanceAmount: string | null;
+  } | null;
   customer: { id: number; customerName: string } | null;
   order: { id: number; orderNumber: string } | null;
 }
@@ -151,6 +157,8 @@ export interface CreateQuotationInput {
   discount?: number;
   cgstPercent?: number;
   sgstPercent?: number;
+  /** Advance agreed against the quotation; shown on the form and stored with the document. */
+  advanceAmount?: number;
   remarks?: string;
   items: QuotationItemInput[];
 }
@@ -161,6 +169,7 @@ export interface UpdateQuotationInput {
   discount?: number;
   cgstPercent?: number;
   sgstPercent?: number;
+  advanceAmount?: number;
   remarks?: string;
   manualCustomer?: ManualCustomerInput;
   items?: QuotationItemInput[];

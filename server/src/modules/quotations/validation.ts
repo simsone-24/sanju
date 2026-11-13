@@ -37,6 +37,7 @@ export const createQuotationSchema = z
     discount: z.coerce.number().min(0).optional(),
     cgstPercent: z.coerce.number().min(0).max(100).optional(),
     sgstPercent: z.coerce.number().min(0).max(100).optional(),
+    advanceAmount: z.coerce.number().min(0).optional(),
     remarks: z.string().min(1).optional(),
     items: z.array(quotationItemSchema).min(1, 'At least one line item is required.'),
   })
@@ -68,6 +69,7 @@ export const updateQuotationSchema = z
     discount: z.coerce.number().min(0).optional(),
     cgstPercent: z.coerce.number().min(0).max(100).optional(),
     sgstPercent: z.coerce.number().min(0).max(100).optional(),
+    advanceAmount: z.coerce.number().min(0).optional(),
     remarks: z.string().min(1).optional(),
     manualCustomer: manualCustomerSchema.optional(),
     items: z.array(quotationItemSchema).min(1).optional(),

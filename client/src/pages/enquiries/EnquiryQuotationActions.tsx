@@ -1,4 +1,3 @@
-import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -62,6 +61,7 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
         discount: Number(source.discount),
         cgstPercent: Number(source.cgstPercent),
         sgstPercent: Number(source.sgstPercent),
+        advanceAmount: Number(source.advanceAmount ?? 0),
         remarks: source.remarks ?? undefined,
         items: source.items.map((item, index) => ({
           itemName: item.itemName,

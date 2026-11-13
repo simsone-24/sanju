@@ -36,6 +36,7 @@ export const quotationFormSchema = z
     quotationDate: z.string().optional().or(z.literal('')),
     cgstPercent: z.string().optional().or(z.literal('')),
     sgstPercent: z.string().optional().or(z.literal('')),
+    advanceAmount: z.string().optional().or(z.literal('')),
     items: z.array(quotationItemSchema),
   })
   // Mirrors the API's own superRefine (server/src/modules/quotations/validation.ts): the required

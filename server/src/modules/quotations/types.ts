@@ -33,6 +33,8 @@ export interface CreateQuotationInput {
   // CGST and SGST rates (percent). Their amounts are derived server-side.
   cgstPercent?: number;
   sgstPercent?: number;
+  /** Advance agreed against the quotation; stored as-is and not deducted from the total. */
+  advanceAmount?: number;
   remarks?: string;
   items: QuotationItemInput[];
 }
@@ -43,6 +45,7 @@ export interface UpdateQuotationInput {
   discount?: number;
   cgstPercent?: number;
   sgstPercent?: number;
+  advanceAmount?: number;
   remarks?: string;
   manualCustomer?: ManualCustomerInput;
   items?: QuotationItemInput[];

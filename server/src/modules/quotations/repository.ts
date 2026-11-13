@@ -37,13 +37,13 @@ const quotationBaseSelect = {
   sgstPercent: true,
   tax: true,
   totalAmount: true,
+  advanceAmount: true,
   status: true,
   pdfPath: true,
   createdAt: true,
   // Drives the "Last Updated" column the enquiry's quotation table requires
   // ("md files/Enquiry/enq.md" §9).
   updatedAt: true,
-  advanceAmount: true,
   manualCustomerName: true,
   manualPhone: true,
   manualWhatsapp: true,
@@ -55,6 +55,7 @@ const quotationBaseSelect = {
       id: true,
       enquiryNumber: true,
       status: true,
+      advanceAmount: true,
       prospectName: true,
       prospectMobile: true,
       prospectWhatsapp: true,
@@ -393,8 +394,8 @@ interface CreateQuotationData {
   sgstPercent: number;
   tax: number;
   totalAmount: number;
-  remarks?: string;
   advanceAmount?: number;
+  remarks?: string;
   createdById: number;
   items: QuotationItemWithAmount[];
 }
@@ -434,8 +435,8 @@ export function createQuotation(data: CreateQuotationData, client: PrismaClientO
       sgstPercent: data.sgstPercent,
       tax: data.tax,
       totalAmount: data.totalAmount,
-      remarks: data.remarks,
       advanceAmount: data.advanceAmount,
+      remarks: data.remarks,
       createdById: data.createdById,
       status: QuotationStatus.DRAFT,
       items: { create: itemCreateInput(data.items) },
@@ -456,8 +457,8 @@ interface UpdateQuotationData {
   sgstPercent?: number;
   tax?: number;
   totalAmount?: number;
-  remarks?: string;
   advanceAmount?: number;
+  remarks?: string;
   manualCustomer?: ManualCustomerData;
 }
 
@@ -481,8 +482,8 @@ export async function updateQuotation(
       sgstPercent: data.sgstPercent,
       tax: data.tax,
       totalAmount: data.totalAmount,
-      remarks: data.remarks,
       advanceAmount: data.advanceAmount,
+      remarks: data.remarks,
       ...(data.manualCustomer
         ? {
             manualCustomerName: data.manualCustomer.name,

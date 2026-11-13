@@ -1,5 +1,7 @@
 import type { QuotationItemInput } from '../../types/quotation';
 
+import type { RentalItem } from '../../types/rent';
+
 // The item rows of a quotation being composed outside the full Quotation form — held as plain
 // strings so a half-typed row ("2", "") is representable while the user is still typing, and
 // converted to the API's numeric shape only at submit time.
@@ -13,7 +15,7 @@ export interface QuotationDraftItem {
   rate: string;
 }
 
-export const EMPTY_QUOTATION_DRAFT_ITEM: QuotationDraftItem = { itemName: '', quantity: '', rate: '' };
+export const EMPTY_QUOTATION_DRAFT_ITEM: QuotationDraftItem = { itemName: '', quantity: '1', rate: '' };
 
 export interface QuotationDraftTotals {
   cgstPercent: number;
@@ -65,6 +67,33 @@ export function editQuotationDraftItem(
 /** The last row is the one being typed into, so it is never removable — there is always one row. */
 export function removeQuotationDraftItem(items: QuotationDraftItem[], index: number): QuotationDraftItem[] {
   return items.length > 1 ? items.filter((_, i) => i !== index) : items;
+}
+
+/**
+ * Applies a pick from the stock item master, seeding the row's rate from the master's default.
+ */
+export function applyRentalItemToQuotationDraft(
+  items: QuotationDraftItem[],
+  index: number,
+  master: RentalItem | null,
+): QuotationDraftItem[] {
+  const next = items.map((item, i) => {
+    if (i !== index) return item;
+    if (!master) return item;
+    return {
+      ...item,
+      itemName: master.itemName,
+      rate:
+        item.rate === '' && master.defaultRentRate !== null
+          ? String(Number(master.defaultRentRate))
+          : item.rate,
+    };
+  });
+
+  if (master && index === items.length - 1) {
+    next.push({ ...EMPTY_QUOTATION_DRAFT_ITEM });
+  }
+  return next;
 }
 
 export type QuotationDraftItemsResult =

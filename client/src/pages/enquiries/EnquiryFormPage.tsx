@@ -144,6 +144,15 @@ const INITIAL_STATUS_OPTIONS: InitialEnquiryStatus[] = [
   'ORDER_LOST',
 ];
 
+// The status field sits near the bottom of the form, where MUI otherwise shifts the menu up over
+// the trigger to keep it in the viewport — putting the first option (Draft) under the pointer, so a
+// slightly slower click selects it on release. Anchoring the menu above the trigger keeps the
+// options clear of the field.
+const STATUS_MENU_PROPS = {
+  anchorOrigin: { vertical: 'top', horizontal: 'left' },
+  transformOrigin: { vertical: 'bottom', horizontal: 'left' },
+} as const;
+
 function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatusSectionProps) {
   // masters/user.md §Enquiries — Change Status and Convert to Order are permissions of their own.
   // Confirming an enquiry is what creates the order, so that one option needs the second permission.
@@ -199,6 +208,7 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
               }}
               helperText="Enquiries usually start as Pending. Choosing Order Confirmed here creates the customer record straight away."
               sx={{ gridColumn: '1 / -1' }}
+              slotProps={{ select: { MenuProps: STATUS_MENU_PROPS } }}
             >
               {statusOptions}
             </TextField>
@@ -242,6 +252,7 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
                   : 'Select a new status — it is applied when you save this enquiry.'
             }
             sx={{ gridColumn: '1 / -1' }}
+            slotProps={{ select: { MenuProps: STATUS_MENU_PROPS } }}
           >
             {statusOptions}
           </TextField>
@@ -620,6 +631,7 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
             email: enquiry.prospect?.email ?? null,
             address: enquiry.prospect?.address ?? null,
             eventDate: enquiry.eventDate,
+            advanceAmount: enquiry.advanceAmount,
           }}
           onClose={() => setQuotationDialogFor(null)}
           onSaved={() => setQuotationDialogFor(null)}
@@ -880,12 +892,16 @@ export default function EnquiryFormPage() {
   const seededEnquiryId = useRef<number | null>(null);
   // The stored Final Budget the field currently reflects — see the re-sync effect below.
   const syncedFinalBudget = useRef<string | null>(null);
+  // The stored Advance the field currently reflects. Saving an enquiry-sourced quotation syncs the
+  // quotation's advance back onto the enquiry, so the Final Budget field has to follow that write.
+  const syncedAdvanceAmount = useRef<string | null>(null);
 
   useEffect(() => {
     if (!existingEnquiry) return;
     if (seededEnquiryId.current === existingEnquiry.id) return;
     seededEnquiryId.current = existingEnquiry.id;
     syncedFinalBudget.current = existingEnquiry.finalBudgetAmount ?? '';
+    syncedAdvanceAmount.current = existingEnquiry.advanceAmount ?? '';
     // A prospect enquiry (no Customer row yet) is edited like a NEW customer — its details live in
     // the `prospect` block and stay editable. A linked enquiry's customer is fixed (EXISTING).
     const isProspect = existingEnquiry.customer.id === null;
@@ -944,6 +960,16 @@ export default function EnquiryFormPage() {
     if (dirtyFields.finalBudgetAmount) return;
     setValue('finalBudgetAmount', stored);
   }, [existingEnquiry, dirtyFields.finalBudgetAmount, setValue]);
+
+  // Same idea for the advance: a quotation saved from the dialog syncs its advance onto the
+  // enquiry server-side, so mirror that write here rather than leaving the Final Budget field stale.
+  useEffect(() => {
+    if (!existingEnquiry || seededEnquiryId.current !== existingEnquiry.id) return;
+    const stored = existingEnquiry.advanceAmount ?? '';
+    if (syncedAdvanceAmount.current === stored) return;
+    syncedAdvanceAmount.current = stored;
+    setValue('advanceAmount', stored);
+  }, [existingEnquiry, setValue]);
 
   const customerType = watch('customerType');
   const mobileValue = watch('mobile');
@@ -1097,6 +1123,7 @@ export default function EnquiryFormPage() {
           cgstAmount={quotationTotals.cgstAmount}
           sgstAmount={quotationTotals.sgstAmount}
           total={quotationTotals.total}
+          advanceAmount={Number(advanceAmountValue) || 0}
           images={quotationImageUrls}
         />
       </Box>
@@ -1168,17 +1195,16 @@ export default function EnquiryFormPage() {
         }
         queryClient.invalidateQueries({ queryKey: ['enquiries'] });
         queryClient.invalidateQueries({ queryKey: ['enquiry', id] });
+        // Editing the enquiry can move the quotation's event/customer details and the advance, so
+        // anything cached for the record we're returning to has to be re-read.
+        queryClient.invalidateQueries({ queryKey: ['quotation'] });
+        queryClient.invalidateQueries({ queryKey: ['quotations'] });
+        queryClient.invalidateQueries({ queryKey: ['quotations-grouped'] });
         if (statusChanged) {
           // Confirming raises the order and its tracker row, so those lists are refreshed too.
           queryClient.invalidateQueries({ queryKey: ['enquiry-timeline', id] });
           queryClient.invalidateQueries({ queryKey: ['orders'] });
           queryClient.invalidateQueries({ queryKey: ['payment-tracker'] });
-        }
-        // Editing an enquiry can move the quotation's event/customer details, so anything cached for
-        // the record we're returning to has to be re-read.
-        if (returnTo) {
-          queryClient.invalidateQueries({ queryKey: ['quotation'] });
-          queryClient.invalidateQueries({ queryKey: ['quotations-grouped'] });
         }
         showToast(
           statusChanged
@@ -1203,6 +1229,7 @@ export default function EnquiryFormPage() {
           enquiryId: created.id,
           cgstPercent: quotationTotals.cgstPercent,
           sgstPercent: quotationTotals.sgstPercent,
+          advanceAmount: Number(advanceAmountValue) || 0,
           items: quotationItemsInput,
         });
         if (quotationImages.length) {

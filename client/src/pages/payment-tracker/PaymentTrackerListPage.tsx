@@ -191,28 +191,10 @@ export default function PaymentTrackerListPage() {
   // carried over from whatever is on screen, so switching off a named window narrows the range instead
   // of half-clearing it.
   function applyCustomBound(patch: { from?: Dayjs | null; to?: Dayjs | null }) {
-    patchParams({
-      from: patch.from !== undefined ? patch.from : customFrom,
-      to: patch.to !== undefined ? patch.to : customTo,
-      range: null,
-    });
-  }
-
-  // Any filter change sends the user back to page 1 — staying on page 7 of a result set that just
-  // shrank to 2 pages would show an empty table. `page`/`limit` patches opt out of that reset.
-  function patchParams(patch: Record<string, string | null>) {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        Object.entries(patch).forEach(([key, value]) => {
-          if (value === null || value === '') next.delete(key);
-          else next.set(key, value);
-        });
-        if (!('page' in patch)) next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
+    if (patch.from !== undefined) setCustomFrom(patch.from);
+    if (patch.to !== undefined) setCustomTo(patch.to);
+    setDateRange(CUSTOM_DATE_RANGE);
+    setPage(1);
   }
 
   // Everything currently narrowing the list, as individually removable chips — so an unexpected
@@ -350,7 +332,7 @@ export default function PaymentTrackerListPage() {
         <span
           className={`tw-tabular-nums tw-font-semibold ${
             Number(row.paidAmount) > 0 ? 'tw-text-success' : 'tw-text-ink dark:tw-text-ink-dark'}
-          }
+          `}
         >
           {formatCurrency(row.paidAmount)}
         </span>
@@ -460,7 +442,6 @@ export default function PaymentTrackerListPage() {
             </span>
           )
         }
-        titleAdornmentAlign="right"
         actions={
           <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5 sm:tw-gap-2">
             <Button
@@ -484,7 +465,7 @@ export default function PaymentTrackerListPage() {
           value={formatCurrency(stats?.totalExpectedAmount ?? 0)}
           icon={<SavingsIcon />}
           tone="cyan"
-          subtext={stats?.totalOrders > 0 ? `${stats.totalOrders} orders` : ''}
+          subtext={stats?.totalOrders ? `${stats.totalOrders} orders` : ''}
         />
         <StatCard
           label="Collected Amount"
@@ -586,7 +567,7 @@ export default function PaymentTrackerListPage() {
                       label="Event Date From"
                       margin="none"
                       value={customFrom}
-                      onChange={(value) => applyDateRange({ from: value })}
+                      onChange={(value) => applyCustomBound({ from: value })}
                     />
                   </div>
                   <div className="tw-flex-1">
@@ -595,7 +576,7 @@ export default function PaymentTrackerListPage() {
                       margin="none"
                       minDate={customFrom ?? undefined}
                       value={customTo}
-                      onChange={(value) => applyDateRange({ to: value })}
+                      onChange={(value) => applyCustomBound({ to: value })}
                     />
                   </div>
                 </div>
@@ -636,6 +617,8 @@ export default function PaymentTrackerListPage() {
           rows={data?.records ?? []}
           getRowId={(row) => row.id}
           meta={data?.meta}
+          loading={isLoading}
+          canExport={canExport}
           page={page}
           limit={limit}
           fixedLayout
@@ -661,12 +644,8 @@ export default function PaymentTrackerListPage() {
             action:
               activeFilters.length > 0 ? (
                 <Button onClick={resetFilters}>Reset Filters</Button>
-              ) : canCreate ? (
-                <Button variant="primary" startIcon={<AddIcon fontSize="small" />} onClick={() => navigate('/payment-tracker/new')}>
-                  Create Payment
-                </Button>
               ) : undefined,
-          )}
+          }}
         />
       ) : (
         <p className="tw-mt-2 tw-text-sm tw-text-ink-muted dark:tw-text-ink-dark-muted">

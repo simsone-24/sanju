@@ -228,6 +228,7 @@ CREATE TABLE `quotations` (
     `sgst_percent` DECIMAL(5, 2) NOT NULL DEFAULT 0,
     `tax` DECIMAL(12, 2) NOT NULL DEFAULT 0,
     `total_amount` DECIMAL(12, 2) NOT NULL,
+    `advance_amount` DECIMAL(12, 2) NULL,
     `remarks` TEXT NULL,
     `status` ENUM('DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'REVISED') NOT NULL DEFAULT 'DRAFT',
     `pdf_path` VARCHAR(191) NULL,

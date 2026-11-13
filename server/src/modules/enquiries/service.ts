@@ -2,6 +2,7 @@ import { EnquiryStatus, SequenceType } from '@prisma/client';
 import * as customersRepository from '../customers/repository';
 import * as customersService from '../customers/service';
 import * as ordersService from '../orders/service';
+import * as quotationsService from '../quotations/service';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
 import { AppError } from '../../utils/AppError';
 import { logActivity } from '../../utils/activityLogger';
@@ -314,6 +315,12 @@ export async function update(actor: AuthenticatedUser, id: number, input: Update
     description: `Enquiry "${existingEnquiry.enquiryNumber}" updated.`,
     performedById: actor.id,
   });
+
+  // The enquiry's Advance and the quotation's Advance are one figure. Mirror the edit onto the
+  // current quotation (and its PDF) before the order sync below seeds any opening receipt from it.
+  if (input.advanceAmount !== undefined) {
+    await quotationsService.syncAdvanceFromEnquiry(companyId, id, input.advanceAmount, actor.id);
+  }
 
   // The enquiry's money is the order's money: correcting the Final Budget or Advance after the
   // enquiry was already confirmed has to reach the order and its Payment Tracker, not just sit on

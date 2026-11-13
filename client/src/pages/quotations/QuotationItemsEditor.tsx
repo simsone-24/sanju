@@ -1,5 +1,6 @@
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
+  Autocomplete,
   Box,
   IconButton,
   Stack,
@@ -14,8 +15,11 @@ import {
   useMediaQuery,
   type Theme,
 } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import * as rentService from '../../services/rentService';
 import { formatCurrency } from '../../utils/format';
 import {
+  applyRentalItemToQuotationDraft,
   editQuotationDraftItem,
   removeQuotationDraftItem,
   type QuotationDraftItem,
@@ -62,6 +66,14 @@ export function QuotationItemsEditor({
   // The customer's outstanding balance: the tax-inclusive total less whatever was paid up front.
   const grandTotal = totals.total - advance;
 
+  // Stock Items master for autocomplete suggestions
+  const { data: stockItems } = useQuery({
+    queryKey: ['rent-items-active'],
+    queryFn: () => rentService.listItems({ page: 1, limit: 500, status: 'ACTIVE' }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const stockItemOptions = stockItems?.records ?? [];
+
   return (
     <Box>
       {isMobile ? (
@@ -76,13 +88,31 @@ export function QuotationItemsEditor({
                 sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, display: 'grid', gap: 1.5 }}
               >
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                  <TextField
+                  <Autocomplete
+                    freeSolo
                     size="small"
                     fullWidth
-                    label="Item"
-                    placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
-                    value={item.itemName}
-                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'itemName', event.target.value))}
+                    options={stockItemOptions}
+                    getOptionLabel={(option) => (typeof option === 'string' ? option : option.itemName)}
+                    inputValue={item.itemName}
+                    onChange={(_event, value) => {
+                      if (typeof value === 'string') {
+                        onItemsChange(editQuotationDraftItem(items, index, 'itemName', value));
+                      } else {
+                        onItemsChange(applyRentalItemToQuotationDraft(items, index, value));
+                      }
+                    }}
+                    onInputChange={(_event, value, reason) => {
+                      if (reason === 'reset') return;
+                      onItemsChange(editQuotationDraftItem(items, index, 'itemName', value));
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Item"
+                        placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
+                      />
+                    )}
                   />
                   {canDelete && (
                     <IconButton
@@ -98,19 +128,30 @@ export function QuotationItemsEditor({
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5 }}>
                   <TextField
                     size="small"
-                    type="number"
                     label="Quantity"
                     value={item.quantity}
-                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'quantity', event.target.value))}
-                    slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                    onChange={(event) =>
+                      onItemsChange(
+                        editQuotationDraftItem(items, index, 'quantity', event.target.value.replace(/[^0-9]/g, ''))
+                      )
+                    }
+                    slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right' } } }}
                   />
                   <TextField
                     size="small"
-                    type="number"
                     label="Unit Price"
                     value={item.rate}
-                    onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'rate', event.target.value))}
-                    slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                    onChange={(event) =>
+                      onItemsChange(
+                        editQuotationDraftItem(
+                          items,
+                          index,
+                          'rate',
+                          event.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+                        )
+                      )
+                    }
+                    slotProps={{ htmlInput: { inputMode: 'decimal', style: { textAlign: 'right' } } }}
                   />
                 </Box>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -150,32 +191,60 @@ export function QuotationItemsEditor({
               return (
                 <TableRow key={index}>
                   <TableCell>
-                    <TextField
+                    <Autocomplete
+                      freeSolo
                       size="small"
-                      fullWidth
-                      placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
-                      value={item.itemName}
-                      onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'itemName', event.target.value))}
+                      options={stockItemOptions}
+                      getOptionLabel={(option) => (typeof option === 'string' ? option : option.itemName)}
+                      inputValue={item.itemName}
+                      onChange={(_event, value) => {
+                        if (typeof value === 'string') {
+                          onItemsChange(editQuotationDraftItem(items, index, 'itemName', value));
+                        } else {
+                          onItemsChange(applyRentalItemToQuotationDraft(items, index, value));
+                        }
+                      }}
+                      onInputChange={(_event, value, reason) => {
+                        if (reason === 'reset') return;
+                        onItemsChange(editQuotationDraftItem(items, index, 'itemName', value));
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
+                        />
+                      )}
                     />
                   </TableCell>
                   <TableCell align="right">
                     <TextField
                       size="small"
-                      type="number"
                       fullWidth
                       value={item.quantity}
-                      onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'quantity', event.target.value))}
-                      slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                      onChange={(event) =>
+                        onItemsChange(
+                          editQuotationDraftItem(items, index, 'quantity', event.target.value.replace(/[^0-9]/g, ''))
+                        )
+                      }
+                      slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right' } } }}
                     />
                   </TableCell>
                   <TableCell align="right">
                     <TextField
                       size="small"
-                      type="number"
                       fullWidth
                       value={item.rate}
-                      onChange={(event) => onItemsChange(editQuotationDraftItem(items, index, 'rate', event.target.value))}
-                      slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                      onChange={(event) =>
+                        onItemsChange(
+                          editQuotationDraftItem(
+                            items,
+                            index,
+                            'rate',
+                            event.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+                          )
+                        )
+                      }
+                      slotProps={{ htmlInput: { inputMode: 'decimal', style: { textAlign: 'right' } } }}
                     />
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>

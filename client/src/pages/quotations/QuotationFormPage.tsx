@@ -42,6 +42,7 @@ import QuotationPreview from './QuotationPreview';
 import * as customerService from '../../services/customerService';
 import * as enquiryService from '../../services/enquiryService';
 import * as quotationService from '../../services/quotationService';
+import * as rentService from '../../services/rentService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
 import type { CustomerOption } from '../../types/masters';
@@ -63,7 +64,7 @@ import {
 } from '../../validation/quotationSchemas';
 import { ImageThumb } from './ImageThumb';
 
-const EMPTY_ITEM = { itemName: '', quantity: '', rate: '' };
+const EMPTY_ITEM = { itemName: '', quantity: '1', rate: '' };
 
 const SOURCE_LABELS: Record<QuotationFormSource, { label: string; hint: string }> = {
   ENQUIRY: { label: 'Existing Enquiry', hint: 'Price an enquiry already in the pipeline. The quotation is versioned against it.' },
@@ -157,6 +158,7 @@ export default function QuotationFormPage() {
       quotationDate: todayISO(),
       cgstPercent: '',
       sgstPercent: '',
+      advanceAmount: '',
       items: [{ ...EMPTY_ITEM }],
     },
   });
@@ -165,6 +167,8 @@ export default function QuotationFormPage() {
 
   const source = watch('source');
   const status = watch('status');
+  // The date as it will print — the editable Event Date field, not the enquiry's own event date.
+  const quotationDateValue = watch('quotationDate');
   // REVISED describes a quotation superseded by a newer revision, so it is only meaningful on one
   // that already exists.
   const statusOptions = isEdit ? QUOTATION_EDIT_STATUSES : QUOTATION_CREATE_STATUSES;
@@ -183,6 +187,14 @@ export default function QuotationFormPage() {
     enabled: !detailsLocked && source === 'CUSTOMER',
     placeholderData: (previous) => previous,
   });
+
+  // Stock Items master for autocomplete suggestions in the items table.
+  const { data: stockItems } = useQuery({
+    queryKey: ['rent-items-active'],
+    queryFn: () => rentService.listItems({ page: 1, limit: 500, status: 'ACTIVE' }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const stockItemOptions = stockItems?.records ?? [];
 
   // Preselect when opened from a record's context (?enquiryId=... / ?customerId=...).
   useEffect(() => {
@@ -215,8 +227,34 @@ export default function QuotationFormPage() {
     enabled: !isEdit && source === 'CUSTOMER' && Boolean(selectedCustomerId),
   });
 
+  // The quotation prints its date as the event date: picking an enquiry pre-fills it from the
+  // enquiry's own event date (skipped in edit mode, where the saved date must stay untouched).
+  // Picking a different enquiry re-fills it, and a manual edit after that sticks.
+  useEffect(() => {
+    if (isEdit || !selectedEnquiry?.eventDate) return;
+    setValue('quotationDate', selectedEnquiry.eventDate.slice(0, 10));
+  }, [selectedEnquiry, isEdit, setValue]);
+
+  // A new enquiry-sourced quotation starts from the enquiry's Final Budget advance, so the two
+  // figures match until the user deliberately changes the quotation.
+  useEffect(() => {
+    if (isEdit || !selectedEnquiry) return;
+    const advance = selectedEnquiry.advanceAmount;
+    setValue('advanceAmount', advance && Number(advance) > 0 ? advance : '');
+  }, [selectedEnquiry, isEdit, setValue]);
+
   useEffect(() => {
     if (!existingQuotation) return;
+    // A quotation that never carried an advance inherits the linked enquiry's Final Budget advance,
+    // so editing it cannot silently reset that figure to zero when the form is saved.
+    const storedAdvance = existingQuotation.advanceAmount;
+    const enquiryAdvance = existingQuotation.link.enquiry?.advanceAmount ?? null;
+    const seedAdvanceAmount =
+      storedAdvance && Number(storedAdvance) > 0
+        ? storedAdvance
+        : enquiryAdvance && Number(enquiryAdvance) > 0
+          ? enquiryAdvance
+          : '';
     reset({
       // The picker is hidden in edit mode (the customer of a saved quotation can't change), so
       // this only seeds the field. ORDER-sourced quotations aren't raised from this form and fall
@@ -238,6 +276,7 @@ export default function QuotationFormPage() {
       quotationDate: existingQuotation.quotationDate.slice(0, 10),
       cgstPercent: Number(existingQuotation.cgstPercent) > 0 ? existingQuotation.cgstPercent : '',
       sgstPercent: Number(existingQuotation.sgstPercent) > 0 ? existingQuotation.sgstPercent : '',
+      advanceAmount: seedAdvanceAmount,
       items: existingQuotation.items.map((item) => ({
         itemName: item.itemName,
         quantity: item.quantity,
@@ -250,6 +289,7 @@ export default function QuotationFormPage() {
   const items = (useWatch({ control, name: 'items' }) ?? []) as QuotationFormValues['items'];
   const cgstValue = watch('cgstPercent');
   const sgstValue = watch('sgstPercent');
+  const advanceValue = watch('advanceAmount');
 
   const itemsSubtotal = items.reduce(
     (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0),
@@ -260,6 +300,9 @@ export default function QuotationFormPage() {
   const cgstAmount = Math.round(((itemsSubtotal * cgstPercentNum) / 100) * 100) / 100;
   const sgstAmount = Math.round(((itemsSubtotal * sgstPercentNum) / 100) * 100) / 100;
   const grandTotal = itemsSubtotal + cgstAmount + sgstAmount;
+  // The advance is what the customer commits up front, so it is shown against the grand total —
+  // the same presentation QuotationItemsEditor uses on the enquiry's quotation draft.
+  const advanceAmount = Math.min(Math.max(Number(advanceValue) || 0, 0), grandTotal);
 
   // Object URLs for previewing staged (not-yet-uploaded) images; revoked when the set changes.
   const stagedUrls = useMemo(() => stagedImages.map((file) => URL.createObjectURL(file)), [stagedImages]);
@@ -470,6 +513,7 @@ export default function QuotationFormPage() {
           quotationDate: values.quotationDate || undefined,
           cgstPercent,
           sgstPercent,
+          advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : 0,
           items: itemsInput,
           ...(existingQuotation?.source === 'MANUAL' ? { manualCustomer } : {}),
         });
@@ -486,6 +530,7 @@ export default function QuotationFormPage() {
           quotationDate: values.quotationDate || undefined,
           cgstPercent,
           sgstPercent,
+          advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : 0,
           items: itemsInput,
         });
         if (stagedImages.length) {
@@ -604,13 +649,7 @@ export default function QuotationFormPage() {
           company={branding}
           recipient={previewRecipient}
           quotationNumber={existingQuotation?.quotationNumber ?? 'Auto-generated'}
-          quotationDate={
-            existingQuotation?.event?.eventDate
-              ? formatDate(existingQuotation.event.eventDate)
-              : selectedEnquiry?.eventDate
-                ? formatDate(selectedEnquiry.eventDate)
-                : ''
-          }
+          quotationDate={quotationDateValue ? formatDate(quotationDateValue) : ''}
           items={items
             .filter((item) => item.itemName.trim() !== '')
             .map((item) => ({
@@ -625,6 +664,7 @@ export default function QuotationFormPage() {
           cgstAmount={cgstAmount}
           sgstAmount={sgstAmount}
           total={grandTotal}
+          advanceAmount={advanceAmount}
           images={isEdit ? (existingQuotation?.images ?? []).map((image) => getPublicAssetUrl(image.filePath)) : stagedUrls}
         />
       </Box>
@@ -886,14 +926,20 @@ export default function QuotationFormPage() {
           </>
         )}
 
-        {selectedEnquiry?.eventDate && (
-          <TextField
-            label="Event Date"
-            value={formatDate(selectedEnquiry.eventDate)}
-            fullWidth
-            slotProps={{ input: { readOnly: true } }}
-          />
-        )}
+        <Controller
+          name="quotationDate"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Event Date"
+              type="date"
+              fullWidth
+              helperText="The date printed on the quotation. Pre-filled from the enquiry's event date."
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          )}
+        />
 
         <Controller
           name="status"
@@ -998,17 +1044,42 @@ export default function QuotationFormPage() {
                           name={`items.${index}.itemName` as const}
                           control={control}
                           render={({ field: f }) => (
-                            <TextField
-                              {...f}
-                              onChange={(event) => {
-                                f.onChange(event);
-                                maybeAppendRow(index, event.target.value);
-                              }}
+                            <Autocomplete
+                              freeSolo
                               size="small"
-                              fullWidth
-                              placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
-                              onKeyDown={(event) => handleItemKeyDown(event, index)}
-                              slotProps={{ htmlInput: { 'data-item-input': index } }}
+                              options={stockItemOptions}
+                              getOptionLabel={(option) =>
+                                typeof option === 'string' ? option : option.itemName
+                              }
+                              inputValue={f.value}
+                              onChange={(_event, value) => {
+                                const name = typeof value === 'string' ? value : (value?.itemName ?? '');
+                                f.onChange(name);
+                                maybeAppendRow(index, name);
+                                // Auto-fill rate from the stock item's default rent rate
+                                if (value && typeof value !== 'string' && value.defaultRentRate !== null) {
+                                  setValue(`items.${index}.rate`, String(Number(value.defaultRentRate)), { shouldDirty: true });
+                                }
+                              }}
+                              onInputChange={(_event, value, reason) => {
+                                if (reason === 'reset') return;
+                                f.onChange(value);
+                                maybeAppendRow(index, value);
+                              }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item name'}
+                                  onKeyDown={(event) => handleItemKeyDown(event, index)}
+                                  slotProps={{
+                                    ...params.slotProps,
+                                    htmlInput: {
+                                      ...params.slotProps.htmlInput,
+                                      'data-item-input': index,
+                                    },
+                                  }}
+                                />
+                              )}
                             />
                           )}
                         />
@@ -1021,10 +1092,13 @@ export default function QuotationFormPage() {
                             <TextField
                               {...f}
                               size="small"
-                              type="number"
                               fullWidth
+                              onChange={(event) => {
+                                const val = event.target.value.replace(/[^0-9]/g, '');
+                                f.onChange(val);
+                              }}
                               onKeyDown={(event) => handleItemKeyDown(event, index)}
-                              slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                              slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right' } } }}
                             />
                           )}
                         />
@@ -1037,10 +1111,13 @@ export default function QuotationFormPage() {
                             <TextField
                               {...f}
                               size="small"
-                              type="number"
                               fullWidth
+                              onChange={(event) => {
+                                const val = event.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                                f.onChange(val);
+                              }}
                               onKeyDown={(event) => handleItemKeyDown(event, index)}
-                              slotProps={{ htmlInput: { style: { textAlign: 'right' }, min: 0 } }}
+                              slotProps={{ htmlInput: { inputMode: 'decimal', style: { textAlign: 'right' } } }}
                             />
                           )}
                         />
@@ -1090,6 +1167,14 @@ export default function QuotationFormPage() {
                 slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
                 {...register('sgstPercent')}
               />
+              <TextField
+                label="Advance Amount"
+                type="number"
+                size="small"
+                sx={{ width: 170 }}
+                slotProps={{ htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right' } } }}
+                {...register('advanceAmount')}
+              />
             </Stack>
             <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -1119,10 +1204,20 @@ export default function QuotationFormPage() {
                 </Typography>
               </Stack>
             )}
+            {advanceAmount > 0 && (
+              <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Advance
+                </Typography>
+                <Typography variant="body2" sx={{ minWidth: 140, textAlign: 'right' }}>
+                  - {formatCurrency(advanceAmount)}
+                </Typography>
+              </Stack>
+            )}
             <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', alignItems: 'baseline', gap: 1 }}>
               <Typography variant="h4">Grand Total</Typography>
               <Typography variant="h4" sx={{ minWidth: 140, textAlign: 'right' }}>
-                {formatCurrency(grandTotal)}
+                {formatCurrency(grandTotal - advanceAmount)}
               </Typography>
             </Stack>
           </Stack>

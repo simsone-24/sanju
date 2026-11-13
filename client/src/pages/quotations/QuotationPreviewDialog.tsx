@@ -87,7 +87,7 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
   const sgstPercent = quotation ? Number(quotation.sgstPercent) : 0;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
         <Box>
           <Typography variant="h4">
@@ -114,7 +114,7 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
             company={branding}
             recipient={quotation.recipient}
             quotationNumber={`${quotation.quotationNumber} (v${quotation.version})`}
-            quotationDate={quotation.event?.eventDate ? formatDate(quotation.event.eventDate) : ''}
+            quotationDate={formatDate(quotation.quotationDate)}
             items={quotation.items.map((item) => ({
               itemName: item.itemName,
               quantity: Number(item.quantity),
@@ -127,6 +127,7 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
             cgstAmount={Math.round(((subtotal * cgstPercent) / 100) * 100) / 100}
             sgstAmount={Math.round(((subtotal * sgstPercent) / 100) * 100) / 100}
             total={Number(quotation.totalAmount)}
+            advanceAmount={Number(quotation.advanceAmount ?? 0)}
             images={quotation.images.map((image) => getPublicAssetUrl(image.filePath))}
           />
         )}

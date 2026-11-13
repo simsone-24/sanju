@@ -111,6 +111,7 @@ function mapBase(record: QuotationBaseRecord) {
     sgstPercent: record.sgstPercent,
     tax: record.tax,
     totalAmount: record.totalAmount,
+    advanceAmount: record.advanceAmount,
     status: record.status,
     pdfPath: record.pdfPath,
     createdAt: record.createdAt,
@@ -119,7 +120,12 @@ function mapBase(record: QuotationBaseRecord) {
     owner: buildOwner(record),
     link: {
       enquiry: record.enquiry
-        ? { id: record.enquiry.id, enquiryNumber: record.enquiry.enquiryNumber, status: record.enquiry.status }
+        ? {
+            id: record.enquiry.id,
+            enquiryNumber: record.enquiry.enquiryNumber,
+            status: record.enquiry.status,
+            advanceAmount: record.enquiry.advanceAmount,
+          }
         : null,
       customer: record.customer ? { id: record.customer.id, customerName: record.customer.customerName } : null,
       order: record.sourceOrder ? { id: record.sourceOrder.id, orderNumber: record.sourceOrder.orderNumber } : null,
@@ -176,7 +182,6 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       quotationNumber: record.quotationNumber,
       version: record.version,
       quotationDate: record.quotationDate,
-      eventDate: record.enquiry?.eventDate ?? null,
       status: record.status,
       recipient: snapshot,
       items: record.items.map((item) => ({
@@ -193,6 +198,7 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       sgstPercent: Number(record.sgstPercent),
       tax: Number(record.tax),
       totalAmount: Number(record.totalAmount),
+      advanceAmount: Number(record.advanceAmount ?? 0),
       remarks: record.remarks,
       imagePaths: record.images.map((image) => path.resolve(env.uploadPath, image.filePath)),
     },
@@ -466,6 +472,7 @@ export async function create(companyId: number, actorId: number, input: CreateQu
         sgstPercent,
         tax,
         totalAmount,
+        advanceAmount: input.advanceAmount ?? 0,
         remarks: input.remarks,
         createdById: actorId,
         items: itemsWithAmount,
@@ -479,7 +486,14 @@ export async function create(companyId: number, actorId: number, input: CreateQu
       // when they decide to, not as a side effect of raising a document.
       await enquiriesRepository.updateEnquiry(
         input.enquiryId!,
-        { quotationAmount: totalAmount, quotationVersion: version },
+        {
+          quotationAmount: totalAmount,
+          quotationVersion: version,
+          // The quotation's advance is the same figure the Final Budget section shows, so keep the
+          // enquiry in step when the caller supplied one. Omitted values leave the stored advance
+          // untouched (older clients that do not know the field yet).
+          ...(input.advanceAmount !== undefined ? { advanceAmount: input.advanceAmount } : {}),
+        },
         tx,
       );
     }
@@ -543,6 +557,7 @@ export async function update(companyId: number, actorId: number, id: number, inp
   const taxable = subtotal - discount;
   const tax = roundCurrency((taxable * cgstPercent) / 100) + roundCurrency((taxable * sgstPercent) / 100);
   const totalAmount = roundCurrency(subtotal - discount + tax);
+  const advanceAmount = input.advanceAmount ?? Number(existing.advanceAmount ?? 0);
 
   if (totalAmount < 0) {
     throw new AppError(400, 'Total amount cannot be negative. Check the discount amount.', [
@@ -561,6 +576,7 @@ export async function update(companyId: number, actorId: number, id: number, inp
         sgstPercent,
         tax,
         totalAmount,
+        advanceAmount,
         remarks: input.remarks,
         manualCustomer: input.manualCustomer,
       },
@@ -578,17 +594,17 @@ export async function update(companyId: number, actorId: number, id: number, inp
     if (existing.source === QuotationSource.ENQUIRY && existing.enquiry) {
       const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, existing.enquiry.id, tx);
       const isLatest = Boolean(latest && latest.id === id);
-      if (isLatest || isApproved) {
-        await enquiriesRepository.updateEnquiry(
-          existing.enquiry.id,
-          {
-            ...(isLatest ? { quotationAmount: totalAmount, quotationVersion: existing.version } : {}),
-            // finalBudgetAmount is the combined total of every confirmed quotation (see approve()),
-            // so editing one of them has to re-sum rather than overwrite with this one's total.
-            ...(approvedTotal !== null ? { finalBudgetAmount: approvedTotal } : {}),
-          },
-          tx,
-        );
+      const enquiryChanges = {
+        ...(isLatest ? { quotationAmount: totalAmount, quotationVersion: existing.version } : {}),
+        // finalBudgetAmount is the combined total of every confirmed quotation (see approve()),
+        // so editing one of them has to re-sum rather than overwrite with this one's total.
+        ...(approvedTotal !== null ? { finalBudgetAmount: approvedTotal } : {}),
+        // The quotation advance is the same figure the enquiry's Final Budget shows; sync it back
+        // whenever the caller supplied one.
+        ...(input.advanceAmount !== undefined ? { advanceAmount: input.advanceAmount } : {}),
+      };
+      if (Object.keys(enquiryChanges).length > 0) {
+        await enquiriesRepository.updateEnquiry(existing.enquiry.id, enquiryChanges, tx);
       }
     }
 
@@ -825,6 +841,33 @@ export async function removeImage(companyId: number, actorId: number, quotationI
   });
 
   return mapDetail(refreshed ?? quotation);
+}
+
+// Mirrors an enquiry advance edit onto the enquiry's current (latest) quotation. Keeping the rule
+// server-side means every client sees the same figures without duplicating it, and older revisions
+// keep the advance they were sent with. No-ops when there is nothing to change.
+export async function syncAdvanceFromEnquiry(
+  companyId: number,
+  enquiryId: number,
+  advanceAmount: number,
+  actorId: number,
+) {
+  const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, enquiryId);
+  if (!latest || Number(latest.advanceAmount ?? 0) === advanceAmount) return null;
+
+  const updated = await quotationsRepository.updateQuotation(latest.id, { advanceAmount }, undefined);
+  await regeneratePdf(companyId, updated);
+
+  await logActivity({
+    companyId,
+    module: 'QUOTATIONS',
+    referenceId: updated.id,
+    action: 'UPDATE',
+    description: `Quotation "${updated.quotationNumber}" (v${updated.version}) advance synced from the enquiry.`,
+    performedById: actorId,
+  });
+
+  return updated;
 }
 
 // Returns an absolute filesystem path to the PDF, generating it on demand if it was never rendered

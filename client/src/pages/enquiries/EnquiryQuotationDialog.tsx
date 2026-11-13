@@ -57,6 +57,8 @@ interface EnquiryQuotationDialogProps {
     email: string | null;
     address: string | null;
     eventDate: string | null;
+    /** The enquiry's Final Budget advance, used to seed a new quotation so both stay in step. */
+    advanceAmount: string | null;
   } | null;
   /**
    * The quotation to edit. `null`/omitted composes a new one — the same dialog either way, so
@@ -84,6 +86,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   const [items, setItems] = useState<QuotationDraftItem[]>([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
   const [cgstPercent, setCgstPercent] = useState('');
   const [sgstPercent, setSgstPercent] = useState('');
+  const [advanceAmount, setAdvanceAmount] = useState('');
   const [quotationDate, setQuotationDate] = useState(todayISO);
   const [status, setStatus] = useState<QuotationStatus>('DRAFT');
   const [itemsError, setItemsError] = useState<string | null>(null);
@@ -97,6 +100,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   useEffect(() => () => stagedUrls.forEach((url) => URL.revokeObjectURL(url)), [stagedUrls]);
 
   const isEdit = Boolean(quotationId);
+  const enquiryAdvanceAmount = enquiry?.advanceAmount ?? null;
 
   // The quotation being edited. Shares the ['quotation', id] key with the Quotation view/form pages,
   // so an already-read quotation opens from cache.
@@ -123,6 +127,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       setItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
       setCgstPercent('');
       setSgstPercent('');
+      setAdvanceAmount(
+        enquiryAdvanceAmount && Number(enquiryAdvanceAmount) > 0 ? enquiryAdvanceAmount : '',
+      );
       setQuotationDate(todayISO());
       setStagedImages([]);
       setStatus('DRAFT');
@@ -144,12 +151,21 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
     ]);
     setCgstPercent(Number(existingQuotation.cgstPercent) ? existingQuotation.cgstPercent : '');
     setSgstPercent(Number(existingQuotation.sgstPercent) ? existingQuotation.sgstPercent : '');
+    // The quotation's own advance wins; a quotation that never carried one inherits the enquiry's
+    // Final Budget advance so editing it cannot quietly reset that figure to zero.
+    setAdvanceAmount(
+      existingQuotation.advanceAmount && Number(existingQuotation.advanceAmount) > 0
+        ? existingQuotation.advanceAmount
+        : enquiryAdvanceAmount && Number(enquiryAdvanceAmount) > 0
+          ? enquiryAdvanceAmount
+          : '',
+    );
     setQuotationDate(existingQuotation.quotationDate.slice(0, 10));
     setStatus(existingQuotation.status);
     setItemsError(null);
     setServerError(null);
     setPreviewOpen(true);
-  }, [open, quotationId, existingQuotation]);
+  }, [open, quotationId, existingQuotation, enquiryAdvanceAmount]);
 
   // REVISED is only offered on a quotation that already carries it — it is a state the server sets
   // when a revision supersedes one, not an ordinary pick.
@@ -253,6 +269,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
           quotationDate: quotationDate || undefined,
           cgstPercent: totals.cgstPercent,
           sgstPercent: totals.sgstPercent,
+          advanceAmount: Number(advanceAmount) || 0,
           items: parsed.items,
         });
         showToast(`Quotation ${updated.quotationNumber} updated.`);
@@ -268,6 +285,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
         quotationDate: quotationDate || undefined,
         cgstPercent: totals.cgstPercent,
         sgstPercent: totals.sgstPercent,
+        advanceAmount: Number(advanceAmount) || 0,
         items: parsed.items,
       });
       if (stagedImages.length) {
@@ -366,6 +384,8 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
               onSgstChange={setSgstPercent}
               totals={totals}
               error={itemsError}
+              advanceAmount={advanceAmount}
+              onAdvanceChange={setAdvanceAmount}
             />
 
             <Box>
@@ -444,6 +464,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   cgstAmount={totals.cgstAmount}
                   sgstAmount={totals.sgstAmount}
                   total={totals.total}
+                  advanceAmount={Number(advanceAmount) || 0}
                   images={
                     isEdit ? (existingQuotation?.images ?? []).map((image) => getPublicAssetUrl(image.filePath)) : stagedUrls
                   }

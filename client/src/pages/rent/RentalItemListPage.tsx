@@ -126,7 +126,7 @@ export default function RentalItemListPage() {
     },
     onSuccess: () => {
       invalidate();
-      showToast(editing ? 'Rental item updated.' : 'Rental item created.');
+      showToast(editing ? 'Stock item updated.' : 'Stock item created.');
       setEditing(null);
       setAddOpen(false);
     },
@@ -137,7 +137,7 @@ export default function RentalItemListPage() {
     try {
       await saveMutation.mutateAsync(values);
     } catch (error) {
-      setFormError(describeApiError(error, 'Unable to save the rental item. Please try again.'));
+      setFormError(describeApiError(error, 'Unable to save the stock item. Please try again.'));
     }
   });
 
@@ -145,10 +145,10 @@ export default function RentalItemListPage() {
     mutationFn: (itemId: number) => rentService.deleteItem(itemId),
     onSuccess: () => {
       invalidate();
-      showToast('Rental item deleted.');
+      showToast('Stock item deleted.');
       setDeleting(null);
     },
-    onError: (error) => setFormError(describeApiError(error, 'Unable to delete the rental item.')),
+    onError: (error) => setFormError(describeApiError(error, 'Unable to delete the stock item.')),
   });
 
   const columns: DataTableColumn<RentalItem>[] = [
@@ -179,7 +179,7 @@ export default function RentalItemListPage() {
     },
     {
       key: 'defaultRentRate',
-      header: 'Default Rate',
+      header: 'Item Rate',
       align: 'right',
       render: (row) => (row.defaultRentRate !== null ? formatCurrency(row.defaultRentRate) : '—'),
       exportValue: (row) => row.defaultRentRate ?? '',
@@ -232,7 +232,7 @@ export default function RentalItemListPage() {
   ];
 
   if (!canView) {
-    return <Typography color="text.secondary">You do not have access to view rental items.</Typography>;
+    return <Typography color="text.secondary">You do not have access to view stock items.</Typography>;
   }
 
   const drawerOpen = addOpen || Boolean(editing);
@@ -240,9 +240,9 @@ export default function RentalItemListPage() {
   return (
     <Box>
       <PageHeader
-        title="Rental Items"
+        title="Stock Items"
         subtitle="What you rent out, and the rate it usually goes out at"
-        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Rent', to: '/rent' }, { label: 'Rental Items' }]}
+        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Management' }, { label: 'Stock Items' }]}
         actions={
           canCreate && (
             <Button
@@ -253,7 +253,7 @@ export default function RentalItemListPage() {
                 setAddOpen(true);
               }}
             >
-              Add Rental Item
+              Add Stock Item
             </Button>
           )
         }
@@ -331,21 +331,21 @@ export default function RentalItemListPage() {
         refreshing={isFetching}
         emptyState={{
           icon: <CategoryOutlinedIcon sx={{ fontSize: 36 }} />,
-          title: 'No rental items yet',
+          title: 'No stock items yet',
           description: 'Add the chairs, tables, lights and props you rent out so stock outs can pick from them.',
           action: canCreate ? (
             <Button variant="contained" onClick={() => setAddOpen(true)}>
-              Add Rental Item
+              Add Stock Item
             </Button>
           ) : undefined,
         }}
-        exportFileName="rental-items"
+        exportFileName="stock-items"
         canExport={canExport}
       />
 
       <FormDrawer
         open={drawerOpen}
-        title={editing ? 'Edit Rental Item' : 'Add Rental Item'}
+        title={editing ? 'Edit Stock Item' : 'Add Stock Item'}
         subtitle="Physical stock levels are not tracked in this phase."
         onClose={() => {
           setEditing(null);
@@ -376,7 +376,7 @@ export default function RentalItemListPage() {
           {...form.register('category')}
         />
         <TextField
-          label="Default Rent Rate"
+          label="Item Rate"
           type="number"
           fullWidth
           margin="normal"
@@ -414,7 +414,7 @@ export default function RentalItemListPage() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Delete Rental Item?"
+        title="Delete Stock Item?"
         message={`Delete "${deleting?.itemName}"? This cannot be undone.`}
         danger
         loading={deleteMutation.isPending}

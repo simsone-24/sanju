@@ -83,7 +83,7 @@ as ids.
 source: 'ENQUIRY' | 'CUSTOMER' | 'ORDER' | 'MANUAL'
 enquiryId | customerId | orderId | manualCustomer   — required per source
 status?: 'DRAFT' | 'SENT' | 'APPROVED' | 'REJECTED'
-quotationDate?, discount?, cgstPercent?, sgstPercent?, remarks?
+quotationDate?, discount?, cgstPercent?, sgstPercent?, advanceAmount?, remarks?
 items: [{ itemName, description?, quantity > 0, unit?, rate ≥ 0, sortOrder? }]   min 1
 ```
 
@@ -114,6 +114,9 @@ items: [{ itemName, description?, quantity > 0, unit?, rate ≥ 0, sortOrder? }]
 - Customer details may only be edited on a `MANUAL` quotation — every other source reads its
   recipient from the linked record.
 - Total may not go negative (`400 Total amount cannot be negative. Check the discount amount.`).
+- `advance_amount` is the amount committed up front. It is shown as a deduction from the printed
+  total. For `ENQUIRY` quotations it is also written back to the enquiry's `advance_amount`, so the
+  enquiry's Final Budget advance and the quotation advance stay in step.
 - **PDF rendering is isolated** so a PDF failure never rolls back a successfully-saved quotation; the
   download route regenerates on demand.
 - The grouped list is stitched from two different queries and paginated in memory — the only way to

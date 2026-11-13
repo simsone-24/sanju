@@ -301,6 +301,7 @@ export default function QuotationDetailPage() {
   const taxable = subtotal - discount;
   const cgstAmount = Math.round(((taxable * cgstPercent) / 100) * 100) / 100;
   const sgstAmount = Math.round(((taxable * sgstPercent) / 100) * 100) / 100;
+  const advanceAmount = Number(quotation.advanceAmount ?? 0);
 
   const confirmCopy = CONFIRM_COPY[pendingAction ?? 'send'];
 
@@ -336,7 +337,7 @@ export default function QuotationDetailPage() {
               </span>
             </div>
             <p className="tw-mb-0 tw-mt-1 tw-text-[0.8125rem] tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              {quotation.event?.eventDate ? formatDate(quotation.event.eventDate) : 'Event date not set'}
+              {formatDate(quotation.quotationDate)}
               {enquiry ? ` · Enquiry ${enquiry.enquiryNumber}` : ''}
               {quotation.owner ? ` · ${quotation.owner.fullName}` : ''}
             </p>
@@ -622,12 +623,18 @@ export default function QuotationDetailPage() {
             {cgstPercent > 0 && <AmountRow label={`CGST (${cgstPercent}%)`} value={formatCurrency(cgstAmount)} />}
             {sgstPercent > 0 && <AmountRow label={`SGST (${sgstPercent}%)`} value={formatCurrency(sgstAmount)} />}
             {cgstPercent === 0 && sgstPercent === 0 && <AmountRow label="Tax" value={formatCurrency(tax)} />}
+            {advanceAmount > 0 && (
+              <AmountRow
+                label="Advance Amount"
+                value={`- ${formatCurrency(advanceAmount)}`}
+              />
+            )}
             <div className="tw-mt-2 tw-flex tw-items-baseline tw-justify-between tw-gap-2 tw-border-t tw-border-hairline tw-pt-2 dark:tw-border-hairline-dark">
               <dt className="tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-text-ink-dark-muted">
                 Grand Total
               </dt>
               <dd className="tw-m-0 tw-text-2xl tw-font-bold tw-tabular-nums tw-text-ink dark:tw-text-ink-dark">
-                {formatCurrency(quotation.totalAmount)}
+                {formatCurrency(Number(quotation.totalAmount) - advanceAmount)}
               </dd>
             </div>
           </dl>

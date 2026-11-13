@@ -16,9 +16,9 @@ export interface QuotationPdfItem {
 export interface QuotationPdfData {
   quotationNumber: string;
   version: number;
+  // The event date shown on the document — stored on the quotation itself (pre-filled from the
+  // enquiry's event date when raised, then editable on the form).
   quotationDate: Date;
-  // The event the quotation is for; printed in the Date field when present.
-  eventDate?: Date | null;
   status: string;
   recipient: CustomerSnapshot;
   items: QuotationPdfItem[];
@@ -28,6 +28,8 @@ export interface QuotationPdfData {
   sgstPercent: number;
   tax: number;
   totalAmount: number;
+  /** Advance agreed against the quotation; printed as a deduction from the total when present. */
+  advanceAmount?: number;
   remarks: string | null;
   // Absolute filesystem paths of sample decor images, rendered on a single gallery page.
   imagePaths: string[];
@@ -88,17 +90,17 @@ export async function generateQuotationPdf(
   const contentWidth = right - left;
 
   // ---- Header band: gradient + QUOTATION pill + logo ----------------------
-  const bandHeight = 96;
+  const bandHeight = 60;
   const gradient = doc.linearGradient(0, 0, doc.page.width, 0);
   gradient.stop(0, GREEN).stop(0.5, '#8bc34a').stop(0.78, '#dcedc8').stop(1, '#ffffff');
   doc.rect(0, 0, doc.page.width, bandHeight).fill(gradient);
 
-  doc.roundedRect(left, 30, 200, 42, 21).lineWidth(2).fillAndStroke('#ffffff', '#111111');
-  doc.fillColor('#111111').font('Helvetica-Bold').fontSize(20).text('QUOTATION', left, 43, { width: 200, align: 'center' });
+  doc.roundedRect(left, 12, 200, 36, 18).lineWidth(2).fillAndStroke('#ffffff', '#111111');
+  doc.fillColor('#111111').font('Helvetica-Bold').fontSize(18).text('QUOTATION', left, 22, { width: 200, align: 'center' });
 
   if (company.logoAbsolutePath && fs.existsSync(company.logoAbsolutePath)) {
     try {
-      doc.image(company.logoAbsolutePath, right - 90, 22, { fit: [90, 56], align: 'right' });
+      doc.image(company.logoAbsolutePath, right - 90, 8, { fit: [90, 44], align: 'right' });
     } catch {
       // Unsupported image format (e.g. WebP) — skip the logo.
     }
@@ -107,7 +109,7 @@ export async function generateQuotationPdf(
   // ---- Meta: Date / Quote No ---------------------------------------------
   let y = bandHeight + 20;
   doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('Date', left, y);
-  doc.font('Helvetica-Bold').fillColor(INK).text(formatDate(data.eventDate ?? data.quotationDate), left + 55, y);
+  doc.font('Helvetica-Bold').fillColor(INK).text(formatDate(data.quotationDate), left + 55, y);
   doc.font('Helvetica').fillColor(MUTED).text('Quote No', left, y + 14);
   doc.font('Helvetica-Bold').fillColor(INK).text(`${data.quotationNumber} (v${data.version})`, left + 55, y + 14);
 
@@ -146,10 +148,10 @@ export async function generateQuotationPdf(
   // ---- Items table --------------------------------------------------------
   y += 12;
   const cols = [
-    { key: 'item', label: 'ITEM', width: contentWidth - 265, align: 'left' as const },
-    { key: 'qty', label: 'QUANTITY', width: 85, align: 'center' as const },
-    { key: 'rate', label: 'UNIT PRICE', width: 85, align: 'right' as const },
-    { key: 'amount', label: 'SUBTOTAL', width: 95, align: 'right' as const },
+    { key: 'item', label: 'ITEM', width: contentWidth - 201, align: 'left' as const },
+    { key: 'qty', label: 'QUANTITY', width: 60, align: 'center' as const },
+    { key: 'rate', label: 'UNIT PRICE', width: 69, align: 'right' as const },
+    { key: 'amount', label: 'SUBTOTAL', width: 72, align: 'right' as const },
   ];
   const colX: number[] = [];
   cols.reduce((x, col, index) => {
@@ -157,12 +159,18 @@ export async function generateQuotationPdf(
     return x + col.width;
   }, left);
   const PAD = 6;
+  const headerCells = cols.map((column) => column.label);
 
-  function drawRow(cells: string[], rowY: number, isHeader: boolean): number {
+  function rowHeightFor(cells: string[], isHeader: boolean): number {
     doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
-    const heights = cells.map((text, index) => doc.heightOfString(text || '', { width: cols[index].width - PAD * 2 }));
-    const rowHeight = Math.max(18, ...heights) + 8;
+    const heights = cells.map((text, index) =>
+      doc.heightOfString(text || '', { width: cols[index].width - PAD * 2 }),
+    );
+    return Math.max(18, ...heights) + 4;
+  }
 
+  function drawRow(cells: string[], rowY: number, isHeader: boolean, rowHeight: number): void {
+    doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
     if (isHeader) {
       doc.rect(left, rowY, contentWidth, rowHeight).fill('#eeeeee');
     }
@@ -176,30 +184,47 @@ export async function generateQuotationPdf(
       .lineWidth(0.5)
       .strokeColor('#dddddd')
       .stroke();
-    return rowY + rowHeight;
   }
 
-  // Outer table border
-  const tableTop = y;
-  y = drawRow(
-    cols.map((c) => c.label),
-    y,
-    true,
-  );
+  // The table repeats its heading and keeps its own outer border on every page, so a long
+  // quotation wraps cleanly instead of dragging the totals block onto a trail of extra pages.
+  const pageBottom = () => doc.page.height - MARGIN;
+  const firstRowCells = data.items[0]
+    ? [data.items[0].itemName, num(data.items[0].quantity), num(data.items[0].rate), num(data.items[0].amount)]
+    : [];
+  if (firstRowCells.length && y + rowHeightFor(headerCells, true) + rowHeightFor(firstRowCells, false) > pageBottom()) {
+    doc.addPage();
+    y = MARGIN;
+  }
+
+  let tableTop = y;
+  let rowHeight = rowHeightFor(headerCells, true);
+  drawRow(headerCells, y, true, rowHeight);
+  y += rowHeight;
+
   data.items.forEach((item) => {
-    if (y + 30 > doc.page.height - MARGIN - 40) {
+    const cells = [item.itemName, num(item.quantity), num(item.rate), num(item.amount)];
+    rowHeight = rowHeightFor(cells, false);
+    if (y + rowHeight > pageBottom()) {
+      doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
       doc.addPage();
       y = MARGIN;
+      tableTop = y;
+      rowHeight = rowHeightFor(headerCells, true);
+      drawRow(headerCells, y, true, rowHeight);
+      y += rowHeight;
+      rowHeight = rowHeightFor(cells, false);
     }
-    y = drawRow([item.itemName, num(item.quantity), num(item.rate), num(item.amount)], y, false);
+    drawRow(cells, y, false, rowHeight);
+    y += rowHeight;
   });
+
   doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
 
   // ---- Bank box (left) + totals (right) -----------------------------------
-  y += 18;
-  const totalsWidth = 190;
+  const totalsWidth = 143;
   const totalsX = right - totalsWidth;
-  const bankBoxRight = totalsX - 24;
+  const bankBoxRight = totalsX - 16;
 
   const bankRows = [
     ['Bank Name', company.bankName],
@@ -210,14 +235,53 @@ export async function generateQuotationPdf(
     ['UPI', company.bankUpi],
   ].filter((row): row is [string, string] => Boolean(row[1]));
 
+  const totalsRowCount =
+    1 +
+    (data.discount > 0 ? 1 : 0) +
+    (data.cgstPercent > 0 ? 1 : 0) +
+    (data.sgstPercent > 0 ? 1 : 0) +
+    ((data.advanceAmount ?? 0) > 0 ? 1 : 0);
+  const summaryHeight = Math.max(totalsRowCount * 16 + 4 + 30, bankRows.length * 12);
+
+  // Measure everything below the table before drawing it. PDFKit silently starts a new page when
+  // a text call crosses the bottom margin, which previously split the totals over several pages.
+  doc.font('Helvetica').fontSize(9);
+  const remarksHeight = data.remarks ? 14 + doc.heightOfString(data.remarks, { width: contentWidth }) + 10 : 0;
+  doc.font('Helvetica').fontSize(8.5);
+  const termsHeight = company.termsAndConditions
+    ? 14 + doc.heightOfString(company.termsAndConditions, { width: contentWidth }) + 10
+    : 0;
+  const signatureHeight = company.authorizedSignatory ? 44 : 0;
+  doc.font('Helvetica-Bold').fontSize(11);
+  const footerText = (company.footerMessage ?? 'Thank you for your business.').toUpperCase();
+  const footerHeight = 6 + doc.heightOfString(footerText, { width: contentWidth });
+  doc.font('Helvetica').fontSize(9);
+  const emailHeight = company.email
+    ? 4 + doc.heightOfString(`If you have any questions, please contact us at ${company.email}`, { width: contentWidth })
+    : 0;
+
+  const closingGap = 18;
+  const closingHeight =
+    closingGap + summaryHeight + 24 + remarksHeight + termsHeight + signatureHeight + footerHeight + emailHeight;
+  if (y + closingHeight > pageBottom()) {
+    doc.addPage();
+    y = MARGIN;
+  } else {
+    y += closingGap;
+  }
+
   const bankStartY = y;
   if (bankRows.length) {
     let bankY = y;
     doc.font('Helvetica').fontSize(8.5);
     bankRows.forEach(([label, value]) => {
-      doc.fillColor(MUTED).text(label, left + 8, bankY, { width: 90, continued: false });
-      doc.fillColor(INK).text(`: ${value}`, left + 100, bankY, { width: bankBoxRight - (left + 100) });
-      bankY = doc.y + 2;
+      doc.fillColor(MUTED).text(label, left + 8, bankY, { width: 72, lineBreak: false });
+      doc.fillColor(INK).text(`: ${value}`, left + 80, bankY, {
+        width: bankBoxRight - (left + 80),
+        lineBreak: false,
+        ellipsis: true,
+      });
+      bankY += 12;
     });
     // Left accent border for the bank block.
     doc
@@ -231,8 +295,12 @@ export async function generateQuotationPdf(
   // Totals
   let ty = y;
   function totalRow(label: string, value: string): void {
-    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(`${label} :`, totalsX, ty, { width: totalsWidth - 70 });
-    doc.fillColor(INK).text(value, totalsX + totalsWidth - 70, ty, { width: 70, align: 'right' });
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor(MUTED)
+      .text(`${label} :`, totalsX, ty, { width: totalsWidth - 70, lineBreak: false });
+    doc.fillColor(INK).text(value, totalsX + totalsWidth - 70, ty, { width: 70, align: 'right', lineBreak: false });
     ty += 16;
   }
   const taxable = data.subtotal - data.discount;
@@ -244,11 +312,13 @@ export async function generateQuotationPdf(
   if (data.sgstPercent > 0) {
     totalRow(`Tax sGST ${data.sgstPercent}%`, num(Math.round(((taxable * data.sgstPercent) / 100) * 100) / 100));
   }
+  const advanceAmount = data.advanceAmount ?? 0;
+  if (advanceAmount > 0) totalRow('Advance', `- ${num(advanceAmount)}`);
 
   ty += 4;
   doc.roundedRect(totalsX, ty, totalsWidth, 30, 15).lineWidth(1.5).strokeColor('#111111').stroke();
   doc.font('Helvetica-Bold').fontSize(12).fillColor(INK).text('TOTAL :', totalsX + 12, ty + 9);
-  doc.text(num(data.totalAmount), totalsX, ty + 9, { width: totalsWidth - 12, align: 'right' });
+  doc.text(num(data.totalAmount - advanceAmount), totalsX, ty + 9, { width: totalsWidth - 12, align: 'right' });
   ty += 30;
 
   y = Math.max(ty, bankStartY + bankRows.length * 12) + 24;
@@ -259,8 +329,8 @@ export async function generateQuotationPdf(
   // a reader can tell which is which.
   if (data.remarks) {
     doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text('Notes', left, y);
-    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(data.remarks, left, doc.y + 2, { width: contentWidth });
-    y = doc.y + 10;
+    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(data.remarks, left, y + 14, { width: contentWidth });
+    y += 14 + doc.heightOfString(data.remarks, { width: contentWidth }) + 10;
   }
 
   if (company.termsAndConditions) {
@@ -269,8 +339,8 @@ export async function generateQuotationPdf(
       .font('Helvetica')
       .fontSize(8.5)
       .fillColor(MUTED)
-      .text(company.termsAndConditions, left, doc.y + 2, { width: contentWidth });
-    y = doc.y + 10;
+      .text(company.termsAndConditions, left, y + 14, { width: contentWidth });
+    y += 14 + doc.heightOfString(company.termsAndConditions, { width: contentWidth }) + 10;
   }
 
   // ---- Signature ----------------------------------------------------------
@@ -284,17 +354,13 @@ export async function generateQuotationPdf(
 
   // ---- Footer / thank-you -------------------------------------------------
   y += 6;
-  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text(
-    (company.footerMessage ?? 'Thank you for your business.').toUpperCase(),
-    left,
-    y,
-  );
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text(footerText, left, y, { width: contentWidth });
   if (company.email) {
     doc
       .font('Helvetica')
       .fontSize(9)
       .fillColor(MUTED)
-      .text(`If you have any questions, please contact us at ${company.email}`, left, doc.y + 2);
+      .text(`If you have any questions, please contact us at ${company.email}`, left, y + 16, { width: contentWidth });
   }
 
   // ---- Sample decor images — single gallery page --------------------------

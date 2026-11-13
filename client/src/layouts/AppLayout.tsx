@@ -153,13 +153,15 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Stock Return', path: '/rent/returns', icon: <AssignmentReturnIcon />, module: 'RENT' },
       { label: 'Rent Payments', path: '/rent/payments', icon: <PaymentsIcon />, module: 'RENT' },
       { label: 'Rental Persons', path: '/rent/persons', icon: <GroupsIcon />, module: 'RENT' },
-      { label: 'Rental Items', path: '/rent/items', icon: <CategoryIcon />, module: 'RENT' },
       { label: 'Rent Reports', path: '/rent/reports', icon: <AssessmentIcon />, module: 'RENT' },
     ],
   },
   {
     title: 'MANAGEMENT',
-    items: [{ label: 'Customers', path: '/customers', icon: <PeopleIcon />, module: 'CUSTOMERS' }],
+    items: [
+      { label: 'Customers', path: '/customers', icon: <PeopleIcon />, module: 'CUSTOMERS' },
+      { label: 'Stock Items', path: '/rent/items', icon: <CategoryIcon />, module: 'RENT' },
+    ],
   },
   {
     title: 'ADMINISTRATION',
