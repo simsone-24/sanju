@@ -63,6 +63,13 @@ import {
   type QuotationFormValues,
 } from '../../validation/quotationSchemas';
 import { ImageThumb } from './ImageThumb';
+import { SavedImageThumb } from './SavedImageThumb';
+import {
+  setStagedCaption,
+  stageQuotationImages,
+  useStagedImageUrls,
+  type StagedQuotationImage,
+} from './quotationImages';
 
 const EMPTY_ITEM = { itemName: '', quantity: '1', rate: '' };
 
@@ -119,7 +126,7 @@ export default function QuotationFormPage() {
   const [previewOpen, setPreviewOpen] = useState(true);
   // In create mode there is no quotation ID yet, so chosen images are held here and uploaded right
   // after the quotation is saved.
-  const [stagedImages, setStagedImages] = useState<File[]>([]);
+  const [stagedImages, setStagedImages] = useState<StagedQuotationImage[]>([]);
 
   const { data: existingQuotation } = useQuery({
     queryKey: ['quotation', id],
@@ -305,8 +312,7 @@ export default function QuotationFormPage() {
   const advanceAmount = Math.min(Math.max(Number(advanceValue) || 0, 0), grandTotal);
 
   // Object URLs for previewing staged (not-yet-uploaded) images; revoked when the set changes.
-  const stagedUrls = useMemo(() => stagedImages.map((file) => URL.createObjectURL(file)), [stagedImages]);
-  useEffect(() => () => stagedUrls.forEach((url) => URL.revokeObjectURL(url)), [stagedUrls]);
+  const stagedUrls = useStagedImageUrls(stagedImages);
 
   // Appends a fresh empty row the moment the current last row gets an item name — the "auto add
   // next row" behaviour of UIEnhance.md §4. The Add Row button below the table covers the same
@@ -405,7 +411,7 @@ export default function QuotationFormPage() {
   });
 
   const uploadImagesMutation = useMutation({
-    mutationFn: (files: File[]) => quotationService.uploadImages(id, files),
+    mutationFn: (files: File[]) => quotationService.uploadImages(id, files.map((file) => ({ file }))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotation', id] });
       showToast('Images added.');
@@ -430,7 +436,7 @@ export default function QuotationFormPage() {
       }
     } else {
       // Stage for upload after the quotation is created (cap at 12 total).
-      setStagedImages((prev) => [...prev, ...files].slice(0, 12));
+      setStagedImages((prev) => stageQuotationImages(prev, files));
     }
   }
 
@@ -614,10 +620,10 @@ export default function QuotationFormPage() {
           >
             {isEdit
               ? (existingQuotation?.images ?? []).map((image) => (
-                  <ImageThumb
+                  <SavedImageThumb
                     key={image.id}
-                    src={getPublicAssetUrl(image.filePath)}
-                    alt={image.fileName}
+                    quotationId={id}
+                    image={image}
                     onRemove={() => deleteImageMutation.mutate(image.id)}
                   />
                 ))
@@ -626,6 +632,8 @@ export default function QuotationFormPage() {
                     key={url}
                     src={url}
                     alt={`decor ${index + 1}`}
+                    caption={stagedImages[index]?.caption ?? ''}
+                    onCaptionChange={(value) => setStagedImages((prev) => setStagedCaption(prev, index, value))}
                     onRemove={() => setStagedImages((prev) => prev.filter((_, i) => i !== index))}
                   />
                 ))}
@@ -665,7 +673,14 @@ export default function QuotationFormPage() {
           sgstAmount={sgstAmount}
           total={grandTotal}
           advanceAmount={advanceAmount}
-          images={isEdit ? (existingQuotation?.images ?? []).map((image) => getPublicAssetUrl(image.filePath)) : stagedUrls}
+          images={
+            isEdit
+              ? (existingQuotation?.images ?? []).map((image) => ({
+                  src: getPublicAssetUrl(image.filePath),
+                  caption: image.caption,
+                }))
+              : stagedUrls.map((url, index) => ({ src: url, caption: stagedImages[index]?.caption || null }))
+          }
         />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', flexShrink: 0 }}>

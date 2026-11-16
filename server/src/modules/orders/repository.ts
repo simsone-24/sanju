@@ -71,6 +71,12 @@ const orderDetailSelect = {
       eventName: true,
       eventTime: true,
       eventType: { select: { eventName: true } },
+      // Every day the event runs (the order's own eventDate is the earliest of them).
+      eventDays: {
+        where: { deletedAt: null },
+        select: { eventDate: true, eventTime: true },
+        orderBy: [{ eventDate: 'asc' }, { eventTime: 'asc' }, { id: 'asc' }],
+      },
     },
   },
   customer: {

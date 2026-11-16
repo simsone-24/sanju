@@ -7,6 +7,7 @@ const rentalItemSelect = {
   itemName: true,
   category: true,
   defaultRentRate: true,
+  totalStock: true,
   description: true,
   status: true,
   createdAt: true,

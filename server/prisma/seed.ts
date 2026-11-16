@@ -81,6 +81,13 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
     'Event Coordinator': ['canView', 'canCreate', 'canEdit', 'canPrint'],
     Accountant: ['canView', 'canCreate', 'canExport'],
   },
+  EXPENSES: {
+    'Super Admin': 'All',
+    Manager: 'All',
+    'Sales Executive': 'No Access',
+    'Event Coordinator': 'No Access',
+    Accountant: 'All',
+  },
   REPORTS: {
     'Super Admin': 'All',
     Manager: 'All',

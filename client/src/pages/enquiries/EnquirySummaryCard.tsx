@@ -1,6 +1,4 @@
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import BadgeIcon from '@mui/icons-material/Badge';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CallIcon from '@mui/icons-material/Call';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import ContactSupportOutlinedIcon from '@mui/icons-material/ContactSupportOutlined';
@@ -9,7 +7,7 @@ import EventIcon from '@mui/icons-material/Event';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import { Button, ListItemIcon, ListItemText, Menu, MenuItem, Stack } from '@mui/material';
+import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import { useState } from 'react';
 import { RecordHeaderCard } from '../../components/RecordHeaderCard';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -30,8 +28,8 @@ interface EnquirySummaryCardProps {
  * Enquiry Details header — the shared RecordHeaderCard filled in for an enquiry, so this page and
  * Order Details open the same way.
  *
- * Both status badges sit beside the number: an enquiry's own stage and its appointment's state are
- * independent, and either can be the reason someone opened the record.
+ * Kept to what identifies the record: the number and stage, who it is for, the event, and the two
+ * money figures. Everything else lives in the tabs below.
  */
 export function EnquirySummaryCard({
   enquiry,
@@ -43,27 +41,19 @@ export function EnquirySummaryCard({
   onWhatsApp,
 }: EnquirySummaryCardProps) {
   const [contactAnchor, setContactAnchor] = useState<HTMLElement | null>(null);
+  const eventDates = [...new Set(enquiry.eventDays.map((day) => day.eventDate))];
 
   function runAndClose(action: () => void) {
     setContactAnchor(null);
     action();
   }
 
-  const appointment = enquiry.appointmentDate
-    ? `${formatDate(enquiry.appointmentDate)}${enquiry.appointmentTime ? ` · ${enquiry.appointmentTime}` : ''}`
-    : 'Not scheduled';
-
   return (
     <RecordHeaderCard
       icon={<ContactSupportOutlinedIcon />}
       eyebrow="Enquiry"
       title={enquiry.enquiryNumber}
-      badge={
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
-          <StatusBadge type="enquiry" status={enquiry.status} />
-          <StatusBadge type="appointment" status={enquiry.appointmentStatus} />
-        </Stack>
-      }
+      badge={<StatusBadge type="enquiry" status={enquiry.status} />}
       actions={
         <>
           {canEdit && (
@@ -115,12 +105,12 @@ export function EnquirySummaryCard({
           label: 'Event Type',
           value: enquiry.eventType?.eventName ?? 'Not set',
         },
-        { icon: <EventIcon sx={{ fontSize: 16 }} />, label: 'Event Date', value: formatDate(enquiry.eventDate) },
-        { icon: <CalendarMonthIcon sx={{ fontSize: 16 }} />, label: 'Appointment', value: appointment },
         {
-          icon: <BadgeIcon sx={{ fontSize: 16 }} />,
-          label: 'Assigned To',
-          value: enquiry.assignedUser?.fullName ?? 'Unassigned',
+          icon: <EventIcon sx={{ fontSize: 16 }} />,
+          label: eventDates.length > 1 ? 'Event Dates' : 'Event Date',
+          // Every date is written out — a Morning and an Evening session on one day count once.
+          value: eventDates.length > 0 ? eventDates.map(formatDate).join(', ') : formatDate(enquiry.eventDate),
+          wrap: true,
         },
       ]}
       figures={[
@@ -131,16 +121,6 @@ export function EnquirySummaryCard({
         {
           label: 'Advance Amount',
           value: enquiry.advanceAmount ? formatCurrency(enquiry.advanceAmount) : 'Not recorded',
-        },
-        {
-          label: 'Estimated Budget',
-          value: enquiry.estimatedBudget ? formatCurrency(enquiry.estimatedBudget) : '—',
-        },
-        {
-          label: 'Quotation',
-          value: enquiry.quotationAmount
-            ? `${formatCurrency(enquiry.quotationAmount)}${enquiry.quotationVersion ? ` (v${enquiry.quotationVersion})` : ''}`
-            : 'Not quoted',
         },
       ]}
     />

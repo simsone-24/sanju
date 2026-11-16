@@ -1,6 +1,5 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import { Autocomplete, Box, MenuItem, TextField } from '@mui/material';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Dayjs } from 'dayjs';
@@ -8,7 +7,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '../../../components/DataTable';
 import { DatePickerField } from '../../../components/DatePickerField';
-import { StatCard } from '../../../components/StatCard';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { usePermission } from '../../../hooks/usePermission';
 import * as customerService from '../../../services/customerService';
@@ -20,7 +18,7 @@ import { formatCurrency, formatDate } from '../../../utils/format';
 import { toOptionalId } from '../../../utils/ids';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { ReportPanel } from '../ReportPanel';
-import { STAT_ROW_SX } from '../reportLayout';
+import { KpiStrip } from '../KpiStrip';
 
 export default function OutstandingReportTab() {
   const canExport = usePermission('REPORTS', 'canExport');
@@ -183,24 +181,13 @@ export default function OutstandingReportTab() {
         />
       </ReportFilterBar>
 
-      <Box sx={STAT_ROW_SX}>
-        <StatCard
-          label="Total Outstanding"
-          value={formatCurrency(data?.summary.totalOutstanding ?? '0')}
-          icon={<AccountBalanceWalletIcon fontSize="small" />}
-          tone="red"
-          subtext="Still to be collected"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Orders"
-          value={data?.summary.orderCount ?? 0}
-          icon={<WorkHistoryIcon fontSize="small" />}
-          tone="amber"
-          subtext="Carrying a balance"
-          loading={isLoading}
-        />
-      </Box>
+      <KpiStrip
+        loading={isLoading}
+        items={[
+          { label: 'Total Outstanding', value: formatCurrency(data?.summary.totalOutstanding ?? '0'), subtext: 'Still to be collected', tone: 'due' },
+          { label: 'Orders', value: data?.summary.orderCount ?? 0, subtext: 'Carrying a balance' },
+        ]}
+      />
 
       <ReportPanel icon={<ReceiptLongIcon fontSize="small" />} title="Orders with a Balance">
         <DataTable

@@ -48,8 +48,19 @@ export interface EnquiryFollowUp {
   createdBy: { id: number; fullName: string } | null;
 }
 
+/** One day the event runs. `eventDate` is a plain `YYYY-MM-DD` — a day has no time zone. */
+export interface EnquiryEventDay {
+  id: number;
+  eventDate: string;
+  eventTime: EventTime | null;
+}
+
 export interface EnquiryDetail extends EnquiryListItem {
   prospect: EnquiryProspect | null;
+  /** Every day the event runs, earliest first; `eventDate` above is the first of them. */
+  eventDays: EnquiryEventDay[];
+  /** The system user responsible for running the event. */
+  eventManager: { id: number; fullName: string } | null;
   eventTime: EventTime | null;
   mahal: string | null;
   venue: string | null;
@@ -95,6 +106,8 @@ export interface CreateEnquiryInput {
   eventName?: string;
   eventDate?: string;
   eventTime?: EventTime;
+  /** Every day the event runs, each with its own time. The earliest becomes the main event date. */
+  eventDays?: { eventDate: string; eventTime?: EventTime | null }[];
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;
@@ -109,6 +122,7 @@ export interface CreateEnquiryInput {
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
   assignedUserId?: number;
+  eventManagerId?: number;
   followUpDate?: string;
   /** Defaults to NEW server-side. Only a status reachable from NEW may be set at creation. */
   status?: EnquiryStatus;
@@ -120,7 +134,11 @@ export interface CreateEnquiryInput {
 // which accepts a partial update (at least one field required) rather than a full replace.
 // followUpDate is re-declared below as nullable, so it is omitted here rather than intersected —
 // intersecting `string | undefined` with `string | null | undefined` would collapse back to string.
-export type UpdateEnquiryInput = Partial<Omit<CreateEnquiryInput, 'customer' | 'status' | 'followUpDate'>> & {
+export type UpdateEnquiryInput = Partial<
+  Omit<CreateEnquiryInput, 'customer' | 'status' | 'followUpDate' | 'eventManagerId'>
+> & {
+  /** null removes the event manager; omitting it leaves the stored value alone. */
+  eventManagerId?: number | null;
   customerName?: string;
   mobile?: string;
   whatsapp?: string;

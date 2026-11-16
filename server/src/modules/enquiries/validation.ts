@@ -24,6 +24,14 @@ const existingCustomerSchema = z.object({
 
 const customerInputSchema = z.discriminatedUnion('type', [newCustomerSchema, existingCustomerSchema]);
 
+// One day the event runs. The time is optional — a day can be booked before its slot is known.
+const eventDaySchema = z.object({
+  eventDate: z.coerce.date(),
+  eventTime: z.nativeEnum(EventTime).nullable().optional(),
+});
+
+const eventDaysSchema = z.array(eventDaySchema).max(31, 'An event can have at most 31 days.');
+
 export const createEnquirySchema = z
   .object({
     // Omitted entirely for a DRAFT saved before any customer type was picked.
@@ -32,6 +40,9 @@ export const createEnquirySchema = z
     eventName: z.string().min(1).optional(),
     eventDate: z.coerce.date().optional(),
     eventTime: z.nativeEnum(EventTime).optional(),
+    // Every day the event runs, each with its own time of day. Supersedes eventDate / eventTime,
+    // which are still accepted and treated as a single day when this is omitted.
+    eventDays: eventDaysSchema.optional(),
     mahal: z.string().min(1).optional(),
     venue: z.string().min(1).optional(),
     estimatedBudget: z.coerce.number().min(0).optional(),
@@ -47,6 +58,7 @@ export const createEnquirySchema = z
     appointmentNotes: z.string().min(1).optional(),
     appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
     assignedUserId: idSchema().optional(),
+    eventManagerId: idSchema().optional(),
     // When the customer should next be contacted — the optional Follow-up step of the workflow.
     followUpDate: z.coerce.date().optional(),
     status: z.nativeEnum(EnquiryStatus).optional(),
@@ -59,8 +71,8 @@ export const createEnquirySchema = z
     if (!data.eventTypeId) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventTypeId'], message: 'A valid event type is required.' });
     }
-    if (!data.eventDate) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Event date is required.' });
+    if (!data.eventDate && !data.eventDays?.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDays'], message: 'Event date is required.' });
     }
     if (!data.customer) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Customer details are required.' });
@@ -96,6 +108,8 @@ export const updateEnquirySchema = z
     eventName: z.string().min(1).optional(),
     eventDate: z.coerce.date().optional(),
     eventTime: z.nativeEnum(EventTime).optional(),
+    // Replaces the whole list of event days; an empty list removes them all.
+    eventDays: eventDaysSchema.optional(),
     mahal: z.string().min(1).optional(),
     venue: z.string().min(1).optional(),
     estimatedBudget: z.coerce.number().min(0).optional(),
@@ -108,6 +122,8 @@ export const updateEnquirySchema = z
     appointmentNotes: z.string().min(1).optional(),
     appointmentStatus: z.nativeEnum(AppointmentStatus).optional(),
     assignedUserId: idSchema().optional(),
+    // Nullable, unlike on create: null removes the event manager, an omitted field leaves it alone.
+    eventManagerId: idSchema().nullable().optional(),
     // Nullable, unlike on create: clearing the date is how a user says the follow-up is no longer
     // owed, and an omitted field means "leave as it is".
     followUpDate: z.coerce.date().nullable().optional(),

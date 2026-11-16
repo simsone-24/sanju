@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { CompanyDetail } from '../../types/company';
 import type { QuotationRecipient } from '../../types/quotation';
 import { getPublicAssetUrl } from '../../utils/format';
+import type { QuotationPreviewImage } from './quotationImages';
 
 export interface QuotationPreviewItem {
   itemName: string;
@@ -25,8 +26,10 @@ interface QuotationPreviewProps {
   total: number;
   /** Advance agreed against the quotation; deducted from the printed total when present. */
   advanceAmount?: number;
-  images: string[];
+  images: QuotationPreviewImage[];
 }
+
+const GALLERY_ROWS_PER_PAGE = 3;
 
 // Plain thousands-separated numbers with no currency symbol, matching the printed Sanju template.
 function num(value: number): string {
@@ -151,8 +154,11 @@ export default function QuotationPreview({
     ['UPI', company?.bankUpi],
   ].filter(([, value]) => Boolean(value)) as [string, string][];
 
-  const galleryColumns = images.length === 1 ? 1 : 2;
-  const galleryRows = Math.ceil(images.length / galleryColumns);
+  // One picture per row, three rows to a sheet — the same split the PDF makes.
+  const galleryPages: QuotationPreviewImage[][] = [];
+  for (let index = 0; index < images.length; index += GALLERY_ROWS_PER_PAGE) {
+    galleryPages.push(images.slice(index, index + GALLERY_ROWS_PER_PAGE));
+  }
 
   return (
     <Box
@@ -333,23 +339,25 @@ export default function QuotationPreview({
         </Box>
       </A4Sheet>
 
-      {/* Sample decor images get their own page, matching the PDF's gallery page. */}
-      {images.length > 0 && (
-        <A4Sheet scale={scale}>
+      {/* Sample decor images get their own pages, matching the PDF: one picture per row. */}
+      {galleryPages.map((page, pageIndex) => (
+        <A4Sheet key={pageIndex} scale={scale}>
           <Box sx={{ p: 3, height: A4_HEIGHT, display: 'flex', flexDirection: 'column' }}>
-            <Typography sx={{ fontWeight: 800, fontSize: 18 }}>Sample Decor</Typography>
+            <Typography sx={{ fontWeight: 800, fontSize: 18 }}>
+              {pageIndex === 0 ? 'Sample Decor' : 'Sample Decor (continued)'}
+            </Typography>
             <Box
               sx={{
                 mt: 2,
                 flex: 1,
                 minHeight: 0,
                 display: 'grid',
-                gridTemplateColumns: `repeat(${galleryColumns}, 1fr)`,
-                gridTemplateRows: `repeat(${galleryRows}, 1fr)`,
+                gridTemplateColumns: '1fr',
+                gridTemplateRows: `repeat(${GALLERY_ROWS_PER_PAGE}, 1fr)`,
                 gap: 1.5,
               }}
             >
-              {images.map((src, index) => (
+              {page.map((image, index) => (
                 <Box
                   key={index}
                   sx={{
@@ -358,20 +366,26 @@ export default function QuotationPreview({
                     borderRadius: 0.5,
                     overflow: 'hidden',
                     display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
                   <Box
                     component="img"
-                    src={src}
-                    alt={`decor ${index + 1}`}
-                    sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    src={image.src}
+                    alt={image.caption || `decor ${pageIndex * GALLERY_ROWS_PER_PAGE + index + 1}`}
+                    sx={{ width: '100%', flex: 1, minHeight: 0, objectFit: 'contain' }}
                   />
+                  {image.caption && (
+                    <Typography sx={{ fontWeight: 700, fontSize: 12, textAlign: 'center', py: 0.75, px: 1 }} noWrap>
+                      {image.caption}
+                    </Typography>
+                  )}
                 </Box>
               ))}
             </Box>
           </Box>
         </A4Sheet>
-      )}
+      ))}
     </Box>
   );
 }

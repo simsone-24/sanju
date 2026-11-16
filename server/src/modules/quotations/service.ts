@@ -200,7 +200,10 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       totalAmount: Number(record.totalAmount),
       advanceAmount: Number(record.advanceAmount ?? 0),
       remarks: record.remarks,
-      imagePaths: record.images.map((image) => path.resolve(env.uploadPath, image.filePath)),
+      images: record.images.map((image) => ({
+        path: path.resolve(env.uploadPath, image.filePath),
+        caption: image.caption,
+      })),
     },
     {
       companyName: company.companyName,
@@ -780,12 +783,13 @@ export async function approve(companyId: number, actorId: number, id: number) {
 const MAX_QUOTATION_IMAGES = 12;
 
 // Attaches sample decor images to a quotation and regenerates the PDF so they appear on its gallery
-// page. `files` carry the already-stored relative path + original name.
+// page. `files` carry the already-stored relative path + original name, and the description typed for
+// each ("Stage", "Hall"…), if any.
 export async function addImages(
   companyId: number,
   actorId: number,
   quotationId: number,
-  files: { fileName: string; filePath: string }[],
+  files: { fileName: string; filePath: string; caption?: string }[],
 ) {
   const quotation = await quotationsRepository.findQuotationById(companyId, quotationId);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
@@ -800,6 +804,7 @@ export async function addImages(
       quotationId,
       fileName: file.fileName,
       filePath: file.filePath,
+      caption: file.caption || null,
       sortOrder: existingCount + index,
     })),
   );
@@ -813,6 +818,37 @@ export async function addImages(
     referenceId: quotationId,
     action: 'UPDATE',
     description: `${files.length} sample image(s) added to quotation "${quotation.quotationNumber}".`,
+    performedById: actorId,
+  });
+
+  return mapDetail(refreshed ?? quotation);
+}
+
+// Changes the description printed under a sample image, and refreshes the PDF that carries it.
+export async function updateImageCaption(
+  companyId: number,
+  actorId: number,
+  quotationId: number,
+  imageId: number,
+  caption: string,
+) {
+  const quotation = await quotationsRepository.findQuotationById(companyId, quotationId);
+  if (!quotation) throw new AppError(404, 'Quotation not found.');
+
+  const image = await quotationsRepository.findQuotationImageById(imageId);
+  if (!image || image.quotationId !== quotationId) throw new AppError(404, 'Image not found.');
+
+  await quotationsRepository.updateQuotationImageCaption(imageId, caption || null);
+
+  const refreshed = await quotationsRepository.findQuotationById(companyId, quotationId);
+  if (refreshed) await regeneratePdf(companyId, refreshed);
+
+  await logActivity({
+    companyId,
+    module: 'QUOTATIONS',
+    referenceId: quotationId,
+    action: 'UPDATE',
+    description: `Description of sample image "${image.fileName}" updated on quotation "${quotation.quotationNumber}".`,
     performedById: actorId,
   });
 

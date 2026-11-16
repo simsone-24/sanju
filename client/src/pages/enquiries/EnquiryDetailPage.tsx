@@ -2,6 +2,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import EmailIcon from '@mui/icons-material/Email';
+import BadgeIcon from '@mui/icons-material/Badge';
 import FlagIcon from '@mui/icons-material/Flag';
 import HistoryIcon from '@mui/icons-material/History';
 import HomeIcon from '@mui/icons-material/Home';
@@ -10,9 +11,10 @@ import LocationCityIcon from '@mui/icons-material/LocationCity';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NotesIcon from '@mui/icons-material/Notes';
-import PaidIcon from '@mui/icons-material/Paid';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
+import PaidIcon from '@mui/icons-material/Paid';
 import PlaceIcon from '@mui/icons-material/Place';
+import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import UpdateIcon from '@mui/icons-material/Update';
@@ -20,7 +22,6 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import {
   Box,
   Button,
-  Chip,
   Divider,
   ListItemIcon,
   ListItemText,
@@ -36,6 +37,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { AppTabs } from '../../components/AppTabs';
 import { CardSection, DetailRow } from '../../components/DetailRow';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePermission } from '../../hooks/usePermission';
@@ -64,7 +66,9 @@ function DetailSkeleton() {
   );
 }
 
-const CARD_SX = { borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0 } as const;
+function digitsOnly(value: string | null | undefined): string {
+  return (value ?? '').replace(/\D/g, '');
+}
 
 export default function EnquiryDetailPage() {
   const id = useRouteId();
@@ -290,196 +294,212 @@ export default function EnquiryDetailPage() {
 
       <EnquiryProgressTracker status={enquiry.status} />
 
-      {/* One page, grouped into as few cards as the content allows — the header above already
-          carries customer, event date, appointment, assigned-to and the three money figures, so
-          nothing here repeats it. */}
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2.5,
-          alignItems: 'start',
-          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(300px, 1fr)' },
-        }}
-      >
-        <Stack spacing={2.5} sx={{ minWidth: 0 }}>
-          <Paper variant="outlined" sx={CARD_SX}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={{ xs: 1, sm: 2 }}
-              sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', rowGap: 1 }}
-            >
-              <Typography variant="h4" component="h2">
-                Customer &amp; Event
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-                {customerRecord && <Chip size="small" variant="outlined" label={customerRecord.customerCode} />}
-                {!enquiry.customer.id && (
-                  <Chip size="small" variant="outlined" label="Prospect — added on Order Confirmed" />
-                )}
-              </Stack>
-            </Stack>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gap: { xs: 3, md: 4 },
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-              }}
-            >
-              <CardSection icon={<PersonOutlinedIcon fontSize="small" />} title="Contact" tone="primary">
-                <DetailRow
-                  icon={<WhatsAppIcon sx={{ fontSize: 16 }} />}
-                  label="WhatsApp"
-                  value={contact?.whatsapp || '—'}
-                />
-                <DetailRow icon={<EmailIcon sx={{ fontSize: 16 }} />} label="Email" value={contact?.email || '—'} />
-                <DetailRow
-                  icon={<LocationCityIcon sx={{ fontSize: 16 }} />}
-                  label="City"
-                  value={contact?.city || '—'}
-                />
-                <DetailRow icon={<HomeIcon sx={{ fontSize: 16 }} />} label="Address" value={contact?.address || '—'} />
-              </CardSection>
-
-              <CardSection icon={<CelebrationIcon fontSize="small" />} title="Event" tone="success">
-                <DetailRow
-                  icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
-                  label="Event Time"
-                  value={enquiry.eventTime ? (enquiry.eventTime === 'MORNING' ? 'Morning' : 'Evening') : '—'}
-                />
-                <DetailRow icon={<MeetingRoomIcon sx={{ fontSize: 16 }} />} label="Mahal" value={enquiry.mahal || '—'} />
-                <DetailRow icon={<PlaceIcon sx={{ fontSize: 16 }} />} label="Venue" value={enquiry.venue || '—'} />
-              </CardSection>
-            </Box>
-
-            {/* Only once there is something to say beyond what the header's appointment badge and
-                date already cover — an enquiry with no meeting notes yet shouldn't grow a section. */}
-            {(enquiry.meetingLocation || enquiry.appointmentNotes) && (
-              <>
-                <Divider sx={{ my: 3 }} />
-                <CardSection icon={<CalendarMonthIcon fontSize="small" />} title="Appointment Notes" tone="info">
-                  {enquiry.meetingLocation && (
+      {/* The header carries only what identifies the record; everything else sits in these tabs, each
+          fact once. */}
+      <AppTabs
+        surface
+        idPrefix="enquiry-detail"
+        tabs={[
+          {
+            label: 'Overview',
+            icon: <SpaceDashboardOutlinedIcon fontSize="small" />,
+            content: (
+              <Paper variant="outlined" sx={{ borderRadius: '20px', p: { xs: 2.5, sm: 3.5 } }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gap: { xs: 3, md: 4 },
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+                  }}
+                >
+                  <CardSection icon={<CelebrationIcon fontSize="small" />} title="Event" tone="success">
                     <DetailRow
-                      icon={<PlaceIcon sx={{ fontSize: 16 }} />}
-                      label="Meeting Location"
-                      value={enquiry.meetingLocation}
-                    />
-                  )}
-                  {enquiry.appointmentNotes && (
-                    <DetailRow
-                      icon={<NotesIcon sx={{ fontSize: 16 }} />}
-                      label="Discussion"
+                      icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
+                      label={enquiry.eventDays.length > 1 ? 'Event Days' : 'Event Time'}
                       value={
-                        <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'pre-line' }}>
-                          {enquiry.appointmentNotes}
-                        </Typography>
+                        enquiry.eventDays.length === 0 ? (
+                          '—'
+                        ) : (
+                          <Box>
+                            {enquiry.eventDays.map((day) => (
+                              <Typography key={day.id} variant="body2" sx={{ fontWeight: 600 }}>
+                                {enquiry.eventDays.length > 1 ? `${formatDate(day.eventDate)} · ` : ''}
+                                {day.eventTime ? (day.eventTime === 'MORNING' ? 'Morning' : 'Evening') : '—'}
+                              </Typography>
+                            ))}
+                          </Box>
+                        )
                       }
                     />
-                  )}
-                </CardSection>
-              </>
-            )}
-          </Paper>
+                    <DetailRow icon={<MeetingRoomIcon sx={{ fontSize: 16 }} />} label="Mahal" value={enquiry.mahal || '—'} />
+                    <DetailRow icon={<PlaceIcon sx={{ fontSize: 16 }} />} label="Venue" value={enquiry.venue || '—'} />
+                    <DetailRow
+                      icon={<PaidIcon sx={{ fontSize: 16 }} />}
+                      label="Estimated Budget"
+                      value={enquiry.estimatedBudget ? formatCurrency(enquiry.estimatedBudget) : '—'}
+                    />
+                  </CardSection>
 
-          <Paper variant="outlined" sx={CARD_SX}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={{ xs: 1, sm: 2 }}
-              sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', rowGap: 1 }}
-            >
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
-                <RequestQuoteIcon fontSize="small" sx={{ color: 'primary.main' }} />
-                <Typography variant="h4" component="h2">
-                  Quotations ({quotations?.records.length ?? 0})
-                </Typography>
-              </Stack>
-              {showCreateQuotation && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={<RequestQuoteIcon />}
-                  onClick={() => setQuotationDialog({ quotationId: null })}
-                  sx={{ alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+                  <CardSection icon={<CalendarMonthIcon fontSize="small" />} title="Appointment" tone="info">
+                    <DetailRow
+                      icon={<FlagIcon sx={{ fontSize: 16 }} />}
+                      label="Status"
+                      value={<StatusBadge type="appointment" status={enquiry.appointmentStatus} size="sm" />}
+                    />
+                    <DetailRow
+                      icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
+                      label="Date & Time"
+                      value={
+                        enquiry.appointmentDate
+                          ? `${formatDate(enquiry.appointmentDate)}${enquiry.appointmentTime ? ` · ${enquiry.appointmentTime}` : ''}`
+                          : 'Not scheduled'
+                      }
+                    />
+                    {enquiry.meetingLocation && (
+                      <DetailRow
+                        icon={<PlaceIcon sx={{ fontSize: 16 }} />}
+                        label="Location"
+                        value={enquiry.meetingLocation}
+                      />
+                    )}
+                    {enquiry.appointmentNotes && (
+                      <DetailRow
+                        icon={<NotesIcon sx={{ fontSize: 16 }} />}
+                        label="Discussion"
+                        value={
+                          <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'pre-line' }}>
+                            {enquiry.appointmentNotes}
+                          </Typography>
+                        }
+                      />
+                    )}
+                  </CardSection>
+
+                  <CardSection icon={<PersonOutlinedIcon fontSize="small" />} title="Contact" tone="primary">
+                    {customerRecord ? (
+                      <DetailRow
+                        icon={<PersonOutlinedIcon sx={{ fontSize: 16 }} />}
+                        label="Customer Code"
+                        value={customerRecord.customerCode}
+                      />
+                    ) : (
+                      !enquiry.customer.id && (
+                        <DetailRow
+                          icon={<PersonOutlinedIcon sx={{ fontSize: 16 }} />}
+                          label="Customer"
+                          value="Prospect — added on Order Confirmed"
+                        />
+                      )
+                    )}
+                    {/* The header already shows the mobile number, so WhatsApp only appears when it is a
+                        different number. */}
+                    {contact?.whatsapp && digitsOnly(contact.whatsapp) !== digitsOnly(enquiry.customer.mobile) && (
+                      <DetailRow icon={<WhatsAppIcon sx={{ fontSize: 16 }} />} label="WhatsApp" value={contact.whatsapp} />
+                    )}
+                    <DetailRow icon={<EmailIcon sx={{ fontSize: 16 }} />} label="Email" value={contact?.email || '—'} />
+                    <DetailRow icon={<LocationCityIcon sx={{ fontSize: 16 }} />} label="City" value={contact?.city || '—'} />
+                    <DetailRow icon={<HomeIcon sx={{ fontSize: 16 }} />} label="Address" value={contact?.address || '—'} />
+                  </CardSection>
+                </Box>
+
+                <Divider sx={{ my: { xs: 3, md: 4 } }} />
+
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gap: { xs: 3, md: 4 },
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+                  }}
                 >
-                  Create Quotation
-                </Button>
-              )}
-            </Stack>
-            <DataTable
-              disableContainer
-              columns={quotationColumns}
-              rows={quotations?.records ?? []}
-              getRowId={(row) => row.id}
-              page={1}
-              limit={50}
-              onPageChange={() => undefined}
-              onLimitChange={() => undefined}
-              onRowClick={(row) => setPreviewQuotationId(row.id)}
-              exportFileName={`${enquiry.enquiryNumber}-quotations`}
-              canExport={canExport}
-              emptyState={{
-                icon: <RequestQuoteIcon sx={{ fontSize: 36 }} />,
-                title: 'No quotations yet',
-                description: showCreateQuotation
-                  ? 'Create a quotation to share pricing with this customer.'
-                  : 'No quotation has been created for this enquiry.',
-              }}
-            />
-          </Paper>
-        </Stack>
+                  <CardSection icon={<BadgeIcon fontSize="small" />} title="People" tone="primary">
+                    <DetailRow
+                      icon={<BadgeIcon sx={{ fontSize: 16 }} />}
+                      label="Event Manager"
+                      value={enquiry.eventManager?.fullName ?? 'Not set'}
+                    />
+                    <DetailRow
+                      icon={<PersonOutlinedIcon sx={{ fontSize: 16 }} />}
+                      label="Assigned To"
+                      value={enquiry.assignedUser?.fullName ?? 'Unassigned'}
+                    />
+                  </CardSection>
 
-        <Stack spacing={2.5} sx={{ minWidth: 0 }}>
-          <Paper variant="outlined" sx={CARD_SX}>
-            <Typography variant="h4" component="h2" sx={{ mb: 2.5 }}>
-              Activity
-            </Typography>
-            <Stack spacing={1.75}>
-              {/* Only once recorded — an enquiry-stage advance is optional, and an empty row would
-                  imply money is owed. */}
-              {enquiry.advanceAmount && (
-                <DetailRow
-                  icon={<PaidIcon sx={{ fontSize: 16 }} />}
-                  label="Advance Paid"
-                  value={formatCurrency(enquiry.advanceAmount)}
+                  <CardSection icon={<UpdateIcon fontSize="small" />} title="Follow-up" tone="warning">
+                    <DetailRow
+                      icon={<UpdateIcon sx={{ fontSize: 16 }} />}
+                      label="Next Follow-up"
+                      value={enquiry.followUpDate ? formatDate(enquiry.followUpDate) : 'None due'}
+                    />
+                    <DetailRow
+                      icon={<HistoryIcon sx={{ fontSize: 16 }} />}
+                      label="Raised"
+                      value={formatDateTime(enquiry.createdAt)}
+                    />
+                    <DetailRow
+                      icon={<HistoryIcon sx={{ fontSize: 16 }} />}
+                      label="Last Updated"
+                      value={formatDateTime(enquiry.updatedAt)}
+                    />
+                  </CardSection>
+
+                  {enquiry.notes && (
+                    <CardSection icon={<NotesIcon fontSize="small" />} title="Notes" tone="info">
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                        {enquiry.notes}
+                      </Typography>
+                    </CardSection>
+                  )}
+                </Box>
+              </Paper>
+            ),
+          },
+          {
+            label: `Quotations (${quotations?.records.length ?? 0})`,
+            icon: <RequestQuoteIcon fontSize="small" />,
+            content: (
+              <Paper variant="outlined" sx={{ borderRadius: '20px', p: { xs: 2.5, sm: 3.5 } }}>
+                {showCreateQuotation && (
+                  <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<RequestQuoteIcon />}
+                      onClick={() => setQuotationDialog({ quotationId: null })}
+                    >
+                      Create Quotation
+                    </Button>
+                  </Stack>
+                )}
+                <DataTable
+                  disableContainer
+                  columns={quotationColumns}
+                  rows={quotations?.records ?? []}
+                  getRowId={(row) => row.id}
+                  page={1}
+                  limit={50}
+                  onPageChange={() => undefined}
+                  onLimitChange={() => undefined}
+                  onRowClick={(row) => setPreviewQuotationId(row.id)}
+                  exportFileName={`${enquiry.enquiryNumber}-quotations`}
+                  canExport={canExport}
+                  emptyState={{
+                    icon: <RequestQuoteIcon sx={{ fontSize: 36 }} />,
+                    title: 'No quotations yet',
+                    description: showCreateQuotation
+                      ? 'Create a quotation to share pricing with this customer.'
+                      : 'No quotation has been created for this enquiry.',
+                  }}
                 />
-              )}
-              <DetailRow
-                icon={<UpdateIcon sx={{ fontSize: 16 }} />}
-                label="Follow-up Date"
-                value={enquiry.followUpDate ? formatDate(enquiry.followUpDate) : 'None due'}
-              />
-              <DetailRow
-                icon={<HistoryIcon sx={{ fontSize: 16 }} />}
-                label="Enquiry Raised"
-                value={formatDateTime(enquiry.createdAt)}
-              />
-              <DetailRow
-                icon={<UpdateIcon sx={{ fontSize: 16 }} />}
-                label="Last Updated"
-                value={formatDateTime(enquiry.updatedAt)}
-              />
-            </Stack>
-          </Paper>
-
-          {enquiry.notes && (
-            <Paper variant="outlined" sx={CARD_SX}>
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2 }}>
-                <NotesIcon fontSize="small" sx={{ color: 'primary.main' }} />
-                <Typography variant="h4" component="h2">
-                  Notes
-                </Typography>
-              </Stack>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {enquiry.notes}
-              </Typography>
-            </Paper>
-          )}
-        </Stack>
-      </Box>
-
-      <Box sx={{ mt: 2.5 }}>
-        <EnquiryTimelineCard enquiryId={enquiry.id} />
-      </Box>
+              </Paper>
+            ),
+          },
+          {
+            label: 'Timeline',
+            icon: <HistoryIcon fontSize="small" />,
+            content: <EnquiryTimelineCard enquiryId={enquiry.id} />,
+          },
+        ]}
+      />
 
       <EnquiryStatusDialog
         open={statusDialogOpen}

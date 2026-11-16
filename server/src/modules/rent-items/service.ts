@@ -35,6 +35,7 @@ export async function create(companyId: number, actorId: number, input: CreateRe
     itemName: input.itemName,
     category: input.category,
     defaultRentRate: input.defaultRentRate,
+    totalStock: input.totalStock,
     description: input.description,
     status: RentalItemStatus.ACTIVE,
   });
@@ -70,6 +71,7 @@ export async function update(companyId: number, actorId: number, id: number, inp
     itemName: input.itemName,
     category: input.category,
     defaultRentRate: input.defaultRentRate,
+    totalStock: input.totalStock,
     description: input.description,
     status: input.status,
   });

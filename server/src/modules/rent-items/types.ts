@@ -4,6 +4,7 @@ export interface CreateRentalItemInput {
   itemName: string;
   category?: string;
   defaultRentRate?: number;
+  totalStock?: number;
   description?: string;
 }
 
@@ -11,6 +12,7 @@ export interface UpdateRentalItemInput {
   itemName?: string;
   category?: string;
   defaultRentRate?: number;
+  totalStock?: number;
   description?: string;
   status?: RentalItemStatus;
 }

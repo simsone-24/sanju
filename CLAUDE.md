@@ -380,3 +380,47 @@ Avoid mock data unless requested.
 Prefer maintainability over clever solutions.
 
 Write code that another developer can easily understand.
+
+---
+
+# Change Summary Rule
+
+After completing any task that changes code, create or update a summary file.
+
+Location: `md files/changes/YYYY-MM-DD.md` (one file per day; append new entries to the same day's file).
+
+Each entry must contain
+
+- Title of the change
+- Files created / modified / deleted
+- What changed and why
+- Database changes (link to the SQL file, or "None")
+- API changes (endpoint, method, request / response), or "None"
+- Follow-up notes or known limitations
+
+Keep entries short and factual. Never skip the summary.
+
+---
+
+# Database Change Tracking
+
+Every time a table, column, index, foreign key, enum or constraint is created, altered or dropped, write a SQL file for it in addition to the Prisma schema and migration.
+
+Location: `database/YYYY-MM-DD/NN_short_description.sql`
+
+- `YYYY-MM-DD` is the date the change was made.
+- `NN` is a two-digit order number within that date (`01`, `02`, ...), so files run in the correct order.
+- `short_description` is snake_case, e.g. `01_add_quotation_advance_amount.sql`.
+
+Each file must contain
+
+- A header comment: date, purpose, related module / feature
+- The exact SQL (`CREATE TABLE`, `ALTER TABLE`, `CREATE INDEX`, ...) matching MySQL and the Prisma migration
+- A commented rollback section (`-- ROLLBACK:`) with the reverse SQL
+
+Rules
+
+- One file per logical change; never edit a SQL file after it has been committed, add a new one instead.
+- Keep `server/prisma/schema.prisma` and the Prisma migration in sync with the SQL file.
+- Reference the SQL file in the day's change summary.
+- If a task has no database change, do not create a SQL file.

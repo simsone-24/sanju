@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { usePermission } from '../../hooks/usePermission';
 import * as quotationService from '../../services/quotationService';
@@ -34,6 +34,13 @@ import type {
 import { formatDate, getPublicAssetUrl } from '../../utils/format';
 import { QUOTATION_CREATE_STATUSES, QUOTATION_EDIT_STATUSES } from '../../validation/quotationSchemas';
 import { ImageThumb } from '../quotations/ImageThumb';
+import { SavedImageThumb } from '../quotations/SavedImageThumb';
+import {
+  setStagedCaption,
+  stageQuotationImages,
+  useStagedImageUrls,
+  type StagedQuotationImage,
+} from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
 import {
@@ -94,10 +101,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   // Shown by default — mirrors the Quotation form's live preview so this dialog produces the same
   // WYSIWYG check before saving.
   const [previewOpen, setPreviewOpen] = useState(true);
-  const [stagedImages, setStagedImages] = useState<File[]>([]);
+  const [stagedImages, setStagedImages] = useState<StagedQuotationImage[]>([]);
   // Object URLs for previewing staged (not-yet-uploaded) images.
-  const stagedUrls = useMemo(() => stagedImages.map((file) => URL.createObjectURL(file)), [stagedImages]);
-  useEffect(() => () => stagedUrls.forEach((url) => URL.revokeObjectURL(url)), [stagedUrls]);
+  const stagedUrls = useStagedImageUrls(stagedImages);
 
   const isEdit = Boolean(quotationId);
   const enquiryAdvanceAmount = enquiry?.advanceAmount ?? null;
@@ -220,7 +226,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   const saving = createMutation.isPending || updateMutation.isPending;
 
   const uploadImagesMutation = useMutation({
-    mutationFn: (files: File[]) => quotationService.uploadImages(quotationId!, files),
+    mutationFn: (files: File[]) => quotationService.uploadImages(quotationId!, files.map((file) => ({ file }))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] });
       showToast('Images added.');
@@ -245,7 +251,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       }
     } else {
       // No quotation ID yet, so the files are held and uploaded right after the quotation is created.
-      setStagedImages((prev) => [...prev, ...files].slice(0, 12));
+      setStagedImages((prev) => stageQuotationImages(prev, files));
     }
   }
 
@@ -414,10 +420,10 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                 >
                   {isEdit
                     ? (existingQuotation?.images ?? []).map((image) => (
-                        <ImageThumb
+                        <SavedImageThumb
                           key={image.id}
-                          src={getPublicAssetUrl(image.filePath)}
-                          alt={image.fileName}
+                          quotationId={quotationId!}
+                          image={image}
                           onRemove={() => deleteImageMutation.mutate(image.id)}
                         />
                       ))
@@ -426,6 +432,8 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                           key={url}
                           src={url}
                           alt={`decor ${index + 1}`}
+                          caption={stagedImages[index]?.caption ?? ''}
+                          onCaptionChange={(value) => setStagedImages((prev) => setStagedCaption(prev, index, value))}
                           onRemove={() => setStagedImages((prev) => prev.filter((_, i) => i !== index))}
                         />
                       ))}
@@ -466,7 +474,12 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   total={totals.total}
                   advanceAmount={Number(advanceAmount) || 0}
                   images={
-                    isEdit ? (existingQuotation?.images ?? []).map((image) => getPublicAssetUrl(image.filePath)) : stagedUrls
+                    isEdit
+                      ? (existingQuotation?.images ?? []).map((image) => ({
+                          src: getPublicAssetUrl(image.filePath),
+                          caption: image.caption,
+                        }))
+                      : stagedUrls.map((url, index) => ({ src: url, caption: stagedImages[index]?.caption || null }))
                   }
                 />
               </Box>

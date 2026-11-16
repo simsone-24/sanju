@@ -37,6 +37,7 @@ const EMPTY_FORM: RentalItemFormValues = {
   itemName: '',
   category: '',
   defaultRentRate: '',
+  totalStock: '',
   description: '',
   status: 'ACTIVE',
 };
@@ -44,8 +45,9 @@ const EMPTY_FORM: RentalItemFormValues = {
 /**
  * The rentable catalogue — "md files/Stock/stock.md" §6.
  *
- * Phase 1 carries no physical stock counts (§6 "Important", §37): this master describes what can be
- * rented and at what default rate, not how much of it exists.
+ * Each item also records its Total Stock Count — how many the business owns. It is a figure to read:
+ * the stock availability checks §6 and §37 leave out of phase 1 are still not performed, so a stock out
+ * neither validates against it nor reduces it.
  */
 export default function RentalItemListPage() {
   const queryClient = useQueryClient();
@@ -99,6 +101,7 @@ export default function RentalItemListPage() {
         itemName: editing.itemName,
         category: editing.category ?? '',
         defaultRentRate: editing.defaultRentRate !== null ? String(Number(editing.defaultRentRate)) : '',
+        totalStock: String(editing.totalStock),
         description: editing.description ?? '',
         status: editing.status,
       });
@@ -118,6 +121,8 @@ export default function RentalItemListPage() {
         itemName: values.itemName.trim(),
         category: values.category || undefined,
         defaultRentRate: values.defaultRentRate ? Number(values.defaultRentRate) : undefined,
+        // Cleared means none owned, so it is sent as 0 rather than left out (which would keep the old figure).
+        totalStock: values.totalStock ? Number(values.totalStock) : 0,
         description: values.description || undefined,
       };
       return editing
@@ -183,6 +188,13 @@ export default function RentalItemListPage() {
       align: 'right',
       render: (row) => (row.defaultRentRate !== null ? formatCurrency(row.defaultRentRate) : '—'),
       exportValue: (row) => row.defaultRentRate ?? '',
+    },
+    {
+      key: 'totalStock',
+      header: 'Total Stock',
+      align: 'right',
+      render: (row) => row.totalStock,
+      exportValue: (row) => String(row.totalStock),
     },
     {
       key: 'status',
@@ -380,13 +392,20 @@ export default function RentalItemListPage() {
           type="number"
           fullWidth
           margin="normal"
-          helperText={
-            form.formState.errors.defaultRentRate?.message ??
-            'Pre-fills the rate when this item is added to a stock out. Still editable per transaction.'
-          }
+          helperText={form.formState.errors.defaultRentRate?.message}
           error={Boolean(form.formState.errors.defaultRentRate)}
           slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
           {...form.register('defaultRentRate')}
+        />
+        <TextField
+          label="Total Stock Count"
+          type="number"
+          fullWidth
+          margin="normal"
+          error={Boolean(form.formState.errors.totalStock)}
+          helperText={form.formState.errors.totalStock?.message}
+          slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          {...form.register('totalStock')}
         />
         <TextField
           label="Description"

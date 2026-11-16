@@ -31,8 +31,9 @@ export interface QuotationPdfData {
   /** Advance agreed against the quotation; printed as a deduction from the total when present. */
   advanceAmount?: number;
   remarks: string | null;
-  // Absolute filesystem paths of sample decor images, rendered on a single gallery page.
-  imagePaths: string[];
+  // Sample decor images, rendered on a single gallery page: absolute filesystem path plus the
+  // description ("Stage", "Hall"…) printed under it, if one was given.
+  images: { path: string; caption: string | null }[];
 }
 
 export interface CompanyPdfData {
@@ -363,24 +364,44 @@ export async function generateQuotationPdf(
       .text(`If you have any questions, please contact us at ${company.email}`, left, y + 16, { width: contentWidth });
   }
 
-  // ---- Sample decor images — single gallery page --------------------------
-  const images = data.imagePaths.filter((p) => fs.existsSync(p));
+  // ---- Sample decor images — one picture per row, three rows to a page ---
+  const images = data.images.filter((image) => fs.existsSync(image.path));
   if (images.length) {
-    doc.addPage();
-    doc.font('Helvetica-Bold').fontSize(14).fillColor(INK).text('Sample Decor', left, MARGIN);
-    const galleryTop = doc.y + 10;
-    const cols = images.length === 1 ? 1 : 2;
-    const rows = Math.ceil(images.length / cols);
-    const gap = 12;
-    const cellW = (contentWidth - gap * (cols - 1)) / cols;
-    const cellH = (doc.page.height - galleryTop - MARGIN - gap * (rows - 1)) / rows;
-    images.forEach((img, i) => {
-      const x = left + (i % cols) * (cellW + gap);
-      const y = galleryTop + Math.floor(i / cols) * (cellH + gap);
+    const rowsPerPage = 3;
+    const gap = 14;
+    // Room under each picture for its description — only reserved when at least one image has one.
+    const captionH = images.some((image) => image.caption) ? 24 : 0;
+    let galleryTop = 0;
+
+    images.forEach((image, i) => {
+      const slot = i % rowsPerPage;
+      if (slot === 0) {
+        doc.addPage();
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(INK)
+          .text(i === 0 ? 'Sample Decor' : 'Sample Decor (continued)', left, MARGIN);
+        galleryTop = doc.y + 10;
+      }
+      const rowH = (doc.page.height - galleryTop - MARGIN - gap * (rowsPerPage - 1)) / rowsPerPage;
+      const y = galleryTop + slot * (rowH + gap);
       try {
-        doc.image(img, x, y, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+        doc.image(image.path, left, y, { fit: [contentWidth, rowH - captionH], align: 'center', valign: 'center' });
       } catch {
         // Skip an unreadable/corrupt image rather than failing the whole PDF.
+      }
+      if (image.caption) {
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(INK)
+          .text(image.caption, left, y + rowH - captionH + 6, {
+            width: contentWidth,
+            align: 'center',
+            lineBreak: false,
+            ellipsis: true,
+          });
       }
     });
   }

@@ -18,8 +18,13 @@ export const enquiryFormSchema = z
     city: z.string().optional().or(z.literal('')),
     eventTypeId: z.string().optional().or(z.literal('')),
     eventName: z.string().optional().or(z.literal('')),
-    eventDate: z.string().optional().or(z.literal('')),
-    eventTime: z.enum(['MORNING', 'EVENING']).optional().or(z.literal('')),
+    // One row per day the event runs. A row with no date is simply ignored on a draft.
+    eventDays: z.array(
+      z.object({
+        eventDate: z.string(),
+        eventTime: z.enum(['MORNING', 'EVENING']).or(z.literal('')),
+      }),
+    ),
     mahal: z.string().optional().or(z.literal('')),
     venue: z.string().optional().or(z.literal('')),
     estimatedBudget: z.string().optional().or(z.literal('')),
@@ -32,6 +37,7 @@ export const enquiryFormSchema = z
     appointmentNotes: z.string().optional().or(z.literal('')),
     appointmentStatus: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
     assignedUserId: z.string().optional().or(z.literal('')),
+    eventManagerId: z.string().optional().or(z.literal('')),
     // When the customer should next be contacted. Empty means no follow-up is owed.
     followUpDate: z.string().optional().or(z.literal('')),
     // Only meaningful on create — see EnquiryFormPage's EnquiryStatusSection. Any of the 6 statuses
@@ -54,9 +60,28 @@ export const enquiryFormSchema = z
     if (!data.eventTypeId) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventTypeId'], message: 'Select an event type.' });
     }
-    if (!data.eventDate) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Event date is required.' });
-    }
+    const seen = new Set<string>();
+    data.eventDays.forEach((day, index) => {
+      if (!day.eventDate) {
+        // The first row is the event's main date and is required; any further row left blank is a
+        // mistake rather than an empty optional, so it is flagged too.
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['eventDays', index, 'eventDate'],
+          message: index === 0 ? 'Event date is required.' : 'Pick a date or remove this row.',
+        });
+        return;
+      }
+      const key = `${day.eventDate}|${day.eventTime}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['eventDays', index, 'eventDate'],
+          message: 'This date and time is already added.',
+        });
+      }
+      seen.add(key);
+    });
 
     if (data.customerType === 'EXISTING') {
       if (!data.customerId) {

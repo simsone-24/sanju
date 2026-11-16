@@ -19,6 +19,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useMediaQuery } from '@mui/material';
@@ -161,6 +162,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Customers', path: '/customers', icon: <PeopleIcon />, module: 'CUSTOMERS' },
       { label: 'Stock Items', path: '/rent/items', icon: <CategoryIcon />, module: 'RENT' },
+      { label: 'Expenses', path: '/expenses', icon: <ReceiptLongIcon />, module: 'EXPENSES' },
     ],
   },
   {

@@ -14,6 +14,8 @@ export const ROUTES = {
   rentReturns: '/rent/returns',
   rentPayments: '/rent/payments',
   rentReports: '/rent/reports',
+  expenses: '/expenses',
+  expenseCategories: '/expenses/categories',
   customers: '/customers',
   masters: '/masters',
   mastersUsers: '/masters?tab=users',

@@ -6,7 +6,13 @@ import { validate } from '../../middleware/validate';
 import { createPhotoUploader } from '../../middleware/upload';
 import { ModuleName } from '../permissions/catalog';
 import * as quotationsController from './controller';
-import { changeQuotationStatusSchema, createQuotationSchema, updateQuotationSchema } from './validation';
+import {
+  changeQuotationStatusSchema,
+  createQuotationSchema,
+  updateQuotationImageSchema,
+  updateQuotationSchema,
+  uploadQuotationImagesSchema,
+} from './validation';
 
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per image
 const imageUploader = createPhotoUploader('quotation-images', MAX_IMAGE_SIZE_BYTES);
@@ -64,7 +70,14 @@ router.post(
   '/:id/images',
   authorize(ModuleName.QUOTATIONS, 'canEdit'),
   imageUploader.array('images', 12),
+  validate(uploadQuotationImagesSchema),
   quotationsController.uploadImages,
+);
+router.patch(
+  '/:id/images/:imageId',
+  authorize(ModuleName.QUOTATIONS, 'canEdit'),
+  validate(updateQuotationImageSchema),
+  quotationsController.updateImage,
 );
 router.delete('/:id/images/:imageId', authorize(ModuleName.QUOTATIONS, 'canEdit'), quotationsController.deleteImage);
 

@@ -3,7 +3,9 @@ import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import FlagIcon from '@mui/icons-material/Flag';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -33,14 +35,15 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Controller, useForm, type Control } from 'react-hook-form';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Controller, useFieldArray, useForm, type Control } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DatePickerField } from '../../components/DatePickerField';
 import { FormPage } from '../../components/FormPage';
 import { FormSection } from '../../components/FormSection';
+import type { FormNavSection } from '../../components/FormSectionNav';
 import { resolveStatusConfig } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TimePickerField } from '../../components/TimePickerField';
@@ -78,6 +81,12 @@ import { orderConfirmedWarning } from './enquiryOrderConfirmGuard';
 import { EnquiryQuotationDialog } from './EnquiryQuotationDialog';
 import { useEnquiryQuotations } from './useEnquiryQuotations';
 import { ImageThumb } from '../quotations/ImageThumb';
+import {
+  setStagedCaption,
+  stageQuotationImages,
+  useStagedImageUrls,
+  type StagedQuotationImage,
+} from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
@@ -126,11 +135,22 @@ function quotationStatusOptions(status: QuotationStatus, canEdit: boolean, canAp
 type InitialEnquiryStatus = EnquiryStatus;
 
 interface EnquiryStatusSectionProps {
+  step: number;
   control: Control<EnquiryFormValues>;
   enquiry: EnquiryDetail | null;
   /** Called on every pick, so the page can retract an earlier Order Confirmed acknowledgement. */
   onStatusPicked: () => void;
 }
+
+// DOM ids of the form's sections — what the section navigator scrolls to.
+const ENQUIRY_SECTION_IDS = {
+  customer: 'enquiry-customer',
+  event: 'enquiry-event',
+  appointment: 'enquiry-appointment',
+  quotation: 'enquiry-quotation',
+  budget: 'enquiry-budget',
+  status: 'enquiry-status',
+} as const;
 
 const APPOINTMENT_STATUS_OPTIONS: AppointmentStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
@@ -153,7 +173,7 @@ const STATUS_MENU_PROPS = {
   transformOrigin: { vertical: 'bottom', horizontal: 'left' },
 } as const;
 
-function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatusSectionProps) {
+function EnquiryStatusSection({ step, control, enquiry, onStatusPicked }: EnquiryStatusSectionProps) {
   // masters/user.md §Enquiries — Change Status and Convert to Order are permissions of their own.
   // Confirming an enquiry is what creates the order, so that one option needs the second permission.
   const canChangeStatus = usePermission('ENQUIRIES', 'canChangeStatus');
@@ -171,7 +191,6 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
           margin="none"
           value={field.value ? dayjs(field.value) : null}
           onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
-          helperText="When the customer should next be contacted. Leave empty if none is due."
         />
       )}
     />
@@ -191,7 +210,13 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
 
   if (!enquiry) {
     return (
-      <FormSection title="Enquiry Status" subtitle="Choose the status this enquiry should start at." icon={<FlagIcon />}>
+      <FormSection
+        id={ENQUIRY_SECTION_IDS.status}
+        step={step}
+        title="Enquiry Status"
+        subtitle="Choose the status this enquiry should start at."
+        icon={<FlagIcon />}
+      >
         {followUpField}
         <Controller
           name="status"
@@ -206,7 +231,6 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
                 field.onChange(event.target.value as InitialEnquiryStatus);
                 onStatusPicked();
               }}
-              helperText="Enquiries usually start as Pending. Choosing Order Confirmed here creates the customer record straight away."
               sx={{ gridColumn: '1 / -1' }}
               slotProps={{ select: { MenuProps: STATUS_MENU_PROPS } }}
             >
@@ -219,7 +243,13 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
   }
 
   return (
-    <FormSection title="Enquiry Status" subtitle="Update the enquiry's current status." icon={<FlagIcon />}>
+    <FormSection
+      id={ENQUIRY_SECTION_IDS.status}
+      step={step}
+      title="Enquiry Status"
+      subtitle="Update the enquiry's current status."
+      icon={<FlagIcon />}
+    >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', gridColumn: '1 / -1' }}>
         <Typography variant="body2" color="text.secondary">
           Currently
@@ -244,13 +274,8 @@ function EnquiryStatusSection({ control, enquiry, onStatusPicked }: EnquiryStatu
               field.onChange(event.target.value as EnquiryStatus);
               onStatusPicked();
             }}
-            helperText={
-              !canChangeStatus
-                ? 'You do not have permission to change this enquiry’s status.'
-                : field.value !== enquiry.status
-                  ? `Will move from ${resolveStatusConfig('enquiry', enquiry.status).label} to ${resolveStatusConfig('enquiry', field.value).label} when you save.`
-                  : 'Select a new status — it is applied when you save this enquiry.'
-            }
+            // Only the reason the field is locked is spelled out; the rest speaks for itself.
+            helperText={!canChangeStatus ? 'You do not have permission to change this enquiry’s status.' : undefined}
             sx={{ gridColumn: '1 / -1' }}
             slotProps={{ select: { MenuProps: STATUS_MENU_PROPS } }}
           >
@@ -280,7 +305,10 @@ interface QuotationDraftControls {
   onAdvanceChange: (value: string) => void;
   /** Object URLs of the staged (not-yet-uploaded) sample decor images. */
   imageUrls: string[];
+  /** The description typed for each staged image, in the same order as `imageUrls`. */
+  imageCaptions: string[];
   onImagesAdd: (files: File[]) => void;
+  onImageCaptionChange: (index: number, caption: string) => void;
   onImageRemove: (index: number) => void;
 }
 
@@ -291,10 +319,19 @@ interface QuotationDraftControls {
 // to yet, so instead of navigating away, this lets the items be entered inline — Save Enquiry then
 // creates both records together (the enquiry first, then the quotation against its new id), and the
 // backend already moves the enquiry to "Quotation to Share" the moment a quotation exists for it.
-function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; draft?: QuotationDraftControls }) {
+function QuotationSection({
+  step,
+  enquiry,
+  draft,
+}: {
+  step: number;
+  enquiry: EnquiryDetail | null;
+  draft?: QuotationDraftControls;
+}) {
   // Defaulted here rather than trusting the prop: a hot-reloaded parent can briefly still hold the
   // previous draft object (without staged images), which otherwise crashed the whole page.
   const draftImageUrls = draft?.imageUrls ?? [];
+  const draftImageCaptions = draft?.imageCaptions ?? [];
   const queryClient = useQueryClient();
   const canCreateQuotation = usePermission('QUOTATIONS', 'canCreate');
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
@@ -385,6 +422,8 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
 
     return (
       <FormSection
+        id={ENQUIRY_SECTION_IDS.quotation}
+        step={step}
         title="Quotation"
         subtitle="Optionally add items now — saving the enquiry will create this quotation with it."
         icon={<RequestQuoteIcon />}
@@ -426,9 +465,6 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
                       }}
                     />
                   </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    JPEG or PNG, up to 12 images. Uploaded when you save.
-                  </Typography>
                 </Stack>
                 {draftImageUrls.length > 0 && (
                   <Box
@@ -444,16 +480,14 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
                         key={url}
                         src={url}
                         alt={`decor ${index + 1}`}
+                        caption={draftImageCaptions[index] ?? ''}
+                        onCaptionChange={(value) => draft.onImageCaptionChange?.(index, value)}
                         onRemove={() => draft.onImageRemove?.(index)}
                       />
                     ))}
                   </Box>
                 )}
               </Box>
-
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
-                Saving the enquiry will also create this quotation and move the enquiry to "Quotation to Share".
-              </Typography>
 
               {/* The counterpart of the dialog's Cancel: discards the draft and leaves the enquiry
                   itself untouched, so the form's own Save/Cancel still mean what they did before. */}
@@ -546,7 +580,13 @@ function QuotationSection({ enquiry, draft }: { enquiry: EnquiryDetail | null; d
   ];
 
   return (
-    <FormSection title="Quotation" subtitle="Quotations linked to this enquiry." icon={<RequestQuoteIcon />}>
+    <FormSection
+      id={ENQUIRY_SECTION_IDS.quotation}
+      step={step}
+      title="Quotation"
+      subtitle="Quotations linked to this enquiry."
+      icon={<RequestQuoteIcon />}
+    >
       <Box sx={{ gridColumn: '1 / -1' }}>
         {showCreateQuotation && (
           <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 1.5 }}>
@@ -713,8 +753,11 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     customer,
     eventTypeId: toOptionalId(values.eventTypeId),
     eventName: cleanOptional(values.eventName),
-    eventDate: cleanOptional(values.eventDate),
-    eventTime: cleanOptional(values.eventTime) as CreateEnquiryInput['eventTime'],
+    // Rows with no date are dropped (a draft may leave them blank); the server makes the earliest
+    // day the enquiry's main date.
+    eventDays: values.eventDays
+      .filter((day) => day.eventDate)
+      .map((day) => ({ eventDate: day.eventDate, eventTime: day.eventTime || null })),
     mahal: cleanOptional(values.mahal),
     venue: cleanOptional(values.venue),
     estimatedBudget: values.estimatedBudget ? Number(values.estimatedBudget) : undefined,
@@ -729,6 +772,7 @@ function toCreateInput(values: EnquiryFormValues): CreateEnquiryInput {
     appointmentNotes: cleanOptional(values.appointmentNotes),
     appointmentStatus: values.appointmentStatus,
     assignedUserId: toOptionalId(values.assignedUserId),
+    eventManagerId: toOptionalId(values.eventManagerId),
     followUpDate: cleanOptional(values.followUpDate),
     status: values.status,
   };
@@ -742,12 +786,15 @@ function toUpdateInput(values: EnquiryFormValues): UpdateEnquiryInput {
   // user records that the follow-up is no longer owed, and an omitted field would leave the stored
   // date in place.
   const followUpDate = values.followUpDate?.trim() ? values.followUpDate : null;
+  // Likewise explicit null for the event manager, so choosing "Not set" removes a stored one.
+  const eventManagerId = toOptionalId(values.eventManagerId) ?? null;
   // A still-unconfirmed enquiry (customerType NEW) keeps its customer details on the enquiry itself,
   // so edits to them are sent as prospect fields. A linked (EXISTING) enquiry's customer is locked.
   if (values.customerType === 'NEW') {
     return {
       ...rest,
       followUpDate,
+      eventManagerId,
       customerName: values.customerName ?? '',
       mobile: values.mobile ?? '',
       whatsapp: cleanOptional(values.whatsapp),
@@ -756,7 +803,7 @@ function toUpdateInput(values: EnquiryFormValues): UpdateEnquiryInput {
       city: cleanOptional(values.city),
     };
   }
-  return { ...rest, followUpDate };
+  return { ...rest, followUpDate, eventManagerId };
 }
 
 const EMPTY_VALUES: EnquiryFormValues = {
@@ -770,8 +817,7 @@ const EMPTY_VALUES: EnquiryFormValues = {
   city: '',
   eventTypeId: '',
   eventName: '',
-  eventDate: '',
-  eventTime: '',
+  eventDays: [{ eventDate: '', eventTime: '' }],
   mahal: '',
   venue: '',
   estimatedBudget: '',
@@ -785,6 +831,7 @@ const EMPTY_VALUES: EnquiryFormValues = {
   appointmentNotes: '',
   appointmentStatus: 'PENDING',
   assignedUserId: '',
+  eventManagerId: '',
   status: 'PENDING',
 };
 
@@ -826,14 +873,10 @@ export default function EnquiryFormPage() {
   const [quotationCgst, setQuotationCgst] = useState('');
   const [quotationSgst, setQuotationSgst] = useState('');
   const [quotationItemsError, setQuotationItemsError] = useState<string | null>(null);
-  const [quotationImages, setQuotationImages] = useState<File[]>([]);
+  const [quotationImages, setQuotationImages] = useState<StagedQuotationImage[]>([]);
   // Object URLs for previewing staged (not-yet-uploaded) images — uploaded once the linked
   // quotation exists, since images hang off a quotation id.
-  const quotationImageUrls = useMemo(
-    () => quotationImages.map((file) => URL.createObjectURL(file)),
-    [quotationImages],
-  );
-  useEffect(() => () => quotationImageUrls.forEach((url) => URL.revokeObjectURL(url)), [quotationImageUrls]);
+  const quotationImageUrls = useStagedImageUrls(quotationImages);
   const [quotationPreviewOpen, setQuotationPreviewOpen] = useState(true);
 
   // "md files/Enquiry/flow.md" §3 — create mode's Order Confirmed confirmation. The message is
@@ -917,8 +960,9 @@ export default function EnquiryFormPage() {
       city: existingEnquiry.prospect?.city ?? '',
       eventTypeId: fromId(existingEnquiry.eventType?.id),
       eventName: existingEnquiry.eventName ?? '',
-      eventDate: existingEnquiry.eventDate ?? '',
-      eventTime: existingEnquiry.eventTime ?? '',
+      eventDays: existingEnquiry.eventDays.length
+        ? existingEnquiry.eventDays.map((day) => ({ eventDate: day.eventDate, eventTime: day.eventTime ?? '' }))
+        : [{ eventDate: existingEnquiry.eventDate?.slice(0, 10) ?? '', eventTime: existingEnquiry.eventTime ?? '' }],
       mahal: existingEnquiry.mahal ?? '',
       venue: existingEnquiry.venue ?? '',
       estimatedBudget: existingEnquiry.estimatedBudget ?? '',
@@ -931,6 +975,7 @@ export default function EnquiryFormPage() {
       appointmentNotes: existingEnquiry.appointmentNotes ?? '',
       appointmentStatus: existingEnquiry.appointmentStatus,
       assignedUserId: fromId(existingEnquiry.assignedUser?.id),
+      eventManagerId: fromId(existingEnquiry.eventManager?.id),
       followUpDate: existingEnquiry.followUpDate ?? '',
       status: existingEnquiry.status,
     });
@@ -981,7 +1026,17 @@ export default function EnquiryFormPage() {
   const customerNameValue = watch('customerName');
   const emailValue = watch('email');
   const addressValue = watch('address');
-  const eventDateValue = watch('eventDate');
+  // The earliest day is the enquiry's main date — the quotation preview is dated by it.
+  const eventDateValue =
+    watch('eventDays')
+      .map((day) => day.eventDate)
+      .filter(Boolean)
+      .sort()[0] ?? '';
+  const {
+    fields: eventDayFields,
+    append: appendEventDay,
+    remove: removeEventDay,
+  } = useFieldArray({ control, name: 'eventDays' });
   const advanceAmountValue = watch('advanceAmount');
 
   // Runs with an empty term as soon as the "Existing Customer" picker is shown so the dropdown
@@ -1068,7 +1123,11 @@ export default function EnquiryFormPage() {
 
   // Capped at the same 12-image limit the server enforces on quotation image uploads.
   function addQuotationImages(files: File[]) {
-    setQuotationImages((prev) => [...prev, ...files].slice(0, 12));
+    setQuotationImages((prev) => stageQuotationImages(prev, files));
+  }
+
+  function setQuotationImageCaption(index: number, caption: string) {
+    setQuotationImages((prev) => setStagedCaption(prev, index, caption));
   }
 
   function removeQuotationImage(index: number) {
@@ -1124,12 +1183,9 @@ export default function EnquiryFormPage() {
           sgstAmount={quotationTotals.sgstAmount}
           total={quotationTotals.total}
           advanceAmount={Number(advanceAmountValue) || 0}
-          images={quotationImageUrls}
+          images={quotationImageUrls.map((url, index) => ({ src: url, caption: quotationImages[index]?.caption || null }))}
         />
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', flexShrink: 0 }}>
-        Sample decor images added to the quotation appear here.
-      </Typography>
     </>
   );
 
@@ -1145,6 +1201,33 @@ export default function EnquiryFormPage() {
   );
 
   const showQuotationPreview = !isEdit && addQuotationNow;
+
+  // The section navigator. The Quotation card exists for an existing enquiry, and for a new one only
+  // when the user may create quotations (QuotationSection returns nothing otherwise) — so the list,
+  // and the step numbers on the cards, skip it in that case.
+  const canCreateQuotationHere = usePermission('QUOTATIONS', 'canCreate');
+  const hasQuotationSection = isEdit || canCreateQuotationHere;
+  const sectionHasError = (fields: string[]) => fields.some((field) => field in errors);
+  const sectionNav: FormNavSection[] = [
+    {
+      id: ENQUIRY_SECTION_IDS.customer,
+      label: 'Customer',
+      hasError: sectionHasError(['customerId', 'customerName', 'mobile', 'whatsapp', 'email', 'address', 'city']),
+    },
+    {
+      id: ENQUIRY_SECTION_IDS.event,
+      label: 'Event',
+      hasError: sectionHasError(['eventTypeId', 'eventDays', 'mahal', 'venue', 'estimatedBudget', 'eventManagerId']),
+    },
+    { id: ENQUIRY_SECTION_IDS.appointment, label: 'Appointment', hasError: sectionHasError(['appointmentDate']) },
+    ...(hasQuotationSection ? [{ id: ENQUIRY_SECTION_IDS.quotation, label: 'Quotation' }] : []),
+    {
+      id: ENQUIRY_SECTION_IDS.budget,
+      label: 'Final Budget',
+      hasError: sectionHasError(['finalBudgetAmount', 'advanceAmount']),
+    },
+    { id: ENQUIRY_SECTION_IDS.status, label: 'Status', hasError: sectionHasError(['status', 'followUpDate']) },
+  ];
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
@@ -1340,8 +1423,21 @@ export default function EnquiryFormPage() {
       sidePanelMinWidth={380}
       sidePanelMaxWidth={820}
       sidePanelStorageKey="enquiry-quotation-preview-width"
+      variant="premium"
+      maxWidth={1320}
+      sectionNav={sectionNav}
+      footerNote={
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {isEdit ? existingEnquiry?.enquiryNumber : 'A new enquiry number will be generated on save.'}
+          {isDirty && (
+            <Box component="span" sx={{ ml: 1.5, color: 'warning.main', fontWeight: 600 }}>
+              • Unsaved changes
+            </Box>
+          )}
+        </Typography>
+      }
     >
-      <FormSection title="Customer Information" icon={<PersonIcon />}>
+      <FormSection id={ENQUIRY_SECTION_IDS.customer} step={1} title="Customer Information" icon={<PersonIcon />}>
         {customerLocked ? (
           <EnquiryCustomerDetailsCard
             customerName={existingEnquiry?.customer.customerName ?? ''}
@@ -1408,10 +1504,7 @@ export default function EnquiryFormPage() {
                       autoFocus
                       label="Select or search a customer"
                       error={Boolean(errors.customerId)}
-                      helperText={
-                        errors.customerId?.message ??
-                        'Pick from the list, or type to search by name, mobile number, or customer code.'
-                      }
+                      helperText={errors.customerId?.message}
                     />
                   )}
                 />
@@ -1435,7 +1528,6 @@ export default function EnquiryFormPage() {
                   required
                   autoFocus
                   fullWidth
-                  placeholder="e.g. Priya Sharma"
                   error={Boolean(errors.customerName)}
                   helperText={errors.customerName?.message}
                   {...register('customerName')}
@@ -1444,7 +1536,6 @@ export default function EnquiryFormPage() {
                   label="Phone Number"
                   required
                   fullWidth
-                  placeholder="10-digit mobile number"
                   error={Boolean(errors.mobile)}
                   helperText={errors.mobile?.message}
                   slotProps={{ htmlInput: { maxLength: 10, inputMode: 'numeric' } }}
@@ -1463,7 +1554,6 @@ export default function EnquiryFormPage() {
                   <TextField
                     label="WhatsApp"
                     fullWidth
-                    placeholder="If different from phone number"
                     {...whatsappField}
                     // Typing here is the user taking the number over, so the mirror stops — their
                     // value would otherwise be overwritten on the next phone-number keystroke.
@@ -1491,7 +1581,6 @@ export default function EnquiryFormPage() {
                 <TextField
                   label="Email"
                   fullWidth
-                  placeholder="name@example.com"
                   error={Boolean(errors.email)}
                   helperText={errors.email?.message}
                   {...register('email')}
@@ -1504,7 +1593,13 @@ export default function EnquiryFormPage() {
         )}
       </FormSection>
 
-      <FormSection title="Event Information" subtitle="What the customer is planning." icon={<CelebrationIcon />}>
+      <FormSection
+        id={ENQUIRY_SECTION_IDS.event}
+        step={2}
+        title="Event Information"
+        subtitle="What the customer is planning."
+        icon={<CelebrationIcon />}
+      >
         <Controller
           name="eventTypeId"
           control={control}
@@ -1532,70 +1627,141 @@ export default function EnquiryFormPage() {
         />
 
         {/* <TextField label="Event Name" fullWidth {...register('eventName')} /> */}
-        <Controller
-          name="eventDate"
-          control={control}
-          render={({ field }) => (
-            <DatePickerField
-              label="Event Date"
-              required
-              margin="none"
-              value={field.value ? dayjs(field.value) : null}
-              onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
-              error={Boolean(errors.eventDate)}
-              helperText={errors.eventDate?.message}
-            />
-          )}
-        />
-        <Controller
-          name="eventTime"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              select
-              label="Event Time"
-              fullWidth
-              value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              inputRef={field.ref}
-              error={Boolean(errors.eventTime)}
-              helperText={errors.eventTime?.message}
-            >
-              <MenuItem value="">
-                <em>Not set</em>
-              </MenuItem>
-              <MenuItem value="MORNING">Morning</MenuItem>
-              <MenuItem value="EVENING">Evening</MenuItem>
-            </TextField>
-          )}
-        />
-        <TextField label="Mahal" fullWidth placeholder="e.g. Sri Krishna Mahal" {...register('mahal')} />
-        <TextField label="Venue" fullWidth placeholder="Hall, address, or landmark" {...register('venue')} />
+        <Box sx={{ gridColumn: '1 / -1' }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.secondary' }}>
+            Event Dates &amp; Times
+          </Typography>
+          <Stack spacing={1.5}>
+            {eventDayFields.map((row, index) => (
+              <Box
+                key={row.id}
+                sx={{
+                  display: 'grid',
+                  gap: 1.5,
+                  gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: 'minmax(0, 1fr) minmax(0, 1fr) auto' },
+                  alignItems: 'start',
+                }}
+              >
+                <Controller
+                  name={`eventDays.${index}.eventDate`}
+                  control={control}
+                  render={({ field }) => (
+                    <DatePickerField
+                      label={index === 0 ? 'Event Date' : `Event Date ${index + 1}`}
+                      required={index === 0}
+                      margin="none"
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(date: Dayjs | null) => field.onChange(date ? date.format('YYYY-MM-DD') : '')}
+                      error={Boolean(errors.eventDays?.[index]?.eventDate)}
+                      helperText={errors.eventDays?.[index]?.eventDate?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  name={`eventDays.${index}.eventTime`}
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="Event Time"
+                      fullWidth
+                      size="small"
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      inputRef={field.ref}
+                      sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' }, gridRow: { xs: 2, sm: 'auto' } }}
+                    >
+                      <MenuItem value="">
+                        <em>Not set</em>
+                      </MenuItem>
+                      <MenuItem value="MORNING">Morning</MenuItem>
+                      <MenuItem value="EVENING">Evening</MenuItem>
+                    </TextField>
+                  )}
+                />
+                <Stack
+                  direction="row"
+                  sx={{ gridColumn: { xs: 2, sm: 'auto' }, gridRow: { xs: 1, sm: 'auto' }, alignItems: 'center' }}
+                >
+                  <Tooltip title="Remove this date">
+                    <span>
+                      <IconButton
+                        aria-label="Remove this date"
+                        disabled={eventDayFields.length === 1}
+                        onClick={() => removeEventDay(index)}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  {index === eventDayFields.length - 1 && (
+                    <Tooltip title="Add another date">
+                      <IconButton
+                        aria-label="Add another date"
+                        color="primary"
+                        onClick={() => appendEventDay({ eventDate: '', eventTime: '' })}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+        <TextField label="Mahal" fullWidth {...register('mahal')} />
+        <TextField label="Venue" fullWidth {...register('venue')} />
         <TextField
           label="Estimated Budget"
           type="number"
           fullWidth
-          placeholder="0"
-          helperText="The customer's expected spend — refine it later with the quotation."
           slotProps={{
             input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
             htmlInput: { min: 0 },
           }}
           {...register('estimatedBudget')}
         />
+        <Controller
+          name="eventManagerId"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              select
+              label="Event Manager"
+              fullWidth
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              error={Boolean(errors.eventManagerId)}
+              helperText={errors.eventManagerId?.message}
+            >
+              <MenuItem value="">
+                <em>Not set</em>
+              </MenuItem>
+              {users?.map((user) => (
+                <MenuItem key={user.id} value={fromId(user.id)}>
+                  {user.fullName}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
         <TextField
           label="Notes"
           fullWidth
           multiline
           rows={2}
-          placeholder="Anything worth remembering about this enquiry"
           sx={{ gridColumn: '1 / -1' }}
           {...register('notes')}
         />
       </FormSection>
 
       <FormSection
+        id={ENQUIRY_SECTION_IDS.appointment}
+        step={3}
         title="Appointment"
         subtitle="When and where you are meeting the customer."
         icon={<CalendarMonthIcon />}
@@ -1627,7 +1793,6 @@ export default function EnquiryFormPage() {
         <TextField
           label="Meeting Location"
           fullWidth
-          placeholder="e.g. Office, customer's home, venue site"
           {...register('meetingLocation')}
         />
         <Controller
@@ -1656,7 +1821,6 @@ export default function EnquiryFormPage() {
           fullWidth
           multiline
           rows={2}
-          placeholder="What was discussed, what the customer asked for"
           sx={{ gridColumn: '1 / -1' }}
           {...register('appointmentNotes')}
         />
@@ -1690,6 +1854,7 @@ export default function EnquiryFormPage() {
       </FormSection>
 
       <QuotationSection
+        step={4}
         enquiry={isEdit ? (existingEnquiry ?? null) : null}
         draft={
           isEdit
@@ -1709,13 +1874,17 @@ export default function EnquiryFormPage() {
                 advanceAmount: advanceAmountValue ?? '',
                 onAdvanceChange: (value) => setValue('advanceAmount', value, { shouldDirty: true }),
                 imageUrls: quotationImageUrls,
+                imageCaptions: quotationImages.map((image) => image.caption),
                 onImagesAdd: addQuotationImages,
+                onImageCaptionChange: setQuotationImageCaption,
                 onImageRemove: removeQuotationImage,
               }
         }
       />
 
       <FormSection
+        id={ENQUIRY_SECTION_IDS.budget}
+        step={hasQuotationSection ? 5 : 4}
         title="Final Budget"
         subtitle="What this enquiry becomes worth — carried straight into the order when it is confirmed."
         icon={<PaymentsIcon />}
@@ -1724,8 +1893,6 @@ export default function EnquiryFormPage() {
           label="Final Budget Amount"
           type="number"
           fullWidth
-          placeholder="0"
-          helperText="Auto-filled from the approved quotation. Whatever stands here becomes the order's budget."
           slotProps={{
             input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
             htmlInput: { min: 0 },
@@ -1736,8 +1903,6 @@ export default function EnquiryFormPage() {
           label="Advance Amount"
           type="number"
           fullWidth
-          placeholder="0"
-          helperText="Already collected — recorded as the order's opening advance receipt (Cash) on confirmation."
           slotProps={{
             input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
             htmlInput: { min: 0 },
@@ -1747,6 +1912,7 @@ export default function EnquiryFormPage() {
       </FormSection>
 
       <EnquiryStatusSection
+        step={hasQuotationSection ? 6 : 5}
         control={control}
         enquiry={isEdit ? (existingEnquiry ?? null) : null}
         // Picking a different status retracts an earlier acknowledgement, so coming back to
@@ -1755,12 +1921,6 @@ export default function EnquiryFormPage() {
           orderConfirmAcknowledged.current = false;
         }}
       />
-
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          {isEdit ? existingEnquiry?.enquiryNumber : 'A new enquiry number will be generated on save.'}
-        </Typography>
-      </Box>
 
       {/* flow.md §3: confirmation only — confirming proceeds with the save as chosen. */}
       <ConfirmDialog

@@ -4,6 +4,8 @@ import calendarRoutes from '../modules/calendar/routes';
 import customersRoutes from '../modules/customers/routes';
 import documentsRoutes from '../modules/documents/routes';
 import enquiriesRoutes from '../modules/enquiries/routes';
+import expenseCategoriesRoutes from '../modules/expense-categories/routes';
+import expensesRoutes from '../modules/expenses/routes';
 import eventTypesRoutes from '../modules/event-types/routes';
 import invoicesRoutes from '../modules/invoices/routes';
 import ordersRoutes from '../modules/orders/routes';
@@ -56,6 +58,9 @@ router.use('/rent/returns', rentReturnsRoutes);
 router.use('/rent/payments', rentPaymentsRoutes);
 router.use('/rent/dashboard', rentDashboardRoutes);
 router.use('/rent/reports', rentReportsRoutes);
+
+router.use('/expense-categories', expenseCategoriesRoutes);
+router.use('/expenses', expensesRoutes);
 
 router.use('/reports', reportsRoutes);
 router.use('/settings', settingsRoutes);

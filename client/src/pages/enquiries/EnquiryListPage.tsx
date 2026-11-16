@@ -379,43 +379,27 @@ export default function EnquiryListPage() {
       key: 'enquiryNumber',
       header: 'Enquiry',
       sortable: true,
-      align: 'center' as const,
-      width: 165,
-      // The number is the row's link to its detail page — a real anchor, so it also supports
-      // middle-click and ctrl-click to open in a new tab.
+      width: 280,
+      // Enquiry number and customer share one column — "ENQ-2026-0004 - Simsone". The number is the
+      // row's link to its detail page — a real anchor, so it also supports middle-click and
+      // ctrl-click to open in a new tab.
       render: (row) => (
         <div className="tw-min-w-0">
-          <Link
-            to={`/enquiries/${row.id}`}
-            className="tw-block tw-truncate tw-font-bold tw-tabular-nums tw-text-brand tw-no-underline hover:tw-underline"
-          >
-            {row.enquiryNumber}
-          </Link>
+          <div className="tw-truncate">
+            <Link
+              to={`/enquiries/${row.id}`}
+              className="tw-font-bold tw-tabular-nums tw-text-brand tw-no-underline hover:tw-underline"
+            >
+              {row.enquiryNumber}
+            </Link>
+            <span className="tw-font-semibold"> - {row.customer.customerName || '—'}</span>
+          </div>
           <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-            Created {formatDate(row.createdAt)}
+            {row.customer.mobile || 'No mobile'} · Created {formatDate(row.createdAt)}
           </div>
         </div>
       ),
-      exportValue: (row) => row.enquiryNumber,
-    },
-    {
-      key: 'customer',
-      header: 'Customer',
-      sortable: true,
-      align: 'center' as const,
-      width: 150,
-      render: (row) => (
-        <div className="tw-flex tw-min-w-0 tw-items-center tw-justify-center tw-gap-2">
-          <InitialsAvatar name={row.customer.customerName || '?'} seed={row.customer.customerName || row.customer.mobile} />
-          <div className="tw-min-w-0">
-            <div className="tw-truncate tw-font-semibold tw-leading-tight">{row.customer.customerName || '—'}</div>
-            <div className="tw-truncate tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
-              {row.customer.mobile || 'No mobile'}
-            </div>
-          </div>
-        </div>
-      ),
-      exportValue: (row) => `${row.customer.customerName} (${row.customer.mobile})`,
+      exportValue: (row) => `${row.enquiryNumber} - ${row.customer.customerName}`,
     },
     {
       key: 'eventType',

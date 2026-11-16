@@ -21,6 +21,7 @@ export const ModuleName = {
   CUSTOMERS: 'CUSTOMERS',
   CALENDAR: 'CALENDAR',
   RENT: 'RENT',
+  EXPENSES: 'EXPENSES',
   REPORTS: 'REPORTS',
   MASTERS: 'MASTERS',
   SETTINGS: 'SETTINGS',
@@ -166,6 +167,14 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     // write a new rent transaction, and a group trusted to issue stock is the same group that books
     // what comes back. canPrint gates the printable stock out document (§12 Actions).
     actions: [VIEW, CREATE, EDIT, DELETE, PRINT, EXPORT],
+  },
+  {
+    module: ModuleName.EXPENSES,
+    label: 'Expenses',
+    description: 'Business expenses, receipts and expense categories',
+    // Enforced by: modules/expenses and modules/expense-categories routes. Categories share the
+    // module's permissions rather than Masters — they only classify expenses.
+    actions: [VIEW, CREATE, EDIT, DELETE, EXPORT],
   },
   {
     module: ModuleName.REPORTS,

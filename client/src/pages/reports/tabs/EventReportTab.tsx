@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '../../../components/DataTable';
 import { DatePickerField } from '../../../components/DatePickerField';
-import { StatCard } from '../../../components/StatCard';
 import { resolveStatusConfig } from '../../../components/statusConfig';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { usePermission } from '../../../hooks/usePermission';
@@ -17,10 +16,10 @@ import type { OrderStatus } from '../../../types/order';
 import type { EventReportRow } from '../../../types/report';
 import { formatCurrency, formatDate } from '../../../utils/format';
 import { toOptionalId } from '../../../utils/ids';
-import { BreakdownBarList } from '../BreakdownBarList';
+import { DonutChart } from '../DonutChart';
+import { KpiStrip } from '../KpiStrip';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { ReportPanel } from '../ReportPanel';
-import { STAT_ROW_SX } from '../reportLayout';
 
 const STATUS_OPTIONS: OrderStatus[] = ['YET_TO_START', 'IN_PROGRESS', 'ORDER_CLOSED', 'REJECTED'];
 
@@ -205,29 +204,25 @@ export default function EventReportTab() {
         </TextField>
       </ReportFilterBar>
 
-      <Box sx={STAT_ROW_SX}>
-        <StatCard
-          label="Total Events"
-          value={data?.summary.totalEvents ?? 0}
-          icon={<EventNoteIcon fontSize="small" />}
-          tone="violet"
-          subtext="Matching the filters"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Value on This Page"
-          value={formatCurrency(totalValue)}
-          icon={<DonutSmallIcon fontSize="small" />}
-          tone="blue"
-          subtext={`Across ${data?.events.length ?? 0} events shown`}
-          loading={isLoading}
-        />
-      </Box>
+      <KpiStrip
+        loading={isLoading}
+        items={[
+          { label: 'Total Events', value: data?.summary.totalEvents ?? 0, subtext: 'Matching the filters' },
+          {
+            label: 'Value on This Page',
+            value: formatCurrency(totalValue),
+            subtext: `Across ${data?.events.length ?? 0} events shown`,
+          },
+        ]}
+      />
 
       <Stack spacing={2.5}>
         <ReportPanel icon={<DonutSmallIcon fontSize="small" />} title="Events by Status">
-          <BreakdownBarList
-            items={(data?.summary.statusCounts ?? []).map((entry) => ({
+          <DonutChart
+            ariaLabel="Donut chart of events by status"
+            centerLabel={String(data?.summary.totalEvents ?? 0)}
+            centerCaption="Events"
+            slices={(data?.summary.statusCounts ?? []).map((entry) => ({
               label: resolveStatusConfig('order', entry.status).label,
               value: entry.count,
               displayValue: String(entry.count),

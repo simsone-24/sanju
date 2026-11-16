@@ -514,6 +514,7 @@ interface QuotationImageData {
   quotationId: number;
   fileName: string;
   filePath: string;
+  caption: string | null;
   sortOrder: number;
 }
 
@@ -530,6 +531,10 @@ export function findQuotationImageById(id: number, client: PrismaClientOrTx = pr
     where: { id, deletedAt: null },
     select: { id: true, quotationId: true, filePath: true, fileName: true },
   });
+}
+
+export function updateQuotationImageCaption(id: number, caption: string | null, client: PrismaClientOrTx = prisma) {
+  return client.quotationImage.update({ where: { id }, data: { caption } });
 }
 
 export function softDeleteQuotationImage(id: number, client: PrismaClientOrTx = prisma) {

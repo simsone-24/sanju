@@ -5,6 +5,10 @@ import type {
   CustomerReportFilters,
   EventReportFilters,
   EventReportResult,
+  ExpenseReportFilters,
+  ExpenseReportResult,
+  OrderReportFilters,
+  OrderReportResult,
   OutstandingReportFilters,
   OutstandingReportResult,
   RevenueReportFilters,
@@ -41,4 +45,18 @@ export async function getEvents(filters: EventReportFilters): Promise<EventRepor
     params: filters,
   });
   return { ...response.data.data, meta: response.data.meta! };
+}
+
+export async function getExpenses(filters: ExpenseReportFilters): Promise<ExpenseReportResult> {
+  const response = await apiClient.get<ApiSuccessResponse<ExpenseReportResult>>('/reports/expenses', {
+    params: filters,
+  });
+  return response.data.data;
+}
+
+export async function getOrders(filters: OrderReportFilters): Promise<OrderReportResult> {
+  const response = await apiClient.get<ApiSuccessResponse<OrderReportResult>>('/reports/orders', {
+    params: filters,
+  });
+  return response.data.data;
 }

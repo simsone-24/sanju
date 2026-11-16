@@ -20,6 +20,12 @@ export interface ExistingCustomerInput {
 
 export type CustomerInput = NewCustomerInput | ExistingCustomerInput;
 
+/** One day the event runs, with the time of day it happens (optional). */
+export interface EventDayInput {
+  eventDate: Date;
+  eventTime?: EventTime | null;
+}
+
 export interface CreateEnquiryInput {
   // Omitted entirely only for a DRAFT saved before any customer type was picked.
   customer?: CustomerInput;
@@ -29,6 +35,8 @@ export interface CreateEnquiryInput {
   eventName?: string;
   eventDate?: Date;
   eventTime?: EventTime;
+  /** Every day the event runs. When given, the earliest becomes eventDate / eventTime. */
+  eventDays?: EventDayInput[];
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;
@@ -43,6 +51,7 @@ export interface CreateEnquiryInput {
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
   assignedUserId?: number;
+  eventManagerId?: number;
   /** When the customer should next be contacted — the workflow's optional Follow-up step. */
   followUpDate?: Date;
   /** Defaults to NEW. Only a status reachable from NEW (see STATUS_TRANSITIONS in service.ts) may
@@ -56,6 +65,8 @@ export interface UpdateEnquiryInput {
   eventName?: string;
   eventDate?: Date;
   eventTime?: EventTime;
+  /** Every day the event runs. When given, the earliest becomes eventDate / eventTime. */
+  eventDays?: EventDayInput[];
   mahal?: string;
   venue?: string;
   estimatedBudget?: number;
@@ -70,6 +81,8 @@ export interface UpdateEnquiryInput {
   appointmentNotes?: string;
   appointmentStatus?: AppointmentStatus;
   assignedUserId?: number;
+  /** null removes the event manager; undefined leaves it untouched. */
+  eventManagerId?: number | null;
   /** null clears the date; undefined leaves it untouched. */
   followUpDate?: Date | null;
   // Prospect (unconfirmed customer) fields — applied only while the enquiry has no linked Customer.

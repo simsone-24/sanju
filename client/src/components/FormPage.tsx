@@ -1,6 +1,7 @@
-import { Alert, Box, Button, Divider, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Divider, Paper, Stack, Typography } from '@mui/material';
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
+import { FormSectionNav, type FormNavSection } from './FormSectionNav';
 import { Breadcrumbs, type BreadcrumbItem } from './Breadcrumbs';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 
@@ -35,6 +36,15 @@ interface FormPageProps {
   sidePanelStorageKey?: string;
   // Extra controls rendered next to the title (e.g. a "Hide/Show Preview" toggle).
   headerActions?: ReactNode;
+  /**
+   * `premium` opts the page into the polished layout: a floating action bar and, with `sectionNav`,
+   * a section navigator. The default keeps every other form page exactly as it was.
+   */
+  variant?: 'default' | 'premium';
+  /** Premium only: the sections to list in the navigator (each needs a FormSection with that `id`). */
+  sectionNav?: FormNavSection[];
+  /** Premium only: status text on the left of the action bar (a record number, "Unsaved changes"…). */
+  footerNote?: ReactNode;
   children: ReactNode;
 }
 
@@ -61,8 +71,12 @@ export function FormPage({
   sidePanelMaxWidth = 900,
   sidePanelStorageKey,
   headerActions,
+  variant = 'default',
+  sectionNav,
+  footerNote,
   children,
 }: FormPageProps) {
+  const premium = variant === 'premium';
   const blocker = useUnsavedChangesGuard(isDirty && !saving);
   const [savingDraft, setSavingDraft] = useState(false);
 
@@ -174,7 +188,50 @@ export function FormPage({
     </>
   );
 
-  const footer = (
+  const actionButtons = (
+    <>
+      <Button onClick={onCancel} disabled={saving} size="large" sx={{ flex: { xs: 1, sm: '0 0 auto' } }}>
+        Cancel
+      </Button>
+      <Button
+        variant="contained"
+        onClick={onSave}
+        disabled={saving || saveDisabled}
+        size="large"
+        sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+      >
+        {saving ? 'Saving…' : saveLabel}
+      </Button>
+    </>
+  );
+
+  // Premium: a floating bar that stays in view while the form scrolls, with the record's status on
+  // the left and the actions on the right.
+  const premiumFooter = (
+    <Box sx={{ mt: 3, position: 'sticky', bottom: 12, zIndex: 3 }}>
+      <Paper
+        variant="outlined"
+        sx={(theme) => ({
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          px: { xs: 1.5, sm: 3 },
+          py: 1.5,
+          borderRadius: '18px',
+          backdropFilter: 'blur(12px)',
+          backgroundColor: `color-mix(in srgb, ${(theme.vars ?? theme).palette.background.paper} 90%, transparent)`,
+          boxShadow: '0 -6px 28px -10px rgba(15, 23, 42, 0.22)',
+        })}
+      >
+        <Box sx={{ flex: 1, minWidth: 0, display: { xs: 'none', sm: 'block' } }}>{footerNote}</Box>
+        <Stack direction="row" spacing={1.5} sx={{ flex: { xs: 1, sm: '0 0 auto' } }}>
+          {actionButtons}
+        </Stack>
+      </Paper>
+    </Box>
+  );
+
+  const footer = premium ? premiumFooter : (
     <Box sx={{ mt: 3, position: 'sticky', bottom: 0, zIndex: 1 }}>
       <Divider />
       <Stack
@@ -182,18 +239,7 @@ export function FormPage({
         spacing={1.5}
         sx={{ justifyContent: { xs: 'stretch', sm: 'flex-end' }, py: 2, backgroundColor: 'background.default' }}
       >
-        <Button onClick={onCancel} disabled={saving} size="large" sx={{ flex: { xs: 1, sm: '0 0 auto' } }}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={onSave}
-          disabled={saving || saveDisabled}
-          size="large"
-          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
-        >
-          {saving ? 'Saving…' : saveLabel}
-        </Button>
+        {actionButtons}
       </Stack>
     </Box>
   );
@@ -235,6 +281,7 @@ export function FormPage({
         >
           <Box sx={{ minWidth: 0, pr: { xs: 0, md: 2 } }}>
             {header}
+            {premium && sectionNav && <FormSectionNav sections={sectionNav} orientation="horizontal" />}
             {serverError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {serverError}
@@ -286,6 +333,41 @@ export function FormPage({
         </Box>
         {confirmDialog}
       </>
+    );
+  }
+
+  if (premium && sectionNav) {
+    return (
+      <Box>
+        {header}
+        <Box
+          sx={{
+            maxWidth,
+            mx: 'auto',
+            display: 'grid',
+            gap: { lg: 4 },
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: '220px minmax(0, 1fr)' },
+            alignItems: 'start',
+          }}
+        >
+          <Box sx={{ display: { xs: 'none', lg: 'block' }, position: 'sticky', top: 16 }}>
+            <FormSectionNav sections={sectionNav} orientation="vertical" />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ display: { xs: 'block', lg: 'none' } }}>
+              <FormSectionNav sections={sectionNav} orientation="horizontal" />
+            </Box>
+            {serverError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {serverError}
+              </Alert>
+            )}
+            <Stack spacing={3}>{children}</Stack>
+            {footer}
+          </Box>
+        </Box>
+        {confirmDialog}
+      </Box>
     );
   }
 

@@ -7,6 +7,8 @@ import { sendSuccess } from '../../utils/response';
 import * as reportsService from './service';
 import {
   customerReportQuerySchema,
+  expenseReportQuerySchema,
+  orderReportQuerySchema,
   eventReportQuerySchema,
   outstandingReportQuerySchema,
   revenueReportQuerySchema,
@@ -84,6 +86,40 @@ export async function events(req: Request, res: Response, next: NextFunction): P
       status: query.status,
     });
     sendSuccess(res, result.data, 'Event report retrieved successfully.', 200, result.meta);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function expenses(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const query = parseQuery(expenseReportQuerySchema, req.query);
+    const result = await reportsService.getExpenseReport({
+      companyId: actor.companyId,
+      granularity: query.granularity,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      categoryId: query.categoryId,
+    });
+    sendSuccess(res, result, 'Expense report retrieved successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function orders(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const query = parseQuery(orderReportQuerySchema, req.query);
+    const result = await reportsService.getOrderReport({
+      companyId: actor.companyId,
+      granularity: query.granularity,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      eventTypeId: query.eventTypeId,
+    });
+    sendSuccess(res, result, 'Order report retrieved successfully.');
   } catch (error) {
     next(error);
   }

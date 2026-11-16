@@ -1,7 +1,15 @@
+import { OrderStatus } from '@prisma/client';
 import * as customersService from '../customers/service';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as reportsRepository from './repository';
-import { CustomerReportParams, EventReportParams, OutstandingReportParams, RevenueReportParams } from './types';
+import {
+  CustomerReportParams,
+  EventReportParams,
+  ExpenseReportParams,
+  OrderReportParams,
+  OutstandingReportParams,
+  RevenueReportParams,
+} from './types';
 
 export async function getRevenueReport(params: RevenueReportParams) {
   const {
@@ -61,5 +69,44 @@ export async function getEventReport(params: EventReportParams) {
       events: records,
     },
     meta: buildPaginationMeta(params.page, params.limit, totalRecords),
+  };
+}
+
+export async function getExpenseReport(params: ExpenseReportParams) {
+  const summary = await reportsRepository.summarizeExpenses(params);
+  return {
+    totalAmount: Number(summary.totalAmount),
+    expenseCount: summary.expenseCount,
+    byCategory: summary.byCategory.map((entry) => ({ ...entry, amount: Number(entry.amount) })),
+    byMethod: summary.byMethod.map((entry) => ({ ...entry, amount: Number(entry.amount) })),
+    granularity: params.granularity,
+    trend: summary.trend.map((point) => ({ ...point, amount: Number(point.amount) })),
+  };
+}
+
+export async function getOrderReport(params: OrderReportParams) {
+  const summary = await reportsRepository.summarizeOrders(params);
+  // Value leaves rejected orders out — nothing is expected from them — while the count keeps them.
+  const totalOrders = summary.byStatus.reduce((sum, entry) => sum + entry.orderCount, 0);
+  const totalValue = summary.byStatus
+    .filter((entry) => entry.status !== OrderStatus.REJECTED)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+
+  return {
+    totalOrders,
+    totalValue,
+    granularity: params.granularity,
+    byStatus: summary.byStatus.map((entry) => ({
+      status: entry.status,
+      orderCount: entry.orderCount,
+      amount: entry.status === OrderStatus.REJECTED ? 0 : Number(entry.amount),
+    })),
+    byEventType: summary.byEventType.map((entry) => ({
+      eventTypeId: entry.eventTypeId,
+      eventTypeName: entry.eventTypeName ?? 'Not set',
+      orderCount: entry.orderCount,
+      amount: Number(entry.amount),
+    })),
+    trend: summary.trend.map((point) => ({ ...point, amount: Number(point.amount) })),
   };
 }

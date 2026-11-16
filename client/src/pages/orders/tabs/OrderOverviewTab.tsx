@@ -263,6 +263,22 @@ export default function OrderOverviewTab({ order, editRequestId = 0, createdBy, 
                   // known has to say so instead.
                   value={order.eventDate ? dayjs(order.eventDate).format('DD MMM YYYY · dddd') : 'Not scheduled'}
                 />
+                {order.enquiry.eventDays.length > 1 && (
+                  <DetailRow
+                    icon={<EventIcon sx={{ fontSize: 16 }} />}
+                    label="Event Days"
+                    value={
+                      <Box>
+                        {order.enquiry.eventDays.map((day) => (
+                          <Typography key={`${day.eventDate}-${day.eventTime ?? ''}`} variant="body2" sx={{ fontWeight: 600 }}>
+                            {dayjs(day.eventDate.slice(0, 10)).format('DD MMM YYYY')}
+                            {day.eventTime ? ` · ${day.eventTime === 'MORNING' ? 'Morning' : 'Evening'}` : ''}
+                          </Typography>
+                        ))}
+                      </Box>
+                    }
+                  />
+                )}
                 <DetailRow icon={<PlaceIcon sx={{ fontSize: 16 }} />} label="Venue" value={order.venue ?? '—'} />
                 <DetailRow
                   icon={<ListAltIcon sx={{ fontSize: 16 }} />}

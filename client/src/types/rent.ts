@@ -78,6 +78,8 @@ export interface RentalItem {
   itemName: string;
   category: string | null;
   defaultRentRate: string | null;
+  /** How many of this item the business owns. */
+  totalStock: number;
   description: string | null;
   status: RentalItemStatus;
   createdAt: string;
@@ -88,6 +90,7 @@ export interface CreateRentalItemInput {
   itemName: string;
   category?: string;
   defaultRentRate?: number;
+  totalStock?: number;
   description?: string;
 }
 

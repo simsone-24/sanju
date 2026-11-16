@@ -111,3 +111,77 @@ export interface EventReportResult {
   summary: { totalEvents: number; statusCounts: EventStatusCount[] };
   events: EventReportRow[];
 }
+
+export type ExpenseGranularity = 'day' | 'week' | 'month';
+
+export interface ExpenseReportFilters {
+  granularity?: ExpenseGranularity;
+  dateFrom?: string;
+  dateTo?: string;
+  categoryId?: number;
+}
+
+/** One bucket of the expense trend: `period` is `YYYY-MM-DD` (a day, or the Monday of a week) or `YYYY-MM` (month), oldest first. */
+export interface ExpenseTrendPoint {
+  period: string;
+  amount: number;
+  expenseCount: number;
+}
+
+export interface ExpenseCategoryBreakdown {
+  categoryId: number;
+  categoryName: string;
+  amount: number;
+  expenseCount: number;
+}
+
+export interface ExpenseMethodBreakdown {
+  paymentMethod: string;
+  amount: number;
+}
+
+export interface ExpenseReportResult {
+  totalAmount: number;
+  expenseCount: number;
+  byCategory: ExpenseCategoryBreakdown[];
+  byMethod: ExpenseMethodBreakdown[];
+  granularity: ExpenseGranularity;
+  trend: ExpenseTrendPoint[];
+}
+
+export interface OrderReportFilters {
+  granularity?: ExpenseGranularity;
+  dateFrom?: string;
+  dateTo?: string;
+  eventTypeId?: number;
+}
+
+/** One bucket of the orders trend; `period` follows the same format as the expense trend. */
+export interface OrderTrendPoint {
+  period: string;
+  orderCount: number;
+  /** Value of the orders raised in the bucket, rejected orders excluded. */
+  amount: number;
+}
+
+export interface OrderStatusBreakdown {
+  status: string;
+  orderCount: number;
+  amount: number;
+}
+
+export interface OrderEventTypeBreakdown {
+  eventTypeId: number | null;
+  eventTypeName: string;
+  orderCount: number;
+  amount: number;
+}
+
+export interface OrderReportResult {
+  totalOrders: number;
+  totalValue: number;
+  granularity: ExpenseGranularity;
+  byStatus: OrderStatusBreakdown[];
+  byEventType: OrderEventTypeBreakdown[];
+  trend: OrderTrendPoint[];
+}

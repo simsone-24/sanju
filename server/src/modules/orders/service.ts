@@ -106,6 +106,7 @@ async function buildOrderFromEnquiry(
     estimatedBudget: Prisma.Decimal | null;
     advanceAmount: Prisma.Decimal | null;
     customer: { id: number } | null;
+    eventManager: { id: number } | null;
   },
   quotation: { id: number; quotationNumber: string; version: number; totalAmount: Prisma.Decimal } | null,
 ) {
@@ -134,6 +135,9 @@ async function buildOrderFromEnquiry(
         enquiryId: enquiry.id,
         quotationId: quotation?.id ?? null,
         customerId: enquiry.customer!.id,
+        // The order screens call the coordinator the Event Manager — it is the same person the
+        // enquiry named, so it carries over instead of being asked for twice.
+        coordinatorId: enquiry.eventManager?.id ?? null,
         eventDate: enquiry.eventDate,
         venue: enquiry.venue,
         notes: enquiry.notes,

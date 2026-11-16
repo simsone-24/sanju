@@ -35,3 +35,24 @@ export interface EventReportParams {
   eventTypeId?: number;
   status?: OrderStatus;
 }
+
+export type ExpenseGranularity = 'day' | 'week' | 'month';
+
+export interface ExpenseReportParams {
+  companyId: number;
+  /** Bucket size of the trend series: one point per day, Monday-start week or calendar month. */
+  granularity: ExpenseGranularity;
+  dateFrom?: Date;
+  dateTo?: Date;
+  categoryId?: number;
+}
+
+export interface OrderReportParams {
+  companyId: number;
+  /** Bucket size of the trend series: one point per day, Monday-start week or calendar month. */
+  granularity: ExpenseGranularity;
+  /** Orders are placed in the window by the date they were raised (created_at). */
+  dateFrom?: Date;
+  dateTo?: Date;
+  eventTypeId?: number;
+}

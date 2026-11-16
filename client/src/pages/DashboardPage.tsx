@@ -1,6 +1,8 @@
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import TodayIcon from '@mui/icons-material/Today';
@@ -8,16 +10,19 @@ import UpcomingIcon from '@mui/icons-material/Upcoming';
 import { Box, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AppTabs } from '../components/AppTabs';
 import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
 import { useAuth } from '../hooks/useAuth';
+import { usePermission } from '../hooks/usePermission';
 import * as calendarService from '../services/calendarService';
 import * as enquiryService from '../services/enquiryService';
 import * as reportService from '../services/reportService';
 import { startOfWeekMonday } from './calendar/weekUtils';
 import type { CalendarEvent } from '../types/calendar';
 import DashboardEventSection from './dashboard/DashboardEventSection';
+import { DashboardReports } from './dashboard/DashboardReports';
 
 // docs/03_MODULES.md §2 (Dashboard Widgets) and docs/06_UI_UX_GUIDELINES.md §6 (Dashboard
 // Layout). No backend /dashboard endpoint exists — every tile here is assembled client-side from
@@ -27,6 +32,13 @@ import DashboardEventSection from './dashboard/DashboardEventSection';
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  // The Reports tab shows order and expense graphs from the Reports endpoints; each needs its own
+  // module's View permission as well as Reports.
+  const canViewReports = usePermission('REPORTS', 'canView');
+  const canViewOrders = usePermission('ORDERS', 'canView');
+  const canViewExpenses = usePermission('EXPENSES', 'canView');
+  const showReportsTab = canViewReports && (canViewOrders || canViewExpenses);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const today = dayjs().format('YYYY-MM-DD');
   const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
@@ -91,14 +103,8 @@ export default function DashboardPage() {
     navigate(`/orders/${event.id}`);
   }
 
-  return (
-    <Box>
-      <PageHeader
-        title="Dashboard"
-        subtitle={`Welcome back, ${user?.fullName}. ${user?.userGroup.groupName} · ${user?.company.companyName}`}
-        breadcrumbs={[{ label: 'Dashboard' }]}
-      />
-
+  const overview = (
+    <>
       {/* Event and appointment counts at a glance. Each tile drills into the records behind its
           number: events open the calendar view covering that period (or the Events report for the
           open-ended upcoming count), appointments open the Enquiry list filtered to the same
@@ -229,6 +235,39 @@ export default function DashboardPage() {
           onEventClick={handleEventClick}
         />
       </Box>
+    </>
+  );
+
+  // Overview is the dashboard as it always was; Reports adds the expense graphs. The active tab
+  // lives in the query string so a refresh keeps it.
+  const tabs = [
+    { label: 'Overview', icon: <DashboardOutlinedIcon fontSize="small" />, content: overview },
+    ...(showReportsTab
+      ? [{ label: 'Reports', icon: <BarChartIcon fontSize="small" />, content: <DashboardReports /> }]
+      : []),
+  ];
+  const activeIndex = showReportsTab && searchParams.get('tab') === 'reports' ? 1 : 0;
+
+  function handleTabChange(index: number) {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (index === 1) next.set('tab', 'reports');
+        else next.delete('tab');
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  return (
+    <Box>
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Welcome back, ${user?.fullName}. ${user?.userGroup.groupName} · ${user?.company.companyName}`}
+      />
+
+      <AppTabs idPrefix="dashboard" tabs={tabs} activeIndex={activeIndex} onActiveIndexChange={handleTabChange} />
     </Box>
   );
 }

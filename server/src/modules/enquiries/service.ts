@@ -1,4 +1,4 @@
-import { EnquiryStatus, SequenceType } from '@prisma/client';
+import { EnquiryStatus, EventTime, SequenceType } from '@prisma/client';
 import * as customersRepository from '../customers/repository';
 import * as customersService from '../customers/service';
 import * as ordersService from '../orders/service';
@@ -16,9 +16,52 @@ import {
   CreateEnquiryInput,
   CreateFollowUpInput,
   EnquiryStatsParams,
+  EventDayInput,
   ListEnquiriesParams,
   UpdateEnquiryInput,
 } from './types';
+
+interface EventDay {
+  eventDate: Date;
+  eventTime: EventTime | null;
+}
+
+// Within a day, Morning runs before Evening; a day with no time set sorts last.
+const EVENT_TIME_ORDER: Record<EventTime, number> = { MORNING: 0, EVENING: 1 };
+
+/**
+ * The event days a request carries, validated and put in order — or undefined when it says nothing
+ * about them. `eventDays` wins; the older single eventDate / eventTime pair is read as one day so
+ * existing API callers keep working. The same date may appear twice (a Morning and an Evening
+ * session), but never with the same time.
+ */
+function resolveEventDays(input: {
+  eventDays?: EventDayInput[];
+  eventDate?: Date;
+  eventTime?: EventTime;
+}): EventDay[] | undefined {
+  const requested: EventDayInput[] | undefined =
+    input.eventDays ?? (input.eventDate ? [{ eventDate: input.eventDate, eventTime: input.eventTime }] : undefined);
+  if (!requested) return undefined;
+
+  const days: EventDay[] = requested.map((day) => ({ eventDate: day.eventDate, eventTime: day.eventTime ?? null }));
+  const seen = new Set<string>();
+  for (const day of days) {
+    const key = `${day.eventDate.toISOString().slice(0, 10)}|${day.eventTime ?? ''}`;
+    if (seen.has(key)) {
+      throw new AppError(400, 'The same event date and time is entered more than once.', [
+        { field: 'eventDays', message: 'Each event date and time can only be added once.' },
+      ]);
+    }
+    seen.add(key);
+  }
+
+  return days.sort(
+    (a, b) =>
+      a.eventDate.getTime() - b.eventDate.getTime() ||
+      (a.eventTime ? EVENT_TIME_ORDER[a.eventTime] : 2) - (b.eventTime ? EVENT_TIME_ORDER[b.eventTime] : 2),
+  );
+}
 
 // Shape returned to the API: the linked customer and the prospect_* columns are normalised into a
 // single `customer` object (id is null while the enquiry is still an unconfirmed prospect).
@@ -47,9 +90,10 @@ function mapEnquiryDetail<
     prospectEmail: string | null;
     prospectAddress: string | null;
     prospectCity: string | null;
+    eventDays: { id: number; eventDate: Date; eventTime: EventTime | null }[];
   },
 >(row: T) {
-  const { prospectWhatsapp, prospectEmail, prospectAddress, prospectCity, ...listPart } = row;
+  const { prospectWhatsapp, prospectEmail, prospectAddress, prospectCity, eventDays, ...listPart } = row;
   const mapped = mapEnquiryListItem(listPart);
   // Editable prospect block, present only while the enquiry has no linked Customer yet.
   const prospect = row.customer
@@ -62,7 +106,9 @@ function mapEnquiryDetail<
         address: prospectAddress,
         city: prospectCity,
       };
-  return { ...mapped, prospect };
+  // A day has no time of day, so it travels as a plain YYYY-MM-DD string — no timezone to shift it.
+  const days = eventDays.map((day) => ({ ...day, eventDate: day.eventDate.toISOString().slice(0, 10) }));
+  return { ...mapped, prospect, eventDays: days };
 }
 
 export async function list(params: ListEnquiriesParams) {
@@ -175,6 +221,17 @@ export async function create(companyId: number, actorId: number, input: CreateEn
     }
   }
 
+  if (input.eventManagerId) {
+    const manager = await enquiriesRepository.findUserForCompany(companyId, input.eventManagerId);
+    if (!manager) {
+      throw new AppError(400, 'Selected event manager does not exist.', [
+        { field: 'eventManagerId', message: 'Selected event manager does not exist.' },
+      ]);
+    }
+  }
+
+  const eventDays = resolveEventDays(input);
+
   const initialStatus = input.status ?? EnquiryStatus.PENDING;
   if (!VALID_INITIAL_STATUSES.includes(initialStatus)) {
     throw new AppError(400, `Cannot create an enquiry directly at status ${initialStatus}.`, [
@@ -221,8 +278,10 @@ export async function create(companyId: number, actorId: number, input: CreateEn
         ...finalColumns,
         eventTypeId: input.eventTypeId,
         eventName: input.eventName,
-        eventDate: input.eventDate,
-        eventTime: input.eventTime,
+        // The earliest day is the enquiry's main date — see EnquiryEventDay in the schema.
+        eventDate: eventDays?.[0]?.eventDate,
+        eventTime: eventDays?.[0]?.eventTime,
+        eventDays: eventDays?.length ? { create: eventDays } : undefined,
         mahal: input.mahal,
         venue: input.venue,
         estimatedBudget: input.estimatedBudget,
@@ -235,6 +294,7 @@ export async function create(companyId: number, actorId: number, input: CreateEn
         appointmentNotes: input.appointmentNotes,
         appointmentStatus: input.appointmentStatus,
         assignedUserId: input.assignedUserId,
+        eventManagerId: input.eventManagerId,
         followUpDate: input.followUpDate,
         status: initialStatus,
       },
@@ -291,9 +351,37 @@ export async function update(actor: AuthenticatedUser, id: number, input: Update
     }
   }
 
+  if (input.eventManagerId) {
+    const manager = await enquiriesRepository.findUserForCompany(companyId, input.eventManagerId);
+    if (!manager) {
+      throw new AppError(400, 'Selected event manager does not exist.', [
+        { field: 'eventManagerId', message: 'Selected event manager does not exist.' },
+      ]);
+    }
+  }
+
   // Prospect (customer) fields are editable only while no Customer is linked yet; once linked, the
   // enquiry's customer is the immutable Customer Master record and these fields are ignored.
-  const { customerName, mobile, whatsapp, email, address, city, ...enquiryFields } = input;
+  const {
+    customerName,
+    mobile,
+    whatsapp,
+    email,
+    address,
+    city,
+    eventDays: _eventDays,
+    eventDate: _eventDate,
+    eventTime,
+    ...enquiryFields
+  } = input;
+  const eventDays = resolveEventDays(input);
+  // The main date follows the days; a request that changes only the time of day (no date) leaves the
+  // list alone and just updates the main time.
+  const eventFields = eventDays
+    ? { eventDate: eventDays[0]?.eventDate ?? null, eventTime: eventDays[0]?.eventTime ?? null }
+    : eventTime !== undefined
+      ? { eventTime }
+      : {};
   const prospectData = existingEnquiry.customer
     ? {}
     : {
@@ -305,7 +393,10 @@ export async function update(actor: AuthenticatedUser, id: number, input: Update
         ...(city !== undefined ? { prospectCity: city ?? null } : {}),
       };
 
-  const enquiry = await enquiriesRepository.updateEnquiry(id, { ...enquiryFields, ...prospectData });
+  const enquiry = await prisma.$transaction(async (tx) => {
+    if (eventDays) await enquiriesRepository.replaceEventDays(id, eventDays, tx);
+    return enquiriesRepository.updateEnquiry(id, { ...enquiryFields, ...eventFields, ...prospectData }, tx);
+  });
 
   await logActivity({
     companyId,

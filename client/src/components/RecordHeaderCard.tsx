@@ -5,6 +5,8 @@ export interface HeaderFact {
   icon: ReactNode;
   label: string;
   value: string;
+  /** Let a long value wrap onto several lines instead of being cut off with an ellipsis. */
+  wrap?: boolean;
 }
 
 export interface HeaderFigure {
@@ -30,7 +32,7 @@ interface RecordHeaderCardProps {
 
 // One labelled fact in the meta strip: icon-led caption above the value, per
 // "md files/order/view.md" §Design Improvements ("use icon for every information block").
-function MetaField({ icon, label, value }: HeaderFact) {
+function MetaField({ icon, label, value, wrap = false }: HeaderFact) {
   return (
     <Box sx={{ minWidth: 0, px: { xs: 0, sm: 2.5 }, py: 0.25 }}>
       <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mb: 0.5 }}>
@@ -42,7 +44,11 @@ function MetaField({ icon, label, value }: HeaderFact) {
       <Typography
         variant="body2"
         title={value}
-        sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        sx={
+          wrap
+            ? { fontWeight: 600, maxWidth: 260 }
+            : { fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+        }
       >
         {value}
       </Typography>

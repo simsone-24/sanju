@@ -12,7 +12,9 @@ import { parseId } from '../../utils/parseId';
 import {
   ChangeQuotationStatusSchema,
   CreateQuotationSchema,
+  UpdateQuotationImageSchema,
   UpdateQuotationSchema,
+  UploadQuotationImagesSchema,
   listQuotationsQuerySchema,
 } from './validation';
 
@@ -172,19 +174,46 @@ export async function approve(req: Request<{ id: string }>, res: Response, next:
   }
 }
 
-export async function uploadImages(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+export async function uploadImages(
+  req: Request<{ id: string }, unknown, UploadQuotationImagesSchema>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const actor = requireUser(req);
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     if (!files.length) {
       throw new AppError(400, 'At least one image is required.', [{ field: 'images', message: 'Select an image.' }]);
     }
-    const mapped = files.map((file) => ({
+    // The descriptions line up with the files by position.
+    const captions = req.body.captions ?? [];
+    const mapped = files.map((file, index) => ({
       fileName: file.originalname,
       filePath: path.relative(env.uploadPath, file.path).split(path.sep).join('/'),
+      caption: captions[index] || undefined,
     }));
     const quotation = await quotationsService.addImages(actor.companyId, actor.id, parseId(req.params.id), mapped);
     sendSuccess(res, quotation, 'Images added successfully.', 201);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateImage(
+  req: Request<{ id: string; imageId: string }, unknown, UpdateQuotationImageSchema>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const quotation = await quotationsService.updateImageCaption(
+      actor.companyId,
+      actor.id,
+      parseId(req.params.id),
+      parseId(req.params.imageId, 'imageId'),
+      req.body.caption,
+    );
+    sendSuccess(res, quotation, 'Image description updated successfully.');
   } catch (error) {
     next(error);
   }

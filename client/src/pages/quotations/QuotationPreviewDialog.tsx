@@ -128,7 +128,7 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
             sgstAmount={Math.round(((subtotal * sgstPercent) / 100) * 100) / 100}
             total={Number(quotation.totalAmount)}
             advanceAmount={Number(quotation.advanceAmount ?? 0)}
-            images={quotation.images.map((image) => getPublicAssetUrl(image.filePath))}
+            images={quotation.images.map((image) => ({ src: getPublicAssetUrl(image.filePath), caption: image.caption }))}
           />
         )}
       </DialogContent>

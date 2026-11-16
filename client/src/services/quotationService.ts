@@ -86,11 +86,27 @@ export async function approve(id: number): Promise<QuotationDetail> {
   return response.data.data;
 }
 
-// Uploads one or more sample decor images (JPEG/PNG) to a saved quotation.
-export async function uploadImages(id: number, files: File[]): Promise<QuotationDetail> {
+// Uploads one or more sample decor images (JPEG/PNG) to a saved quotation, each with the description
+// typed for it ("Stage", "Hall"…).
+export async function uploadImages(
+  id: number,
+  images: { file: File; caption?: string }[],
+): Promise<QuotationDetail> {
   const formData = new FormData();
-  files.forEach((file) => formData.append('images', file));
+  images.forEach(({ file, caption }) => {
+    formData.append('images', file);
+    // One description per file, always sent (even empty) so they stay lined up with the files.
+    formData.append('captions', caption ?? '');
+  });
   const response = await apiClient.post<ApiSuccessResponse<QuotationDetail>>(`/quotations/${id}/images`, formData);
+  return response.data.data;
+}
+
+export async function updateImageCaption(id: number, imageId: number, caption: string): Promise<QuotationDetail> {
+  const response = await apiClient.patch<ApiSuccessResponse<QuotationDetail>>(
+    `/quotations/${id}/images/${imageId}`,
+    { caption },
+  );
   return response.data.data;
 }
 

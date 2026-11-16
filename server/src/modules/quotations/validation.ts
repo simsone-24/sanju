@@ -100,3 +100,21 @@ export type CreateQuotationSchema = z.infer<typeof createQuotationSchema>;
 export type UpdateQuotationSchema = z.infer<typeof updateQuotationSchema>;
 export type ChangeQuotationStatusSchema = z.infer<typeof changeQuotationStatusSchema>;
 export type ListQuotationsQuerySchema = z.infer<typeof listQuotationsQuerySchema>;
+
+// A short description of one sample image ("Stage", "Hall"…). Blank means no description.
+const imageCaptionSchema = z.string().trim().max(100, 'Image description is too long.');
+
+// The image upload is multipart: `captions` repeats once per file, in the same order as `images`
+// (a single one arrives as a plain string rather than a list).
+export const uploadQuotationImagesSchema = z.object({
+  captions: z
+    .preprocess((value) => (value === undefined ? undefined : Array.isArray(value) ? value : [value]), z.array(imageCaptionSchema))
+    .optional(),
+});
+
+export const updateQuotationImageSchema = z.object({
+  caption: imageCaptionSchema,
+});
+
+export type UploadQuotationImagesSchema = z.infer<typeof uploadQuotationImagesSchema>;
+export type UpdateQuotationImageSchema = z.infer<typeof updateQuotationImageSchema>;

@@ -76,6 +76,8 @@ export interface OrderDetail extends OrderListItem {
     eventName: string | null;
     eventTime: EventTime | null;
     eventType: { eventName: string };
+    /** Every day the event runs, earliest first (the order's own eventDate is the first). */
+    eventDays: { eventDate: string; eventTime: EventTime | null }[];
   };
   customer: { id: number; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
   // Null when the enquiry was confirmed without any quotation — the order's total then comes from

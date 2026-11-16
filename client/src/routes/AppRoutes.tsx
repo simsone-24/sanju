@@ -18,6 +18,9 @@ import PaymentTrackerListPage from '../pages/payment-tracker/PaymentTrackerListP
 import QuotationDetailPage from '../pages/quotations/QuotationDetailPage';
 import QuotationFormPage from '../pages/quotations/QuotationFormPage';
 import QuotationListPage from '../pages/quotations/QuotationListPage';
+import ExpenseCategoryListPage from '../pages/expenses/ExpenseCategoryListPage';
+import ExpenseDetailPage from '../pages/expenses/ExpenseDetailPage';
+import ExpenseListPage from '../pages/expenses/ExpenseListPage';
 import RentDashboardPage from '../pages/rent/RentDashboardPage';
 import RentPaymentListPage from '../pages/rent/RentPaymentListPage';
 import RentReportsPage from '../pages/rent/RentReportsPage';
@@ -70,6 +73,10 @@ export const router = createBrowserRouter(
           <Route path="/payment-tracker/:id" element={<PaymentTrackerDetailPage />} />
 
           <Route path="/calendar" element={<CalendarPage />} />
+
+          <Route path="/expenses" element={<ExpenseListPage />} />
+          <Route path="/expenses/categories" element={<ExpenseCategoryListPage />} />
+          <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
 
           {/* Rent — a self-contained workflow with no link to enquiries, quotations or orders
               ("md files/Stock/stock.md" §1). Create/edit are dedicated pages like every other

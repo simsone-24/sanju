@@ -181,6 +181,11 @@ enum RentalPersonStatus {
   INACTIVE
 }
 
+enum ExpenseCategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum RentalItemStatus {
   ACTIVE
   INACTIVE
@@ -268,6 +273,8 @@ model Company {
   stockOuts         StockOut[]
   stockReturns      StockReturn[]
   rentPayments      RentPayment[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
 
   @@map("companies")
 }
@@ -367,6 +374,8 @@ model User {
   stockOutsCreated      StockOut[]               @relation("StockOutCreatedBy")
   stockReturnsCreated   StockReturn[]            @relation("StockReturnCreatedBy")
   rentPaymentsReceived  RentPayment[]            @relation("RentPaymentReceivedBy")
+  expensesCreated       Expense[]                @relation("ExpenseCreatedBy")
+  managedEnquiries      Enquiry[]                @relation("EnquiryEventManager")
 
   @@index([mobile])
   @@map("users")
@@ -489,6 +498,9 @@ model Enquiry {
   appointmentStatus AppointmentStatus @default(PENDING) @map("appointment_status")
 
   assignedUserId Int? @map("assigned_user_id")
+  // The event manager responsible for running the event — a system user, optional. Carried onto the
+  // order's coordinator when the enquiry converts.
+  eventManagerId Int? @map("event_manager_id")
 
   // Denormalized cache of the latest/approved quotation — see docs/10_IMPLEMENTATION_DECISIONS.md §8.
   // Kept in sync by the Enquiry/Quotation Service layer whenever a quotation is created, updated, or approved.
@@ -521,13 +533,16 @@ model Enquiry {
   customer     Customer?         @relation(fields: [customerId], references: [id])
   eventType    EventType?        @relation(fields: [eventTypeId], references: [id])
   assignedUser User?             @relation("EnquiryAssignedUser", fields: [assignedUserId], references: [id])
+  eventManager User?             @relation("EnquiryEventManager", fields: [eventManagerId], references: [id])
   followUps    EnquiryFollowUp[]
+  eventDays    EnquiryEventDay[]
   quotations   Quotation[]
   orders       Order[]
 
   @@index([eventDate])
   @@index([status])
   @@index([followUpDate])
+  @@index([eventManagerId])
   @@map("enquiries")
 }
 
@@ -917,6 +932,9 @@ model RentalItem {
   itemName        String           @map("item_name")
   category        String?
   defaultRentRate Decimal?         @map("default_rent_rate") @db.Decimal(12, 2)
+  // How many of this item the business owns. A figure to read, nothing more: stock out does not check
+  // it or draw it down.
+  totalStock      Int              @default(0) @map("total_stock")
   description     String?          @db.Text
   status          RentalItemStatus @default(ACTIVE)
   createdAt       DateTime         @default(now()) @map("created_at")
@@ -1126,4 +1144,86 @@ model DocumentSequence {
 
   @@unique([companyId, sequenceType, year])
   @@map("document_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// Expenses — general business expenses (rent, salaries, utilities...). Deliberately not linked to
+// orders: it is a standalone ledger, so it carries no order foreign key.
+// ---------------------------------------------------------------------------
+
+model ExpenseCategory {
+  id        Int                   @id @default(autoincrement())
+  companyId Int                   @map("company_id")
+  name      String
+  status    ExpenseCategoryStatus @default(ACTIVE)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+  deletedAt DateTime?             @map("deleted_at")
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  expenses Expense[]
+
+  @@unique([companyId, name])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id            Int           @id @default(autoincrement())
+  companyId     Int           @map("company_id")
+  categoryId    Int           @map("category_id")
+  expenseDate   DateTime      @map("expense_date") @db.Date
+  amount        Decimal       @db.Decimal(12, 2)
+  // Reuses the fixed PaymentMethod enum the payment forms already share rather than a second list.
+  paymentMethod PaymentMethod @map("payment_method")
+  paidTo        String?       @map("paid_to")
+  description   String?       @db.Text
+  createdById   Int?          @map("created_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  company   Company          @relation(fields: [companyId], references: [id])
+  category  ExpenseCategory  @relation(fields: [categoryId], references: [id])
+  createdBy User?            @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  receipts  ExpenseReceipt[]
+
+  @@index([companyId, expenseDate])
+  @@index([categoryId])
+  @@map("expenses")
+}
+
+// One row per attached receipt (image or PDF) — an expense can carry several. filePath is relative to
+// the upload root, like OrderDocument.filePath.
+model ExpenseReceipt {
+  id        Int       @id @default(autoincrement())
+  expenseId Int       @map("expense_id")
+  fileName  String    @map("file_name")
+  filePath  String    @map("file_path")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  expense Expense @relation(fields: [expenseId], references: [id])
+
+  @@index([expenseId])
+  @@map("expense_receipts")
+}
+
+// One row per day an event runs, each with its own time of day (Morning / Evening). enquiries.event_date
+// and event_time stay as the *main* day — the earliest of these rows — so the lists, filters,
+// calendar, orders and reports that key on a single date keep working unchanged; the service keeps
+// the two in step whenever the days are saved.
+model EnquiryEventDay {
+  id        Int        @id @default(autoincrement())
+  enquiryId Int        @map("enquiry_id")
+  eventDate DateTime   @map("event_date") @db.Date
+  eventTime EventTime? @map("event_time")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  deletedAt DateTime?  @map("deleted_at")
+
+  enquiry Enquiry @relation(fields: [enquiryId], references: [id])
+
+  @@index([enquiryId, eventDate])
+  @@map("enquiry_event_days")
 }

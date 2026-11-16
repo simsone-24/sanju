@@ -1,4 +1,4 @@
-import { AppointmentStatus, EnquiryStatus, Prisma } from '@prisma/client';
+import { AppointmentStatus, EnquiryStatus, EventTime, Prisma } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
 import { EnquiryStatsParams, ListEnquiriesParams } from './types';
 
@@ -25,6 +25,12 @@ const enquiryListSelect = {
 
 const enquiryDetailSelect = {
   ...enquiryListSelect,
+  eventManager: { select: { id: true, fullName: true } },
+  eventDays: {
+    where: { deletedAt: null },
+    select: { id: true, eventDate: true, eventTime: true },
+    orderBy: [{ eventDate: 'asc' }, { eventTime: 'asc' }, { id: 'asc' }],
+  },
   prospectWhatsapp: true,
   prospectEmail: true,
   prospectAddress: true,
@@ -189,6 +195,23 @@ export function findUserForCompany(companyId: number, userId: number, client: Pr
 
 export function createEnquiry(data: Prisma.EnquiryUncheckedCreateInput, client: PrismaClientOrTx = prisma) {
   return client.enquiry.create({ data, select: enquiryDetailSelect });
+}
+
+/**
+ * Replaces an enquiry's event days: the current ones are soft-deleted and the new list inserted.
+ * Runs inside the caller's transaction so the days and the enquiry's main date change together.
+ */
+export async function replaceEventDays(
+  enquiryId: number,
+  days: { eventDate: Date; eventTime: EventTime | null }[],
+  client: PrismaClientOrTx = prisma,
+): Promise<void> {
+  await client.enquiryEventDay.updateMany({ where: { enquiryId, deletedAt: null }, data: { deletedAt: new Date() } });
+  if (days.length > 0) {
+    await client.enquiryEventDay.createMany({
+      data: days.map((day) => ({ enquiryId, eventDate: day.eventDate, eventTime: day.eventTime })),
+    });
+  }
 }
 
 export function updateEnquiry(

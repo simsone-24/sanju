@@ -26,6 +26,11 @@ export const rentalItemFormSchema = z.object({
     .optional()
     .or(z.literal(''))
     .refine((value) => !value || Number(value) >= 0, 'Rate cannot be negative.'),
+  totalStock: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine((value) => !value || /^\d+$/.test(value.trim()), 'Enter a whole number, 0 or more.'),
   description: z.string().optional().or(z.literal('')),
   status: z.enum(['ACTIVE', 'INACTIVE']),
 });
