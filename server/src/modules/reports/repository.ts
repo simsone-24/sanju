@@ -341,17 +341,19 @@ function orderConditions(params: OrderReportParams): Prisma.Sql[] {
   const conditions: Prisma.Sql[] = [
     Prisma.sql`o.deleted_at IS NULL`,
     Prisma.sql`o.company_id = ${params.companyId}`,
+    // The report is by event date, so an order with none set has no place on it.
+    Prisma.sql`o.event_date IS NOT NULL`,
   ];
   if (params.eventTypeId) conditions.push(Prisma.sql`e.event_type_id = ${params.eventTypeId}`);
-  if (params.dateFrom) conditions.push(Prisma.sql`o.created_at >= ${params.dateFrom}`);
-  if (until) conditions.push(Prisma.sql`o.created_at < ${until}`);
+  if (params.dateFrom) conditions.push(Prisma.sql`o.event_date >= ${params.dateFrom}`);
+  if (until) conditions.push(Prisma.sql`o.event_date < ${until}`);
   return conditions;
 }
 
 /**
  * Everything the Orders report shows, aggregated in the database: how many orders and what they are
- * worth by status, by event type, and over time. Orders are placed in the date window by the day they
- * were raised.
+ * worth by status, by event type, and over time. Orders are placed in the date window by their event
+ * date; one with no event date set is left out.
  */
 export async function summarizeOrders(params: OrderReportParams) {
   const until = endExclusive(params.dateTo);
@@ -359,9 +361,11 @@ export async function summarizeOrders(params: OrderReportParams) {
     companyId: params.companyId,
     deletedAt: null,
     ...(params.eventTypeId ? { enquiry: { eventTypeId: params.eventTypeId } } : {}),
-    ...(params.dateFrom || until
-      ? { createdAt: { ...(params.dateFrom ? { gte: params.dateFrom } : {}), ...(until ? { lt: until } : {}) } }
-      : {}),
+    eventDate: {
+      not: null,
+      ...(params.dateFrom ? { gte: params.dateFrom } : {}),
+      ...(until ? { lt: until } : {}),
+    },
   };
   const conditions = Prisma.join(orderConditions(params), ' AND ');
 
@@ -379,7 +383,7 @@ export async function summarizeOrders(params: OrderReportParams) {
       GROUP BY e.event_type_id, et.event_name
     `,
     prisma.$queryRaw<OrderTrendRow[]>`
-      SELECT ${periodExpression(Prisma.sql`o.created_at`, params.granularity)} AS period,
+      SELECT ${periodExpression(Prisma.sql`o.event_date`, params.granularity)} AS period,
              COUNT(*) AS orderCount,
              ${VALUE_EXCLUDING_REJECTED} AS amount
       FROM orders o

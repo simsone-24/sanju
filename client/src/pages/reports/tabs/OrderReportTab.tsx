@@ -30,7 +30,7 @@ interface OrderReportTabProps {
   mode?: 'filters' | 'duration';
 }
 
-/** Orders over time, by status and by event type — placed in the window by the day each was raised. */
+/** Orders over time, by status and by event type — placed in the window by their event date (orders with no event date set are left out). */
 export default function OrderReportTab({ mode = 'filters' }: OrderReportTabProps) {
   const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
   const [dateTo, setDateTo] = useState<Dayjs | null>(null);
@@ -142,7 +142,7 @@ export default function OrderReportTab({ mode = 'filters' }: OrderReportTabProps
             }
           >
             <MonthlyLineChart
-              ariaLabel={`Line graph of orders raised each ${unitName}`}
+              ariaLabel={`Line graph of orders by event date for each ${unitName}`}
               seriesName="Orders"
               points={countPoints}
             />

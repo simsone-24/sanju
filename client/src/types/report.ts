@@ -160,7 +160,7 @@ export interface OrderReportFilters {
 export interface OrderTrendPoint {
   period: string;
   orderCount: number;
-  /** Value of the orders raised in the bucket, rejected orders excluded. */
+  /** Value of the orders whose event falls in the bucket, rejected orders excluded. */
   amount: number;
 }
 

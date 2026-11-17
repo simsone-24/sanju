@@ -51,7 +51,7 @@ export interface OrderReportParams {
   companyId: number;
   /** Bucket size of the trend series: one point per day, Monday-start week or calendar month. */
   granularity: ExpenseGranularity;
-  /** Orders are placed in the window by the date they were raised (created_at). */
+  /** Orders are placed in the window by their event date; an order with no event date set is left out. */
   dateFrom?: Date;
   dateTo?: Date;
   eventTypeId?: number;
