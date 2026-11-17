@@ -92,7 +92,8 @@ export const createEnquirySchema = z
           message: 'Customer name is required.',
         });
       }
-      if (!data.customer.mobile || !mobileSchema.safeParse(data.customer.mobile).success) {
+      // Optional, but a number that is given has to be a valid one.
+      if (data.customer.mobile && !mobileSchema.safeParse(data.customer.mobile).success) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['customer', 'mobile'],
@@ -129,8 +130,9 @@ export const updateEnquirySchema = z
     followUpDate: z.coerce.date().nullable().optional(),
     // Prospect (unconfirmed customer) fields — ignored server-side once a Customer is linked.
     customerName: z.string().min(1).optional(),
-    mobile: mobileSchema.optional(),
-    whatsapp: z.string().min(1).optional(),
+    // null clears the number; an omitted field leaves it alone.
+    mobile: mobileSchema.nullable().optional(),
+    whatsapp: z.string().min(1).nullable().optional(),
     email: z.string().email().optional(),
     address: z.string().min(1).optional(),
     city: z.string().min(1).optional(),

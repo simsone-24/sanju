@@ -12,8 +12,9 @@ const mobileSchema = z.string().regex(/^[6-9]\d{9}$/, 'Mobile number must be a v
 export const updateCustomerSchema = z
   .object({
     customerName: z.string().min(1).optional(),
-    mobile: mobileSchema.optional(),
-    whatsapp: z.string().min(1).optional(),
+    // Phone numbers are optional; null clears one. A number that is given must be valid.
+    mobile: mobileSchema.nullable().optional(),
+    whatsapp: z.string().min(1).nullable().optional(),
     email: z.string().email().optional(),
     address: z.string().min(1).optional(),
     city: z.string().min(1).optional(),

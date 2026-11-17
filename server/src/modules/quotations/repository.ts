@@ -487,8 +487,9 @@ export async function updateQuotation(
       ...(data.manualCustomer
         ? {
             manualCustomerName: data.manualCustomer.name,
-            manualPhone: data.manualCustomer.phone,
-            manualWhatsapp: data.manualCustomer.whatsapp,
+            // The form always sends the whole snapshot, and a number may now be cleared.
+            manualPhone: data.manualCustomer.phone ?? null,
+            manualWhatsapp: data.manualCustomer.whatsapp ?? null,
             manualEmail: data.manualCustomer.email,
             manualAddress: data.manualCustomer.address,
             manualGst: data.manualCustomer.gst,

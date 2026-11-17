@@ -14,7 +14,8 @@ const quotationItemSchema = z.object({
 const manualCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().min(1).optional(),
-  whatsapp: z.string().min(1, 'WhatsApp number is required for a manual quotation.'),
+  // Both numbers are optional; without either, the quotation simply cannot be shared on WhatsApp.
+  whatsapp: z.string().min(1).optional(),
   email: z.string().email().optional(),
   address: z.string().min(1).optional(),
   gst: z.string().min(1).optional(),
@@ -55,7 +56,7 @@ export const createQuotationSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['manualCustomer'],
-        message: 'Enter the customer WhatsApp number.',
+        message: 'Enter the customer details.',
       });
     }
   });

@@ -30,6 +30,9 @@ export type ListPaymentTrackerQuery = z.infer<typeof listPaymentTrackerQuerySche
 export const updatePaymentTrackerSchema = z
   .object({
     budgetAmount: z.coerce.number().positive('Budget must be greater than zero.').optional(),
+    // Why the budget moved (items added or removed on the event day). The service requires it
+    // whenever the amount actually changes; it is kept in the activity log, not a column.
+    budgetChangeReason: z.string().trim().min(1, 'Enter a reason for the budget change.').max(1000).optional(),
     collected: z
       .object({
         amount: z.coerce.number().positive('Collected amount must be greater than zero.'),

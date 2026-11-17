@@ -7,7 +7,7 @@ import {
   TimelineOppositeContent,
   TimelineSeparator,
 } from '@mui/lab';
-import { Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import dayjs from 'dayjs';
 
 export interface TimelineEntry {
@@ -16,6 +16,8 @@ export interface TimelineEntry {
   description?: string | null;
   performedAt: string;
   performedBy?: { fullName: string } | null;
+  /** Labelled facts shown in place of the description (e.g. Old / New amount, Reason). */
+  details?: { label: string; value: string }[];
   /** Dot colour, for timelines that span more than one record (see the enquiry timeline). */
   color?: 'primary' | 'success' | 'warning' | 'info' | 'error' | 'grey';
 }
@@ -50,7 +52,21 @@ export function AppTimeline({ entries, emptyMessage = 'No activity yet.' }: Time
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {entry.action.replaceAll('_', ' ')}
             </Typography>
-            {entry.description && (
+            {entry.details && entry.details.length > 0 && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25, my: 0.5 }}>
+                {entry.details.map((detail) => (
+                  <Box key={detail.label} sx={{ display: 'contents' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {detail.label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>
+                      {detail.value}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            {!entry.details?.length && entry.description && (
               <Typography variant="body2" color="text.secondary">
                 {entry.description}
               </Typography>

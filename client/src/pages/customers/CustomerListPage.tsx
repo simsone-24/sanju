@@ -98,7 +98,7 @@ export default function CustomerListPage() {
           )}
         </Stack>
       ),
-      exportValue: (row) => row.mobile,
+      exportValue: (row) => row.mobile ?? '',
     },
     {
       key: 'city',

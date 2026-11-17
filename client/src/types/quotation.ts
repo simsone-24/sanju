@@ -136,7 +136,7 @@ export interface QuotationItemInput {
 export interface ManualCustomerInput {
   name?: string;
   phone?: string;
-  whatsapp: string;
+  whatsapp?: string;
   email?: string;
   address?: string;
   gst?: string;

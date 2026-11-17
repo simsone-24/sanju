@@ -126,7 +126,7 @@ export default function OrderQuotationTab({ order }: OrderQuotationTabProps) {
   }
 
   function handleWhatsApp() {
-    const number = order.customer.mobile.replace(/\D/g, '');
+    const number = (order.customer.mobile ?? '').replace(/\D/g, '');
     if (!number) {
       showToast('This customer has no mobile number on record.', 'error');
       return;

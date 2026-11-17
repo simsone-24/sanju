@@ -32,6 +32,7 @@ export async function listCustomers(params: ListCustomersParams) {
             { customerCode: { contains: params.search } },
             { customerName: { contains: params.search } },
             { mobile: { contains: params.search } },
+            { whatsapp: { contains: params.search } },
             { email: { contains: params.search } },
           ],
         }
@@ -104,6 +105,10 @@ export function findCustomerById(companyId: number, id: number, client: PrismaCl
 
 export function findCustomerByMobile(companyId: number, mobile: string, client: PrismaClientOrTx = prisma) {
   return client.customer.findFirst({ where: { companyId, mobile, deletedAt: null } });
+}
+
+export function findCustomerByWhatsapp(companyId: number, whatsapp: string, client: PrismaClientOrTx = prisma) {
+  return client.customer.findFirst({ where: { companyId, whatsapp, deletedAt: null } });
 }
 
 export function createCustomer(data: Prisma.CustomerUncheckedCreateInput, client: PrismaClientOrTx = prisma) {

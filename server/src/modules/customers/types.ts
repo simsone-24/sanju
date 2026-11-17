@@ -8,7 +8,7 @@ export interface ListCustomersParams {
 
 export interface CreateCustomerInput {
   customerName: string;
-  mobile: string;
+  mobile?: string;
   whatsapp?: string;
   email?: string;
   address?: string;
@@ -17,8 +17,10 @@ export interface CreateCustomerInput {
 
 export interface UpdateCustomerInput {
   customerName?: string;
-  mobile?: string;
-  whatsapp?: string;
+  /** null clears the number. */
+  mobile?: string | null;
+  /** null clears the number. */
+  whatsapp?: string | null;
   email?: string;
   address?: string;
   city?: string;

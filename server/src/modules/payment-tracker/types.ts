@@ -36,6 +36,8 @@ export interface CollectedEntryInput {
 
 export interface UpdatePaymentTrackerInput {
   budgetAmount?: number;
+  /** Required by the service whenever the budget actually changes. */
+  budgetChangeReason?: string;
   collected?: CollectedEntryInput;
   /** A status to pin manually, or null to hand the status back to automatic recalculation. */
   paymentStatus?: PaymentTrackerStatus | null;

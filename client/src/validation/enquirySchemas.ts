@@ -93,7 +93,8 @@ export const enquiryFormSchema = z
     if (!data.customerName?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customerName'], message: 'Customer name is required.' });
     }
-    if (!data.mobile || !mobileRegex.test(data.mobile)) {
+    // Phone number is optional, but one that is given has to be a valid 10-digit number.
+    if (data.mobile && !mobileRegex.test(data.mobile)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['mobile'],

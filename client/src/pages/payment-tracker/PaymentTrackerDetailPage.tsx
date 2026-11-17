@@ -41,6 +41,7 @@ import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { PaymentTrackerPayment } from '../../types/paymentTracker';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
 import { PaymentHistoryDialog } from './PaymentHistoryDialog';
+import { BudgetChangeHistory } from './BudgetChangeHistory';
 import { PaymentTrackerEditDialog } from './PaymentTrackerEditDialog';
 
 // One figure in the collection summary — the same shape the Order Details payment card uses, so
@@ -349,6 +350,16 @@ export default function PaymentTrackerDetailPage() {
           />
         </Paper>
       </Box>
+
+      <Paper variant="outlined" sx={{ borderRadius: '16px', p: { xs: 2, sm: 3 }, minWidth: 0, mt: 2.5 }}>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 2.5 }}>
+          <EditIcon fontSize="small" sx={{ color: 'primary.main' }} />
+          <Typography variant="h4" component="h2">
+            Budget Changes
+          </Typography>
+        </Stack>
+        <BudgetChangeHistory orderId={data.id} disableContainer />
+      </Paper>
 
       <PaymentTrackerEditDialog open={editOpen} record={data} onClose={() => setEditOpen(false)} />
 

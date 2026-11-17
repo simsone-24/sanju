@@ -49,6 +49,35 @@ function resolvePaymentType(collectedSoFar: number, pendingBefore: number, amoun
   return PaymentType.PARTIAL;
 }
 
+export interface BudgetChange {
+  id: number;
+  performedAt: Date;
+  performedBy: { id: number; fullName: string } | null;
+  from: number;
+  to: number;
+  reason: string;
+}
+
+// Budget changes are the tracker's UPDATE entries whose metadata carries { from, to, reason };
+// entries logged before the reason was recorded have no metadata and are left out.
+export async function getBudgetChanges(companyId: number, orderId: number): Promise<BudgetChange[]> {
+  const order = await paymentTrackerRepository.findTrackerOrderById(companyId, orderId);
+  if (!order) throw new AppError(404, 'Payment tracker record not found.');
+
+  const entries = await paymentTrackerRepository.getTrackerActivityLog(orderId);
+  const changes: BudgetChange[] = [];
+  for (const entry of entries) {
+    const metadata = entry.metadata;
+    if (entry.action !== 'UPDATE' || typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+      continue;
+    }
+    const { from, to, reason } = metadata;
+    if (typeof from !== 'number' || typeof to !== 'number' || typeof reason !== 'string') continue;
+    changes.push({ id: entry.id, performedAt: entry.performedAt, performedBy: entry.performedBy, from, to, reason });
+  }
+  return changes;
+}
+
 /**
  * §Edit Payment — budget, a collection to record, the payment status and remarks, in one request.
  *
@@ -72,6 +101,11 @@ export async function update(
 
   // ---- validation, all of it, before anything is written ----
   if (budgetChanged) {
+    if (!input.budgetChangeReason) {
+      throw new AppError(400, 'Enter a reason for the budget change.', [
+        { field: 'budgetChangeReason', message: 'A reason is required when the budget changes.' },
+      ]);
+    }
     if (nextBudget < collectedSoFar) {
       throw new AppError(400, `The budget cannot be less than the ${collectedSoFar} already collected.`, [
         { field: 'budgetAmount', message: `Budget must be at least ${collectedSoFar}.` },
@@ -147,14 +181,21 @@ export async function update(
   // Logged per change rather than as one lump so the audit trail names what actually moved
   // (CLAUDE.md §Logging: Update, Payment, Status Change).
   if (budgetChanged) {
-    await logActivity({
-      companyId,
-      module: 'PAYMENT_TRACKER',
-      referenceId: orderId,
-      action: 'UPDATE',
-      description: `Budget for order "${order.orderNumber}" changed from ${currentBudget} to ${nextBudget}.`,
-      performedById: actorId,
-    });
+    const description = `Budget for order "${order.orderNumber}" changed from ${currentBudget} to ${nextBudget}. Reason: ${input.budgetChangeReason}`;
+    const metadata = { from: currentBudget, to: nextBudget, reason: input.budgetChangeReason ?? null };
+    // Written to both trails: the Payment Tracker's own history, and the order's Timeline tab,
+    // which only reads ORDERS entries.
+    for (const module of ['PAYMENT_TRACKER', 'ORDERS']) {
+      await logActivity({
+        companyId,
+        module,
+        referenceId: orderId,
+        action: 'UPDATE',
+        description,
+        metadata,
+        performedById: actorId,
+      });
+    }
   }
 
   if (input.collected && receiptNumber) {

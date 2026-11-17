@@ -206,6 +206,7 @@ export function getTrackerActivityLog(orderId: number, client: PrismaClientOrTx 
       id: true,
       action: true,
       description: true,
+      metadata: true,
       performedAt: true,
       performedBy: { select: { id: true, fullName: true } },
     },

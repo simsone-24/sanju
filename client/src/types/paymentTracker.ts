@@ -30,7 +30,7 @@ export interface PaymentTrackerRecord {
   paidAmount: string;
   /** Balance = budget − collected, maintained server-side. */
   pendingAmount: string;
-  customer: { id: number; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string | null };
   enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
   paymentTracker: PaymentTrackerStatusInfo | null;
 }
@@ -52,7 +52,7 @@ export interface PaymentTrackerDetail extends PaymentTrackerRecord {
   updatedAt: string;
   // Widens PaymentTrackerRecord's customer rather than replacing it — the detail endpoint returns
   // a superset (see trackerDetailSelect).
-  customer: { id: number; customerName: string; mobile: string; email: string | null };
+  customer: { id: number; customerName: string; mobile: string | null; email: string | null };
   coordinator: { id: number; fullName: string } | null;
   payments: PaymentTrackerPayment[];
   /** Sum of the ADVANCE receipts, for §Financial Summary. */
@@ -93,8 +93,20 @@ export interface CollectedEntryInput {
 
 export interface UpdatePaymentTrackerInput {
   budgetAmount?: number;
+  /** Required by the server whenever the budget changes. */
+  budgetChangeReason?: string;
   collected?: CollectedEntryInput;
   /** A status to pin by hand, or null to hand it back to automatic recalculation. */
   paymentStatus?: PaymentTrackerStatus | null;
   remarks?: string;
+}
+
+/** One recorded change of an order's budget, with the reason the user gave. */
+export interface BudgetChange {
+  id: number;
+  performedAt: string;
+  performedBy: { id: number; fullName: string } | null;
+  from: number;
+  to: number;
+  reason: string;
 }

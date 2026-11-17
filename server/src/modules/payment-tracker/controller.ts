@@ -77,6 +77,20 @@ export async function getHistory(req: Request<{ orderId: string }>, res: Respons
   }
 }
 
+export async function getBudgetChanges(
+  req: Request<{ orderId: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const changes = await paymentTrackerService.getBudgetChanges(actor.companyId, parseId(req.params.orderId, 'orderId'));
+    sendSuccess(res, changes, 'Budget changes retrieved successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function update(
   req: Request<{ orderId: string }, unknown, UpdatePaymentTrackerSchema>,
   res: Response,

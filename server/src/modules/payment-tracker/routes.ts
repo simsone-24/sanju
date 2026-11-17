@@ -17,6 +17,11 @@ router.get('/', authorize(ModuleName.PAYMENTS, 'canView'), paymentTrackerControl
 router.get('/stats', authorize(ModuleName.PAYMENTS, 'canView'), paymentTrackerController.stats);
 router.get('/:orderId', authorize(ModuleName.PAYMENTS, 'canView'), paymentTrackerController.getByOrderId);
 router.get('/:orderId/history', authorize(ModuleName.PAYMENTS, 'canView'), paymentTrackerController.getHistory);
+router.get(
+  '/:orderId/budget-changes',
+  authorize(ModuleName.PAYMENTS, 'canView'),
+  paymentTrackerController.getBudgetChanges,
+);
 router.put(
   '/:orderId',
   authorize(ModuleName.PAYMENTS, 'canEdit'),

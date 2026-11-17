@@ -50,7 +50,7 @@ export interface InvoiceResult {
   };
   customer: {
     customerName: string;
-    mobile: string;
+    mobile: string | null;
     email: string | null;
     address: string | null;
   };

@@ -16,5 +16,6 @@ export interface CustomerOption {
   id: number;
   customerCode: string;
   customerName: string;
-  mobile: string;
+  mobile: string | null;
+  whatsapp?: string | null;
 }

@@ -67,7 +67,7 @@ function resolveEventDays(input: {
 // single `customer` object (id is null while the enquiry is still an unconfirmed prospect).
 function mapEnquiryListItem<
   T extends {
-    customer: { id: number; customerName: string; mobile: string } | null;
+    customer: { id: number; customerName: string; mobile: string | null } | null;
     prospectName: string | null;
     prospectMobile: string | null;
   },
@@ -76,14 +76,14 @@ function mapEnquiryListItem<
   return {
     ...rest,
     customer: customer
-      ? { id: customer.id as number | null, customerName: customer.customerName, mobile: customer.mobile }
+      ? { id: customer.id as number | null, customerName: customer.customerName, mobile: customer.mobile ?? '' }
       : { id: null, customerName: prospectName ?? '', mobile: prospectMobile ?? '' },
   };
 }
 
 function mapEnquiryDetail<
   T extends {
-    customer: { id: number; customerName: string; mobile: string } | null;
+    customer: { id: number; customerName: string; mobile: string | null } | null;
     prospectName: string | null;
     prospectMobile: string | null;
     prospectWhatsapp: string | null;
@@ -188,14 +188,41 @@ async function resolveCustomerColumns(
 // ORDER_CONFIRMED materialises the customer immediately — see create() below.
 const VALID_INITIAL_STATUSES: EnquiryStatus[] = Object.values(EnquiryStatus);
 
+// A customer already on file owns its phone / WhatsApp numbers, so an enquiry typed in as a NEW
+// customer may not reuse one: the user must pick the existing customer instead, and the enquiry then
+// carries that customer's details rather than a second copy of them.
+async function assertProspectNumbersFree(
+  companyId: number,
+  numbers: { mobile?: string | null; whatsapp?: string | null },
+  client: PrismaClientOrTx,
+) {
+  const checks = [
+    { field: 'mobile', label: 'phone number', value: numbers.mobile, find: customersRepository.findCustomerByMobile },
+    { field: 'whatsapp', label: 'WhatsApp number', value: numbers.whatsapp, find: customersRepository.findCustomerByWhatsapp },
+  ] as const;
+
+  for (const check of checks) {
+    if (!check.value) continue;
+    const customer = await check.find(companyId, check.value, client);
+    if (customer) {
+      const message = `Customer "${customer.customerName}" already exists with this ${check.label}. Select the existing customer instead of creating a new one.`;
+      throw new AppError(409, message, [{ field: check.field, message }]);
+    }
+  }
+}
+
 // Finds an existing customer by mobile (never duplicating) or creates one from the given details.
 // Shared by create() (direct ORDER_CONFIRMED) and confirmProspectCustomer() (status change).
 async function findOrCreateCustomerId(
   companyId: number,
-  details: { customerName: string; mobile: string; whatsapp?: string; email?: string; address?: string; city?: string },
+  details: { customerName: string; mobile?: string; whatsapp?: string; email?: string; address?: string; city?: string },
   client: PrismaClientOrTx,
 ): Promise<number> {
-  const matched = await customersRepository.findCustomerByMobile(companyId, details.mobile, client);
+  // Phone numbers are optional but unique, so a number that is given identifies the customer; with
+  // neither, a new customer is created from the name alone.
+  const matched =
+    (details.mobile ? await customersRepository.findCustomerByMobile(companyId, details.mobile, client) : null) ??
+    (details.whatsapp ? await customersRepository.findCustomerByWhatsapp(companyId, details.whatsapp, client) : null);
   if (matched) return matched.id;
   const created = await customersService.create(companyId, details, client);
   return created.id;
@@ -239,6 +266,10 @@ export async function create(companyId: number, actorId: number, input: CreateEn
     ]);
   }
 
+  if (input.customer?.type === 'NEW') {
+    await assertProspectNumbersFree(companyId, input.customer, prisma);
+  }
+
   const enquiryNumber = await generateDocumentNumber(companyId, SequenceType.ENQUIRY);
 
   // Creating directly at ORDER_CONFIRMED with a NEW customer must create/link the Customer now
@@ -254,7 +285,7 @@ export async function create(companyId: number, actorId: number, input: CreateEn
               companyId,
               {
                 customerName: input.customer.customerName!,
-                mobile: input.customer.mobile!,
+                mobile: input.customer.mobile,
                 whatsapp: input.customer.whatsapp,
                 email: input.customer.email,
                 address: input.customer.address,
@@ -382,12 +413,24 @@ export async function update(actor: AuthenticatedUser, id: number, input: Update
     : eventTime !== undefined
       ? { eventTime }
       : {};
+  // Only a number the user is changing is checked, so editing an old prospect enquiry whose number
+  // has since become a customer's is not blocked for something it did not touch.
+  if (!existingEnquiry.customer) {
+    await assertProspectNumbersFree(
+      companyId,
+      {
+        mobile: mobile !== existingEnquiry.prospectMobile ? mobile : undefined,
+        whatsapp: whatsapp !== existingEnquiry.prospectWhatsapp ? whatsapp : undefined,
+      },
+      prisma,
+    );
+  }
   const prospectData = existingEnquiry.customer
     ? {}
     : {
         ...(customerName !== undefined ? { prospectName: customerName } : {}),
         ...(mobile !== undefined ? { prospectMobile: mobile } : {}),
-        ...(whatsapp !== undefined ? { prospectWhatsapp: whatsapp ?? null } : {}),
+        ...(whatsapp !== undefined ? { prospectWhatsapp: whatsapp } : {}),
         ...(email !== undefined ? { prospectEmail: email ?? null } : {}),
         ...(address !== undefined ? { prospectAddress: address ?? null } : {}),
         ...(city !== undefined ? { prospectCity: city ?? null } : {}),
@@ -472,7 +515,7 @@ async function confirmProspectCustomer(
   id: number,
   targetStatus: EnquiryStatus,
 ) {
-  if (!existingEnquiry.prospectName || !existingEnquiry.prospectMobile) {
+  if (!existingEnquiry.prospectName) {
     throw new AppError(400, 'This enquiry has no customer details to confirm.');
   }
 
@@ -481,7 +524,7 @@ async function confirmProspectCustomer(
       companyId,
       {
         customerName: existingEnquiry.prospectName!,
-        mobile: existingEnquiry.prospectMobile!,
+        mobile: existingEnquiry.prospectMobile ?? undefined,
         whatsapp: existingEnquiry.prospectWhatsapp ?? undefined,
         email: existingEnquiry.prospectEmail ?? undefined,
         address: existingEnquiry.prospectAddress ?? undefined,

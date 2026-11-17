@@ -18,7 +18,7 @@ export interface OrderListItem {
   pendingAmount: string;
   status: OrderStatus;
   createdAt: string;
-  customer: { id: number; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string | null };
   // Event name/type/time come from the linked enquiry — Order itself has no event name column.
   enquiry: { eventName: string | null; eventTime: EventTime | null; eventType: { eventName: string } } | null;
   /** The Payment Tracker's stored status, so both modules report the same payment standing. */
@@ -79,7 +79,7 @@ export interface OrderDetail extends OrderListItem {
     /** Every day the event runs, earliest first (the order's own eventDate is the first). */
     eventDays: { eventDate: string; eventTime: EventTime | null }[];
   };
-  customer: { id: number; customerName: string; mobile: string; email: string | null; address: string | null; createdAt: string };
+  customer: { id: number; customerName: string; mobile: string | null; email: string | null; address: string | null; createdAt: string };
   // Null when the enquiry was confirmed without any quotation — the order's total then comes from
   // the enquiry's final/estimated budget instead.
   quotation: {

@@ -12,16 +12,40 @@ import { CreateCustomerInput, ListCustomersParams, UpdateCustomerInput } from '.
 // Accepts an optional transaction client so the caller (e.g. Enquiry creation) can wrap
 // customer creation and the record that references it in one atomic transaction — otherwise
 // a failure downstream would leave an orphaned customer row behind.
-export async function create(companyId: number, input: CreateCustomerInput, client: PrismaClientOrTx = prisma) {
-  const existing = await customersRepository.findCustomerByMobile(companyId, input.mobile, client);
-  if (existing) {
-    throw new AppError(409, `A customer with mobile number ${input.mobile} already exists.`, [
-      {
-        field: 'mobile',
-        message: `Customer "${existing.customerName}" already exists with this mobile number. Select the existing customer instead of creating a new one.`,
-      },
-    ]);
+// Phone numbers are optional, but one that is given may belong to only one customer. `exceptId` lets an
+// edit keep its own number.
+async function assertContactNumbersUnique(
+  companyId: number,
+  numbers: { mobile?: string | null; whatsapp?: string | null },
+  exceptId: number | null,
+  client: PrismaClientOrTx = prisma,
+) {
+  if (numbers.mobile) {
+    const duplicate = await customersRepository.findCustomerByMobile(companyId, numbers.mobile, client);
+    if (duplicate && duplicate.id !== exceptId) {
+      throw new AppError(409, `A customer with mobile number ${numbers.mobile} already exists.`, [
+        {
+          field: 'mobile',
+          message: `Customer "${duplicate.customerName}" already exists with this mobile number. Select the existing customer instead of creating a new one.`,
+        },
+      ]);
+    }
   }
+  if (numbers.whatsapp) {
+    const duplicate = await customersRepository.findCustomerByWhatsapp(companyId, numbers.whatsapp, client);
+    if (duplicate && duplicate.id !== exceptId) {
+      throw new AppError(409, `A customer with WhatsApp number ${numbers.whatsapp} already exists.`, [
+        {
+          field: 'whatsapp',
+          message: `Customer "${duplicate.customerName}" already exists with this WhatsApp number. Select the existing customer instead of creating a new one.`,
+        },
+      ]);
+    }
+  }
+}
+
+export async function create(companyId: number, input: CreateCustomerInput, client: PrismaClientOrTx = prisma) {
+  await assertContactNumbersUnique(companyId, input, null, client);
 
   const customerCode = await generateDocumentNumber(companyId, SequenceType.CUSTOMER);
 
@@ -75,17 +99,14 @@ export async function update(companyId: number, actorId: number, id: number, inp
   const existing = await customersRepository.findCustomerById(companyId, id);
   if (!existing) throw new AppError(404, 'Customer not found.');
 
-  if (input.mobile && input.mobile !== existing.mobile) {
-    const duplicate = await customersRepository.findCustomerByMobile(companyId, input.mobile);
-    if (duplicate && duplicate.id !== id) {
-      throw new AppError(409, `A customer with mobile number ${input.mobile} already exists.`, [
-        {
-          field: 'mobile',
-          message: `Customer "${duplicate.customerName}" already exists with this mobile number.`,
-        },
-      ]);
-    }
-  }
+  await assertContactNumbersUnique(
+    companyId,
+    {
+      mobile: input.mobile !== existing.mobile ? input.mobile : undefined,
+      whatsapp: input.whatsapp !== existing.whatsapp ? input.whatsapp : undefined,
+    },
+    id,
+  );
 
   const customer = await customersRepository.updateCustomer(id, input);
 

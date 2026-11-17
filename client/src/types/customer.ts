@@ -6,7 +6,7 @@ export interface CustomerListItem {
   id: number;
   customerCode: string;
   customerName: string;
-  mobile: string;
+  mobile: string | null;
   whatsapp: string | null;
   email: string | null;
   city: string | null;
@@ -60,8 +60,8 @@ export interface ListCustomersParams {
 
 export interface UpdateCustomerInput {
   customerName?: string;
-  mobile?: string;
-  whatsapp?: string;
+  mobile?: string | null;
+  whatsapp?: string | null;
   email?: string;
   address?: string;
   city?: string;

@@ -52,3 +52,40 @@ export function updatePaymentTrackerSchema(remaining: number) {
 }
 
 export type UpdatePaymentTrackerFormValues = z.infer<ReturnType<typeof updatePaymentTrackerSchema>>;
+
+/**
+ * Adjust Budget. The new amount may go up or down but never below what is already collected (the
+ * server enforces the same floor), and a reason is mandatory so every change is explained.
+ */
+export function adjustBudgetSchema(collectedSoFar: number, currentBudget: number) {
+  return z
+    .object({
+      budgetAmount: z.string().trim().min(1, 'Enter the new budget amount.'),
+      reason: z
+        .string()
+        .trim()
+        .min(1, 'Enter a reason for the budget change.')
+        .max(1000, 'Reason cannot exceed 1000 characters.'),
+    })
+    .superRefine((values, ctx) => {
+      const amount = Number(values.budgetAmount);
+      if (!values.budgetAmount) return;
+      if (Number.isNaN(amount) || amount <= 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['budgetAmount'], message: 'Budget must be greater than zero.' });
+      } else if (amount < collectedSoFar) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['budgetAmount'],
+          message: `Budget cannot be less than the ${collectedSoFar} already collected.`,
+        });
+      } else if (amount === currentBudget) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['budgetAmount'],
+          message: 'Enter an amount different from the current budget.',
+        });
+      }
+    });
+}
+
+export type AdjustBudgetFormValues = z.infer<ReturnType<typeof adjustBudgetSchema>>;

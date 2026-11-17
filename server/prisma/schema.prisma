@@ -390,7 +390,7 @@ model Customer {
   companyId    Int            @map("company_id")
   customerCode String         @unique @map("customer_code")
   customerName String         @map("customer_name")
-  mobile       String
+  mobile       String?
   whatsapp     String?
   email        String?
   address      String?        @db.Text

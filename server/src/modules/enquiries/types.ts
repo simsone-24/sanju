@@ -87,8 +87,10 @@ export interface UpdateEnquiryInput {
   followUpDate?: Date | null;
   // Prospect (unconfirmed customer) fields — applied only while the enquiry has no linked Customer.
   customerName?: string;
-  mobile?: string;
-  whatsapp?: string;
+  /** null clears the number. */
+  mobile?: string | null;
+  /** null clears the number. */
+  whatsapp?: string | null;
   email?: string;
   address?: string;
   city?: string;

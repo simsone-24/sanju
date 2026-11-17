@@ -140,8 +140,8 @@ export type UpdateEnquiryInput = Partial<
   /** null removes the event manager; omitting it leaves the stored value alone. */
   eventManagerId?: number | null;
   customerName?: string;
-  mobile?: string;
-  whatsapp?: string;
+  mobile?: string | null;
+  whatsapp?: string | null;
   email?: string;
   address?: string;
   city?: string;

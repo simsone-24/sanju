@@ -28,7 +28,7 @@ interface FormState {
 function toFormState(customer: CustomerDetail): FormState {
   return {
     customerName: customer.customerName,
-    mobile: customer.mobile,
+    mobile: customer.mobile ?? '',
     whatsapp: customer.whatsapp ?? '',
     email: customer.email ?? '',
     address: customer.address ?? '',
@@ -58,8 +58,9 @@ export function CustomerEditDialog({ open, customer, onClose, onSaved }: Custome
     mutationFn: () =>
       customerService.update(customer.id, {
         customerName: form.customerName.trim(),
-        mobile: form.mobile.trim(),
-        whatsapp: form.whatsapp.trim() || undefined,
+        // null clears a number; both are optional but unique across customers.
+        mobile: form.mobile.trim() || null,
+        whatsapp: form.whatsapp.trim() || null,
         email: form.email.trim() || undefined,
         address: form.address.trim() || undefined,
         city: form.city.trim() || undefined,
@@ -83,7 +84,7 @@ export function CustomerEditDialog({ open, customer, onClose, onSaved }: Custome
     setError(null);
     const nextErrors: Partial<Record<keyof FormState, string>> = {};
     if (!form.customerName.trim()) nextErrors.customerName = 'Customer name is required.';
-    if (!mobileRegex.test(form.mobile.trim())) nextErrors.mobile = 'Enter a valid 10-digit mobile number.';
+    if (form.mobile.trim() && !mobileRegex.test(form.mobile.trim())) nextErrors.mobile = 'Enter a valid 10-digit mobile number.';
     if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim())) {
       nextErrors.email = 'Enter a valid email address.';
     }
@@ -110,7 +111,6 @@ export function CustomerEditDialog({ open, customer, onClose, onSaved }: Custome
           />
           <TextField
             label="Phone Number"
-            required
             fullWidth
             value={form.mobile}
             onChange={(event) => setForm((prev) => ({ ...prev, mobile: event.target.value }))}

@@ -1,6 +1,7 @@
 import { apiClient } from '../api/client';
 import type { ApiSuccessResponse, PaginationMeta } from '../types/api';
 import type {
+  BudgetChange,
   ListPaymentTrackerParams,
   PaymentTrackerDetail,
   PaymentTrackerPayment,
@@ -43,6 +44,13 @@ export async function update(orderId: number, input: UpdatePaymentTrackerInput):
   const response = await apiClient.put<ApiSuccessResponse<PaymentTrackerDetail>>(
     `/payment-tracker/${orderId}`,
     input,
+  );
+  return response.data.data;
+}
+
+export async function getBudgetChanges(orderId: number): Promise<BudgetChange[]> {
+  const response = await apiClient.get<ApiSuccessResponse<BudgetChange[]>>(
+    `/payment-tracker/${orderId}/budget-changes`,
   );
   return response.data.data;
 }

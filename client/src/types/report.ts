@@ -68,7 +68,7 @@ export interface OutstandingOrderRow {
   paidAmount: string;
   pendingAmount: string;
   status: OrderStatus;
-  customer: { id: number; customerName: string; mobile: string };
+  customer: { id: number; customerName: string; mobile: string | null };
 }
 
 export interface OutstandingReportResult {

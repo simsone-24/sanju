@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import AddIcon from '@mui/icons-material/Add';
-import { Alert, Box, Button, MenuItem, Stack, TextField } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -18,6 +19,8 @@ import type { ApiErrorResponse } from '../../../types/api';
 import type { OrderDetail, OrderPaymentSummary } from '../../../types/order';
 import { formatCurrency, formatDate } from '../../../utils/format';
 import { createPaymentSchema, type CreatePaymentFormValues } from '../../../validation/paymentSchemas';
+import { AdjustBudgetDialog } from '../../payment-tracker/AdjustBudgetDialog';
+import { BudgetChangeHistory } from '../../payment-tracker/BudgetChangeHistory';
 
 const PAYMENT_TYPES = ['ADVANCE', 'PARTIAL', 'FINAL'] as const;
 const PAYMENT_METHODS = ['CASH', 'UPI', 'BANK', 'CARD', 'CHEQUE'] as const;
@@ -30,6 +33,8 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
   const queryClient = useQueryClient();
   const canCreate = usePermission('PAYMENTS', 'canCreate');
   const canExport = usePermission('PAYMENTS', 'canExport');
+  const canEditPayments = usePermission('PAYMENTS', 'canEdit');
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -134,12 +139,27 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
           those three figures and stays on screen while this tab is open. */}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <StatusBadge {...paymentBadge} />
-        {canAddPayment && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
-            Add Payment
-          </Button>
-        )}
+        <Stack direction="row" spacing={1}>
+          {canEditPayments && (
+            <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setBudgetOpen(true)}>
+              Adjust Budget
+            </Button>
+          )}
+          {canAddPayment && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+              Add Payment
+            </Button>
+          )}
+        </Stack>
       </Stack>
+      <AdjustBudgetDialog
+        open={budgetOpen}
+        orderId={order.id}
+        orderNumber={order.orderNumber}
+        currentBudget={Number(order.totalAmount)}
+        collectedSoFar={collectedSoFar}
+        onClose={() => setBudgetOpen(false)}
+      />
 
       <DataTable
         columns={columns}
@@ -153,6 +173,11 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
         exportFileName={`${order.orderNumber}-payments`}
         canExport={canExport}
       />
+
+      <Typography variant="h4" component="h2" sx={{ mt: 4, mb: 2 }}>
+        Budget Changes
+      </Typography>
+      <BudgetChangeHistory orderId={order.id} />
 
       <FormDialog
         open={drawerOpen}

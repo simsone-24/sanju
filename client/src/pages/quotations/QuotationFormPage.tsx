@@ -70,6 +70,7 @@ import {
   useStagedImageUrls,
   type StagedQuotationImage,
 } from './quotationImages';
+import { quotationDraftTotals } from './quotationDraft';
 
 const EMPTY_ITEM = { itemName: '', quantity: '1', rate: '' };
 
@@ -298,15 +299,14 @@ export default function QuotationFormPage() {
   const sgstValue = watch('sgstPercent');
   const advanceValue = watch('advanceAmount');
 
-  const itemsSubtotal = items.reduce(
-    (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0),
-    0,
-  );
-  const cgstPercentNum = Number(cgstValue) || 0;
-  const sgstPercentNum = Number(sgstValue) || 0;
-  const cgstAmount = Math.round(((itemsSubtotal * cgstPercentNum) / 100) * 100) / 100;
-  const sgstAmount = Math.round(((itemsSubtotal * sgstPercentNum) / 100) * 100) / 100;
-  const grandTotal = itemsSubtotal + cgstAmount + sgstAmount;
+  const {
+    subtotal: itemsSubtotal,
+    cgstPercent: cgstPercentNum,
+    sgstPercent: sgstPercentNum,
+    cgstAmount,
+    sgstAmount,
+    total: grandTotal,
+  } = quotationDraftTotals(items, cgstValue ?? '', sgstValue ?? '');
   // The advance is what the customer commits up front, so it is shown against the grand total —
   // the same presentation QuotationItemsEditor uses on the enquiry's quotation draft.
   const advanceAmount = Math.min(Math.max(Number(advanceValue) || 0, 0), grandTotal);
@@ -497,13 +497,13 @@ export default function QuotationFormPage() {
     const sgstPercent = values.sgstPercent ? Number(values.sgstPercent) : 0;
 
     // Only a MANUAL quotation carries a customer snapshot — the API rejects one on any other
-    // source, and rejects a manual quotation without a WhatsApp number (enforced by the schema).
+    // source. Phone and WhatsApp are both optional.
     const manualCustomer: ManualCustomerInput | undefined =
       values.source === 'MANUAL'
         ? {
             name: values.manualName || undefined,
             phone: values.manualPhone || undefined,
-            whatsapp: values.manualWhatsapp!,
+            whatsapp: values.manualWhatsapp || undefined,
             email: values.manualEmail || undefined,
             address: values.manualAddress || undefined,
             gst: values.manualGst || undefined,
@@ -837,7 +837,7 @@ export default function QuotationFormPage() {
               <Autocomplete
                 sx={{ gridColumn: '1 / -1' }}
                 options={enquiryResults?.records ?? []}
-                getOptionLabel={(option) => `${option.enquiryNumber} — ${option.customer.customerName} — ${option.customer.mobile}`}
+                getOptionLabel={(option) => [option.enquiryNumber, option.customer.customerName, option.customer.mobile].filter(Boolean).join(' — ')}
                 filterOptions={(options) => options}
                 onInputChange={(_event, value) => setEnquirySearch(value)}
                 onChange={(_event, value) => {
@@ -874,7 +874,7 @@ export default function QuotationFormPage() {
                 sx={{ gridColumn: '1 / -1' }}
                 options={customerResults ?? []}
                 getOptionLabel={(option: CustomerOption) =>
-                  `${option.customerName} — ${option.mobile} (${option.customerCode})`
+                  `${[option.customerName, option.mobile].filter(Boolean).join(' — ')} (${option.customerCode})`
                 }
                 filterOptions={(options) => options}
                 onInputChange={(_event, value) => setCustomerSearch(value)}
@@ -919,11 +919,10 @@ export default function QuotationFormPage() {
                   {...register('manualName')}
                 />
                 <TextField
-                  required
                   label="WhatsApp Number"
                   fullWidth
                   error={Boolean(errors.manualWhatsapp)}
-                  helperText={errors.manualWhatsapp?.message ?? 'The quotation is shared on this number.'}
+                  helperText={errors.manualWhatsapp?.message ?? 'Optional. The quotation is shared on this number.'}
                   {...register('manualWhatsapp')}
                 />
                 <TextField label="Phone" fullWidth {...register('manualPhone')} />
@@ -1007,7 +1006,6 @@ export default function QuotationFormPage() {
             {...register('manualName')}
           />
           <TextField
-            required
             label="WhatsApp Number"
             fullWidth
             error={Boolean(errors.manualWhatsapp)}

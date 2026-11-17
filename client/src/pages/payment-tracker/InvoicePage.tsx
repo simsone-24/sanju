@@ -14,7 +14,7 @@ import { formatCurrency, formatDate, getPublicAssetUrl } from '../../utils/forma
 // wa.me link with the message pre-composed — mirrors quotationActions.ts's buildQuotationWhatsAppLink.
 // The invoice has no separate WhatsApp number of its own, so the customer's mobile is used directly.
 function buildInvoiceWhatsAppLink(invoice: Invoice): string | null {
-  const number = invoice.customer.mobile.replace(/\D/g, '');
+  const number = (invoice.customer.mobile ?? '').replace(/\D/g, '');
   if (!number) return null;
   const message =
     `Hello ${invoice.customer.customerName}, thank you for contacting us. Please find your invoice ` +

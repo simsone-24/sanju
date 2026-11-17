@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import HistoryIcon from '@mui/icons-material/History';
-import { Alert, Box, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -20,6 +20,7 @@ import {
   updatePaymentTrackerSchema,
   type UpdatePaymentTrackerFormValues,
 } from '../../validation/paymentTrackerSchemas';
+import { AdjustBudgetDialog } from './AdjustBudgetDialog';
 import { PaymentHistoryDialog } from './PaymentHistoryDialog';
 
 const PAYMENT_METHODS = ['CASH', 'UPI', 'BANK', 'CARD', 'CHEQUE'] as const;
@@ -43,16 +44,16 @@ function currentStatusChoice(record: PaymentTrackerRecord | null): StatusChoice 
 /**
  * §Edit Payment — a centered popup (FormDialog) to record a collection against an order.
  *
- * Budget is set once at order creation and isn't editable here (there is no field for it anywhere
- * in the app) — Customer/Budget/Collected/Pending sit up top as a plain read-only summary, and
- * everything below is the actual form: the amount coming in now, how it was paid, and the
- * resulting status/notes.
+ * Customer/Budget/Collected/Pending sit up top as a read-only summary; the budget itself is changed
+ * through the separate Adjust Budget dialog, which demands a reason. Everything below is the actual
+ * form: the amount coming in now, how it was paid, and the resulting status/notes.
  */
 export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrackerEditDialogProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
 
   const collectedSoFar = Number(record?.paidAmount ?? 0);
   const storedBudget = Number(record?.totalAmount ?? 0);
@@ -183,13 +184,18 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 {record?.customer.customerName ?? '—'}
               </Typography>
-              <Tooltip title="Payment history">
-                <span>
-                  <IconButton size="small" onClick={() => setHistoryOpen(true)} disabled={!record}>
-                    <HistoryIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <Button size="small" onClick={() => setBudgetOpen(true)} disabled={!record}>
+                  Adjust Budget
+                </Button>
+                <Tooltip title="Payment history">
+                  <span>
+                    <IconButton size="small" onClick={() => setHistoryOpen(true)} disabled={!record}>
+                      <HistoryIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Stack>
             </Stack>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
@@ -282,6 +288,16 @@ export function PaymentTrackerEditDialog({ open, record, onClose }: PaymentTrack
         </Stack>
       </FormDialog>
 
+      {record && (
+        <AdjustBudgetDialog
+          open={budgetOpen}
+          orderId={record.id}
+          orderNumber={record.orderNumber}
+          currentBudget={storedBudget}
+          collectedSoFar={collectedSoFar}
+          onClose={() => setBudgetOpen(false)}
+        />
+      )}
       <PaymentHistoryDialog open={historyOpen} record={record} onClose={() => setHistoryOpen(false)} />
     </>
   );

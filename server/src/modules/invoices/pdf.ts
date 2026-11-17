@@ -24,7 +24,7 @@ export interface InvoicePdfData {
   invoiceNumber: string;
   invoiceDate: Date;
   order: { orderNumber: string; eventDate: Date | null; venue: string | null; eventName: string };
-  customer: { customerName: string; mobile: string; email: string | null; address: string | null };
+  customer: { customerName: string; mobile: string | null; email: string | null; address: string | null };
   quotationNumber: string | null;
   items: InvoicePdfItem[];
   subtotal: number;
@@ -145,7 +145,8 @@ export async function generateInvoicePdf(
 
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(MUTED).text('BILL TO', left, y);
   doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK).text(data.customer.customerName, left, doc.y + 3, { width: colWidth });
-  doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(data.customer.mobile, left, doc.y + 1, { width: colWidth });
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED);
+  if (data.customer.mobile) doc.text(data.customer.mobile, left, doc.y + 1, { width: colWidth });
   if (data.customer.email) doc.text(data.customer.email, left, doc.y + 1, { width: colWidth });
   if (data.customer.address) doc.text(data.customer.address, left, doc.y + 1, { width: colWidth });
   const billToBottom = doc.y;

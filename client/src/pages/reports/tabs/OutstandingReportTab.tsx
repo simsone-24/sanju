@@ -170,7 +170,7 @@ export default function OutstandingReportTab() {
           size="small"
           options={customerOptions ?? []}
           value={selectedCustomer}
-          getOptionLabel={(option) => `${option.customerName} (${option.mobile})`}
+          getOptionLabel={(option) => option.mobile ? `${option.customerName} (${option.mobile})` : option.customerName}
           isOptionEqualToValue={(option, value) => option.id === value.id}
           onInputChange={(_event, value) => setCustomerSearchInput(value)}
           onChange={(_event, value) => {

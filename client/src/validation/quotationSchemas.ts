@@ -26,7 +26,8 @@ export const quotationFormSchema = z
     enquiryId: z.string().optional().or(z.literal('')),
     customerId: z.string().optional().or(z.literal('')),
     // MANUAL-source snapshot: a customer contacted by phone/WhatsApp for whom no Customer record
-    // exists. WhatsApp is the one required field — it is how the quotation reaches them.
+    // exists. Phone and WhatsApp are both optional; without a WhatsApp number the quotation just
+    // cannot be shared that way.
     manualName: z.string().optional().or(z.literal('')),
     manualPhone: z.string().optional().or(z.literal('')),
     manualWhatsapp: z.string().optional().or(z.literal('')),
@@ -49,13 +50,6 @@ export const quotationFormSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customerId'], message: 'Select a customer.' });
     }
     if (data.source === 'MANUAL') {
-      if (!data.manualWhatsapp?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['manualWhatsapp'],
-          message: 'WhatsApp number is required for a manual quotation.',
-        });
-      }
       if (!data.manualName?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['manualName'], message: 'Customer name is required.' });
       }

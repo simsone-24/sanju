@@ -796,8 +796,9 @@ function toUpdateInput(values: EnquiryFormValues): UpdateEnquiryInput {
       followUpDate,
       eventManagerId,
       customerName: values.customerName ?? '',
-      mobile: values.mobile ?? '',
-      whatsapp: cleanOptional(values.whatsapp),
+      // null (not omitted) so a number the user has cleared is cleared on the enquiry too.
+      mobile: cleanOptional(values.mobile) ?? null,
+      whatsapp: cleanOptional(values.whatsapp) ?? null,
       email: cleanOptional(values.email),
       address: cleanOptional(values.address),
       city: cleanOptional(values.city),
@@ -863,6 +864,8 @@ export default function EnquiryFormPage() {
   // as the phone number is typed. Editing the WhatsApp field turns this off and hands it over. In
   // edit mode the effect that loads an existing enquiry recomputes it from what was saved.
   const [sameAsMobile, setSameAsMobile] = useState(true);
+  // A customer that already owns the number being typed, offered to the user as a choice.
+  const [numberMatch, setNumberMatch] = useState<{ customer: CustomerOption; field: 'mobile' | 'whatsapp' } | null>(null);
   const [editingCustomer, setEditingCustomer] = useState(false);
 
   // Inline "create a quotation together with this enquiry" draft — create mode only. Kept as plain
@@ -1070,6 +1073,71 @@ export default function EnquiryFormPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sameAsMobile, mobileValue]);
+  // A phone / WhatsApp number that already belongs to a customer must not start a second record.
+  // As soon as a full number is typed on a new enquiry the owner is looked up and offered to the user
+  // (see the alert under the number fields): use that customer, or type a different number. The
+  // server enforces the same rule, so this is only the friendlier path (and is skipped without
+  // Customers → View).
+  useEffect(() => {
+    if (isEdit || customerType !== 'NEW' || !canViewCustomers) {
+      setNumberMatch(null);
+      return;
+    }
+    const candidates = (
+      [
+        { field: 'mobile', digits: (mobileValue ?? '').replace(/D/g, '') },
+        { field: 'whatsapp', digits: (whatsappValue ?? '').replace(/D/g, '') },
+      ] as const
+    ).filter((candidate) => candidate.digits.length === 10);
+    if (candidates.length === 0) {
+      setNumberMatch(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      for (const { field, digits } of candidates) {
+        try {
+          const results = await customerService.search(digits);
+          const customer = results.find((row) => row[field] === digits);
+          if (customer) {
+            if (!cancelled) setNumberMatch({ customer, field });
+            return;
+          }
+        } catch {
+          // The lookup is a convenience; the server rejects a duplicate number on save regardless.
+        }
+      }
+      if (!cancelled) setNumberMatch(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mobileValue, whatsappValue, customerType, isEdit, canViewCustomers]);
+
+  // "Use this customer": the form becomes an Existing Customer enquiry and the typed prospect
+  // details are dropped, so nothing is saved twice.
+  function selectMatchedCustomer() {
+    if (!numberMatch) return;
+    const { customer } = numberMatch;
+    setSelectedCustomer(customer);
+    setValue('customerType', 'EXISTING', { shouldDirty: true });
+    setValue('customerId', fromId(customer.id), { shouldDirty: true });
+    setValue('customerName', '');
+    setValue('mobile', '');
+    setValue('whatsapp', '');
+    setSameAsMobile(false);
+    setNumberMatch(null);
+  }
+
+  // "Enter a different number": clears only the clashing field so the user can type another.
+  function enterDifferentNumber() {
+    if (!numberMatch) return;
+    if (numberMatch.field === 'whatsapp') setSameAsMobile(false);
+    setValue(numberMatch.field, '', { shouldDirty: true });
+    setNumberMatch(null);
+  }
+
   // A linked (EXISTING) customer is locked in edit mode. An unconfirmed prospect (customerType NEW)
   // stays editable so its details can still be corrected before the enquiry is confirmed.
   const customerLocked = isEdit && customerType === 'EXISTING';
@@ -1479,9 +1547,7 @@ export default function EnquiryFormPage() {
                   value={selectedCustomer}
                   openOnFocus
                   getOptionLabel={(option) =>
-                    option.customerCode
-                      ? `${option.customerName} · ${option.mobile} · ${option.customerCode}`
-                      : `${option.customerName} · ${option.mobile}`
+                    [option.customerName, option.mobile, option.customerCode].filter(Boolean).join(' · ')
                   }
                   isOptionEqualToValue={(option, value) => option.id === value.id}
                   // Results are already filtered server-side; MUI's client-side filter would drop
@@ -1512,7 +1578,7 @@ export default function EnquiryFormPage() {
                 {selectedCustomer && (
                   <EnquiryCustomerDetailsCard
                     customerName={selectedCustomer.customerName}
-                    mobile={selectedCustomer.mobile}
+                    mobile={selectedCustomer.mobile ?? ''}
                     customerCode={selectedCustomer.customerCode}
                     customer={linkedCustomer}
                     isLoading={isLoadingLinkedCustomer}
@@ -1534,7 +1600,6 @@ export default function EnquiryFormPage() {
                 />
                 <TextField
                   label="Phone Number"
-                  required
                   fullWidth
                   error={Boolean(errors.mobile)}
                   helperText={errors.mobile?.message}
@@ -1592,6 +1657,26 @@ export default function EnquiryFormPage() {
           </>
         )}
       </FormSection>
+
+      {/* Shown the moment a typed number belongs to a customer. Closing it by clicking away counts as
+          "enter a different number", so the clashing value never lingers unnoticed. */}
+      <ConfirmDialog
+        open={Boolean(numberMatch)}
+        title="Number already registered"
+        message={
+          numberMatch ? (
+            <>
+              This {numberMatch.field === 'mobile' ? 'phone' : 'WhatsApp'} number is already registered for{' '}
+              <strong>{numberMatch.customer.customerName}</strong> ({numberMatch.customer.customerCode}). Select this
+              customer to continue, or enter a different number.
+            </>
+          ) : null
+        }
+        confirmLabel="Use this customer"
+        cancelLabel="Enter a different number"
+        onConfirm={selectMatchedCustomer}
+        onClose={enterDifferentNumber}
+      />
 
       <FormSection
         id={ENQUIRY_SECTION_IDS.event}
