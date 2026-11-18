@@ -6,6 +6,7 @@ import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
+import { amountInWords } from '../../utils/amountInWords';
 import { buildPaginationMeta } from '../../utils/pagination';
 import * as enquiriesRepository from '../enquiries/repository';
 import * as customersRepository from '../customers/repository';
@@ -19,6 +20,7 @@ import {
   CustomerSnapshot,
   ListQuotationsParams,
   QuotationItemInput,
+  QuotationSectionInput,
   UpdateQuotationInput,
 } from './types';
 
@@ -28,6 +30,13 @@ function roundCurrency(value: number): number {
 
 function computeItemsWithAmount(items: QuotationItemInput[]) {
   return items.map((item) => ({ ...item, amount: roundCurrency(item.quantity * item.rate) }));
+}
+
+// The subtotal is what the lines add up to: every section's amount plus any flat priced items.
+function sumLines(items: { amount: number }[], sections: QuotationSectionInput[]): number {
+  return roundCurrency(
+    items.reduce((sum, item) => sum + item.amount, 0) + sections.reduce((sum, section) => sum + section.amount, 0),
+  );
 }
 
 // Resolve the recipient from whichever source the quotation came from — the single place that
@@ -161,7 +170,18 @@ function mapDetail(record: QuotationDetailRecord, extras: QuotationDetailExtras 
     updatedAt: record.updatedAt,
     createdBy: record.createdBy,
     whatsappNumber: snapshot.whatsapp ?? snapshot.phone,
-    items: record.items,
+    // Flat priced items (the original layout); items listed under a section are nested in it.
+    items: record.items.filter((item) => item.sectionId === null),
+    sections: record.sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      amount: section.amount,
+      sortOrder: section.sortOrder,
+      items: record.items
+        .filter((item) => item.sectionId === section.id)
+        .map((item) => ({ id: item.id, description: item.itemName, sizeQty: item.sizeQty, sortOrder: item.sortOrder })),
+    })),
+    totalAmountInWords: amountInWords(Number(record.totalAmount)),
     images: record.images,
     revisions: extras.revisions ?? [],
     convertedOrder: extras.convertedOrder ?? null,
@@ -184,14 +204,24 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       quotationDate: record.quotationDate,
       status: record.status,
       recipient: snapshot,
-      items: record.items.map((item) => ({
-        itemName: item.itemName,
-        description: item.description,
-        quantity: Number(item.quantity),
-        unit: item.unit,
-        rate: Number(item.rate),
-        amount: Number(item.amount),
+      items: record.items
+        .filter((item) => item.sectionId === null)
+        .map((item) => ({
+          itemName: item.itemName,
+          description: item.description,
+          quantity: Number(item.quantity ?? 0),
+          unit: item.unit,
+          rate: Number(item.rate ?? 0),
+          amount: Number(item.amount ?? 0),
+        })),
+      sections: record.sections.map((section) => ({
+        title: section.title,
+        amount: Number(section.amount),
+        items: record.items
+          .filter((item) => item.sectionId === section.id)
+          .map((item) => ({ description: item.itemName, sizeQty: item.sizeQty })),
       })),
+      totalInWords: amountInWords(Number(record.totalAmount)),
       subtotal: Number(record.subtotal),
       discount: Number(record.discount),
       cgstPercent: Number(record.cgstPercent),
@@ -421,8 +451,9 @@ async function applyFormStatus(
 export async function create(companyId: number, actorId: number, input: CreateQuotationInput) {
   const resolved = await resolveSource(companyId, input);
 
-  const itemsWithAmount = computeItemsWithAmount(input.items);
-  const subtotal = roundCurrency(itemsWithAmount.reduce((sum, item) => sum + item.amount, 0));
+  const itemsWithAmount = computeItemsWithAmount(input.items ?? []);
+  const sections = input.sections ?? [];
+  const subtotal = sumLines(itemsWithAmount, sections);
   const discount = input.discount ?? 0;
   const cgstPercent = input.cgstPercent ?? 0;
   const sgstPercent = input.sgstPercent ?? 0;
@@ -479,6 +510,7 @@ export async function create(companyId: number, actorId: number, input: CreateQu
         remarks: input.remarks,
         createdById: actorId,
         items: itemsWithAmount,
+        sections,
       },
       tx,
     );
@@ -551,9 +583,11 @@ export async function update(companyId: number, actorId: number, id: number, inp
   }
 
   const itemsWithAmount = input.items ? computeItemsWithAmount(input.items) : undefined;
-  const subtotal = itemsWithAmount
-    ? roundCurrency(itemsWithAmount.reduce((sum, item) => sum + item.amount, 0))
-    : Number(existing.subtotal);
+  // Sending either list replaces every line, so the subtotal follows whichever one was sent.
+  const subtotal =
+    itemsWithAmount || input.sections
+      ? sumLines(itemsWithAmount ?? [], input.sections ?? [])
+      : Number(existing.subtotal);
   const discount = input.discount ?? Number(existing.discount);
   const cgstPercent = input.cgstPercent ?? Number(existing.cgstPercent);
   const sgstPercent = input.sgstPercent ?? Number(existing.sgstPercent);
@@ -584,6 +618,7 @@ export async function update(companyId: number, actorId: number, id: number, inp
         manualCustomer: input.manualCustomer,
       },
       itemsWithAmount,
+      input.sections,
       tx,
     );
 
@@ -891,7 +926,7 @@ export async function syncAdvanceFromEnquiry(
   const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, enquiryId);
   if (!latest || Number(latest.advanceAmount ?? 0) === advanceAmount) return null;
 
-  const updated = await quotationsRepository.updateQuotation(latest.id, { advanceAmount }, undefined);
+  const updated = await quotationsRepository.updateQuotation(latest.id, { advanceAmount }, undefined, undefined);
   await regeneratePdf(companyId, updated);
 
   await logActivity({

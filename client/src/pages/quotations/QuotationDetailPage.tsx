@@ -575,45 +575,91 @@ export default function QuotationDetailPage() {
           </h2>
         </div>
 
-        <PlainTable
-          rows={quotation.items}
-          getRowId={(item) => item.id}
-          emptyMessage="This quotation has no line items."
-          columns={[
-            {
-              key: 'item',
-              header: 'Item',
-              width: 'auto',
-              render: (item) => item.itemName,
-            },
-            {
-              key: 'qty',
-              header: 'Qty',
-              align: 'right',
-              width: '15%',
-              numeric: true,
-              render: (item) => `${Number(item.quantity).toLocaleString('en-IN')}${item.unit ? ` ${item.unit}` : ''}`,
-            },
-            {
-              key: 'rate',
-              header: 'Rate',
-              align: 'right',
-              width: '20%',
-              numeric: true,
-              muted: true,
-              render: (item) => formatCurrency(item.rate),
-            },
-            {
-              key: 'amount',
-              header: 'Amount',
-              align: 'right',
-              width: '20%',
-              numeric: true,
-              strong: true,
-              render: (item) => formatCurrency(item.amount),
-            },
-          ]}
-        />
+        {quotation.sections.length > 0 ? (
+          // Section-wise: each section's items on the left, its single amount beside the group.
+          <div>
+            <div className="tw-flex tw-border-b tw-border-hairline tw-px-4 tw-py-2 tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-border-hairline-dark dark:tw-text-ink-dark-muted">
+              <span className="tw-w-10 tw-text-center">S.No</span>
+              <span className="tw-flex-1">Description</span>
+              <span className="tw-w-28 tw-text-center">Size / Qty</span>
+              <span className="tw-w-32 tw-text-right">Amount</span>
+            </div>
+            {quotation.sections.map((section, sectionIndex) => {
+              const firstSerial = quotation.sections
+                .slice(0, sectionIndex)
+                .reduce((count, previous) => count + previous.items.length, 0);
+              return (
+                <div
+                  key={section.id}
+                  className="tw-flex tw-border-b tw-border-hairline last:tw-border-b-0 dark:tw-border-hairline-dark"
+                >
+                  <div className="tw-min-w-0 tw-flex-1">
+                    {section.title && (
+                      <div
+                        className="tw-px-4 tw-py-2 tw-text-sm tw-font-bold tw-uppercase tw-text-ink dark:tw-text-ink-dark"
+                        style={{ backgroundColor: 'rgba(255, 224, 102, 0.35)' }}
+                      >
+                        {section.title}
+                      </div>
+                    )}
+                    {section.items.map((item, itemIndex) => (
+                      <div key={item.id} className="tw-flex tw-items-baseline tw-px-4 tw-py-1.5 tw-text-sm">
+                        <span className="tw-w-10 tw-text-center tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                          {firstSerial + itemIndex + 1}
+                        </span>
+                        <span className="tw-min-w-0 tw-flex-1 tw-break-words">{item.description}</span>
+                        <span className="tw-w-28 tw-text-center">{item.sizeQty ?? ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="tw-flex tw-w-32 tw-shrink-0 tw-items-center tw-justify-end tw-border-l tw-border-hairline tw-px-4 tw-text-sm tw-font-bold tw-tabular-nums dark:tw-border-hairline-dark">
+                    {formatCurrency(section.amount)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <PlainTable
+            rows={quotation.items}
+            getRowId={(item) => item.id}
+            emptyMessage="This quotation has no line items."
+            columns={[
+              {
+                key: 'item',
+                header: 'Item',
+                width: 'auto',
+                render: (item) => item.itemName,
+              },
+              {
+                key: 'qty',
+                header: 'Qty',
+                align: 'right',
+                width: '15%',
+                numeric: true,
+                render: (item) => `${Number(item.quantity).toLocaleString('en-IN')}${item.unit ? ` ${item.unit}` : ''}`,
+              },
+              {
+                key: 'rate',
+                header: 'Rate',
+                align: 'right',
+                width: '20%',
+                numeric: true,
+                muted: true,
+                render: (item) => formatCurrency(item.rate),
+              },
+              {
+                key: 'amount',
+                header: 'Amount',
+                align: 'right',
+                width: '20%',
+                numeric: true,
+                strong: true,
+                render: (item) => formatCurrency(item.amount),
+              },
+            ]}
+          />
+        )}
 
         {/* Totals sit right-aligned under the items, the way they read on the printed document. */}
         <div className="tw-flex tw-justify-end tw-px-4 tw-py-4">
@@ -639,6 +685,9 @@ export default function QuotationDetailPage() {
             </div>
           </dl>
         </div>
+        <p className="tw-m-0 tw-px-4 tw-pb-4 tw-text-right tw-text-xs tw-font-semibold tw-text-ink-muted dark:tw-text-ink-dark-muted">
+          {quotation.totalAmountInWords}
+        </p>
 
         {/* Notes only appear when there are any — an empty "no notes" block is noise. */}
         {quotation.remarks && (

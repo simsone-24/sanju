@@ -43,11 +43,17 @@ import {
 } from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
+import { QuotationSectionsEditor } from '../quotations/QuotationSectionsEditor';
 import {
   EMPTY_QUOTATION_DRAFT_ITEM,
+  newQuotationSectionDraft,
   quotationDraftTotals,
+  quotationSectionsToDrafts,
+  quotationSectionTotals,
   toQuotationItemsInput,
+  toQuotationSectionsInput,
   type QuotationDraftItem,
+  type QuotationSectionDraft,
 } from '../quotations/quotationDraft';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -91,6 +97,8 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
 
   const [items, setItems] = useState<QuotationDraftItem[]>([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+  // New quotations are section-wise; one saved with flat priced items keeps the item table when edited.
+  const [sections, setSections] = useState<QuotationSectionDraft[]>(() => [newQuotationSectionDraft()]);
   const [cgstPercent, setCgstPercent] = useState('');
   const [sgstPercent, setSgstPercent] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -131,6 +139,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       if (prefilledFor.current === 0) return;
       prefilledFor.current = 0;
       setItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+      setSections([newQuotationSectionDraft()]);
       setCgstPercent('');
       setSgstPercent('');
       setAdvanceAmount(
@@ -155,6 +164,11 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       })),
       { ...EMPTY_QUOTATION_DRAFT_ITEM },
     ]);
+    setSections(
+      existingQuotation.sections.length > 0
+        ? quotationSectionsToDrafts(existingQuotation.sections)
+        : [newQuotationSectionDraft()],
+    );
     setCgstPercent(Number(existingQuotation.cgstPercent) ? existingQuotation.cgstPercent : '');
     setSgstPercent(Number(existingQuotation.sgstPercent) ? existingQuotation.sgstPercent : '');
     // The quotation's own advance wins; a quotation that never carried one inherits the enquiry's
@@ -179,7 +193,24 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
     (option) => option !== 'REVISED' || existingQuotation?.status === 'REVISED',
   );
 
-  const totals = quotationDraftTotals(items, cgstPercent, sgstPercent);
+  // Editing keeps the layout the quotation was saved in, so a flat quotation is never silently converted.
+  const useSections = !isEdit || (existingQuotation?.sections.length ?? 0) > 0;
+  const totals = useSections
+    ? quotationSectionTotals(sections, cgstPercent, sgstPercent)
+    : quotationDraftTotals(items, cgstPercent, sgstPercent);
+
+  // Sections that have been started, in the preview's shape; an untouched blank one is left out.
+  const previewSections = useSections
+    ? sections
+        .map((section) => ({
+          title: section.title.trim() || null,
+          amount: Number(section.amount) || 0,
+          items: section.items
+            .filter((item) => item.description.trim() !== '')
+            .map((item) => ({ description: item.description, sizeQty: item.sizeQty.trim() || null })),
+        }))
+        .filter((section) => section.items.length > 0 || section.title || section.amount > 0)
+    : [];
 
   // Company letterhead + bank details for the live preview (mirrors the printed PDF).
   const { data: branding } = useQuery({
@@ -260,10 +291,22 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
     setServerError(null);
     setItemsError(null);
 
-    const parsed = toQuotationItemsInput(items, 'Add at least one item.');
-    if (parsed.items === null) {
-      setItemsError(parsed.error);
-      return;
+    // The lines to save: sections for a section-wise quotation, otherwise the flat priced items.
+    let lines: Pick<CreateQuotationInput, 'items' | 'sections'>;
+    if (useSections) {
+      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.');
+      if (parsed.sections === null) {
+        setItemsError(parsed.error);
+        return;
+      }
+      lines = { sections: parsed.sections };
+    } else {
+      const parsed = toQuotationItemsInput(items, 'Add at least one item.');
+      if (parsed.items === null) {
+        setItemsError(parsed.error);
+        return;
+      }
+      lines = { items: parsed.items };
     }
 
     try {
@@ -276,7 +319,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
           cgstPercent: totals.cgstPercent,
           sgstPercent: totals.sgstPercent,
           advanceAmount: Number(advanceAmount) || 0,
-          items: parsed.items,
+          ...lines,
         });
         showToast(`Quotation ${updated.quotationNumber} updated.`);
         onSaved(updated);
@@ -292,7 +335,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
         cgstPercent: totals.cgstPercent,
         sgstPercent: totals.sgstPercent,
         advanceAmount: Number(advanceAmount) || 0,
-        items: parsed.items,
+        ...lines,
       });
       if (stagedImages.length) {
         try {
@@ -381,18 +424,36 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
               </Alert>
             )}
 
-            <QuotationItemsEditor
-              items={items}
-              onItemsChange={setItems}
-              cgstPercent={cgstPercent}
-              sgstPercent={sgstPercent}
-              onCgstChange={setCgstPercent}
-              onSgstChange={setSgstPercent}
-              totals={totals}
-              error={itemsError}
-              advanceAmount={advanceAmount}
-              onAdvanceChange={setAdvanceAmount}
-            />
+            {useSections ? (
+              <QuotationSectionsEditor
+                sections={sections}
+                onSectionsChange={(next) => {
+                  setSections(next);
+                  setItemsError(null);
+                }}
+                cgstPercent={cgstPercent}
+                sgstPercent={sgstPercent}
+                onCgstChange={setCgstPercent}
+                onSgstChange={setSgstPercent}
+                totals={totals}
+                error={itemsError}
+                advanceAmount={advanceAmount}
+                onAdvanceChange={setAdvanceAmount}
+              />
+            ) : (
+              <QuotationItemsEditor
+                items={items}
+                onItemsChange={setItems}
+                cgstPercent={cgstPercent}
+                sgstPercent={sgstPercent}
+                onCgstChange={setCgstPercent}
+                onSgstChange={setSgstPercent}
+                totals={totals}
+                error={itemsError}
+                advanceAmount={advanceAmount}
+                onAdvanceChange={setAdvanceAmount}
+              />
+            )}
 
             <Box>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -456,9 +517,12 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                 <QuotationPreview
                   company={branding}
                   recipient={previewRecipient}
-                  quotationNumber={existingQuotation ? existingQuotation.quotationNumber : 'Auto-generated'}
                   quotationDate={enquiry?.eventDate ? formatDate(enquiry.eventDate) : ''}
-                  items={items
+                  sections={previewSections}
+                  totalInWords={isEdit ? existingQuotation?.totalAmountInWords : undefined}
+                  items={useSections
+                    ? []
+                    : items
                     .filter((item) => item.itemName.trim() !== '')
                     .map((item) => ({
                       itemName: item.itemName,

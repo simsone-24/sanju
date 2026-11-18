@@ -613,14 +613,15 @@ model Quotation {
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")
 
-  company     Company          @relation(fields: [companyId], references: [id])
-  enquiry     Enquiry?         @relation(fields: [enquiryId], references: [id])
-  customer    Customer?        @relation(fields: [customerId], references: [id])
-  sourceOrder Order?           @relation("QuotationFromOrder", fields: [orderId], references: [id])
-  createdBy   User?            @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  company     Company            @relation(fields: [companyId], references: [id])
+  enquiry     Enquiry?           @relation(fields: [enquiryId], references: [id])
+  customer    Customer?          @relation(fields: [customerId], references: [id])
+  sourceOrder Order?             @relation("QuotationFromOrder", fields: [orderId], references: [id])
+  createdBy   User?              @relation("QuotationCreatedBy", fields: [createdById], references: [id])
   items       QuotationItem[]
+  sections    QuotationSection[]
   images      QuotationImage[]
-  orders      Order[]          @relation("OrderApprovedQuotation")
+  orders      Order[]            @relation("OrderApprovedQuotation")
 
   // Enquiry-sourced quotations are versioned (revisions) — the unique pair prevents duplicate
   // versions. MySQL treats NULL enquiry_id as distinct, so non-enquiry quotations (always version 1)
@@ -633,19 +634,44 @@ model Quotation {
 
 // docs/10_IMPLEMENTATION_DECISIONS.md §5 — quotations are itemized, not a lump sum.
 model QuotationItem {
+  id          Int      @id @default(autoincrement())
+  quotationId Int      @map("quotation_id")
+  // Set for an item listed under a section; null for a flat, individually priced item.
+  sectionId   Int?     @map("section_id")
+  itemName    String   @map("item_name")
+  description String?  @db.Text
+  // Free text next to the item's description ("8nos", "3x2") — never used in calculations.
+  sizeQty     String?  @map("size_qty")
+  // Quantity, rate and amount belong to flat items only: an item under a section is just a
+  // description, and the section carries the price.
+  quantity    Decimal? @db.Decimal(10, 2)
+  unit        String?
+  rate        Decimal? @db.Decimal(12, 2)
+  amount      Decimal? @db.Decimal(12, 2)
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  quotation Quotation         @relation(fields: [quotationId], references: [id])
+  section   QuotationSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([sectionId])
+  @@map("quotation_items")
+}
+
+// A named group of items priced as one amount ("EVENING STAGE" — 1,20,000), as on Sanju's printed
+// quotation. The quotation subtotal is the sum of its section amounts plus any flat priced items.
+model QuotationSection {
   id          Int     @id @default(autoincrement())
   quotationId Int     @map("quotation_id")
-  itemName    String  @map("item_name")
-  description String? @db.Text
-  quantity    Decimal @db.Decimal(10, 2)
-  unit        String?
-  rate        Decimal @db.Decimal(12, 2)
+  // Optional: a group of items can be priced together without a heading.
+  title       String?
   amount      Decimal @db.Decimal(12, 2)
   sortOrder   Int     @default(0) @map("sort_order")
 
-  quotation Quotation @relation(fields: [quotationId], references: [id])
+  quotation Quotation       @relation(fields: [quotationId], references: [id])
+  items     QuotationItem[]
 
-  @@map("quotation_items")
+  @@index([quotationId])
+  @@map("quotation_sections")
 }
 
 // Sample decor images attached to a quotation — shown to the customer and rendered on a single

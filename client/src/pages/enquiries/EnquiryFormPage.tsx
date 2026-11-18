@@ -67,7 +67,7 @@ import type {
 import type { CustomerOption } from '../../types/masters';
 import type {
   CreateQuotationInput,
-  QuotationItemInput,
+  QuotationSectionInput,
   QuotationListItem,
   QuotationRecipient,
   QuotationStatus,
@@ -89,13 +89,13 @@ import {
 } from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
-import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
+import { QuotationSectionsEditor } from '../quotations/QuotationSectionsEditor';
 import {
-  EMPTY_QUOTATION_DRAFT_ITEM,
-  quotationDraftTotals,
-  toQuotationItemsInput,
-  type QuotationDraftItem,
+  newQuotationSectionDraft,
+  quotationSectionTotals,
+  toQuotationSectionsInput,
   type QuotationDraftTotals,
+  type QuotationSectionDraft,
 } from '../quotations/quotationDraft';
 
 // Sharing-status phrasing for the enquiry-facing Quotation table's status select — statusConfig.ts's
@@ -292,8 +292,8 @@ interface QuotationDraftControls {
   onToggle: (enabled: boolean) => void;
   /** Discards the draft entirely — clears the items and taxes and unticks the checkbox. */
   onCancel: () => void;
-  items: QuotationDraftItem[];
-  onItemsChange: (items: QuotationDraftItem[]) => void;
+  sections: QuotationSectionDraft[];
+  onSectionsChange: (sections: QuotationSectionDraft[]) => void;
   cgstPercent: string;
   sgstPercent: string;
   onCgstChange: (value: string) => void;
@@ -436,9 +436,9 @@ function QuotationSection({
 
           {draft.enabled && (
             <Box sx={{ mt: 2 }}>
-              <QuotationItemsEditor
-                items={draft.items}
-                onItemsChange={draft.onItemsChange}
+              <QuotationSectionsEditor
+                sections={draft.sections}
+                onSectionsChange={draft.onSectionsChange}
                 cgstPercent={draft.cgstPercent}
                 sgstPercent={draft.sgstPercent}
                 onCgstChange={draft.onCgstChange}
@@ -872,7 +872,10 @@ export default function EnquiryFormPage() {
   // state rather than part of the enquiry form/schema since it submits as a separate request only
   // after the enquiry itself is saved.
   const [addQuotationNow, setAddQuotationNow] = useState(false);
-  const [quotationItems, setQuotationItems] = useState<QuotationDraftItem[]>([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+  // A quotation raised together with a new enquiry is always section-wise.
+  const [quotationSections, setQuotationSections] = useState<QuotationSectionDraft[]>(() => [
+    newQuotationSectionDraft(),
+  ]);
   const [quotationCgst, setQuotationCgst] = useState('');
   const [quotationSgst, setQuotationSgst] = useState('');
   const [quotationItemsError, setQuotationItemsError] = useState<string | null>(null);
@@ -1073,6 +1076,20 @@ export default function EnquiryFormPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sameAsMobile, mobileValue]);
+  // Puts the cursor in the first customer field when the form opens and whenever New / Existing
+  // Customer is switched. Done here, not with `autoFocus`: ticking "Create a quotation now" opens the
+  // live preview, which rebuilds the page layout and remounts these fields, and `autoFocus` would then
+  // fire again and scroll the page back up to Customer Name.
+  useEffect(() => {
+    if (isEdit && customerType === 'EXISTING') return;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(customerType === 'NEW' ? 'enquiry-customer-name' : 'enquiry-customer-search')
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [customerType, isEdit]);
+
   // A phone / WhatsApp number that already belongs to a customer must not start a second record.
   // As soon as a full number is typed on a new enquiry the owner is looked up and offered to the user
   // (see the alert under the number fields): use that customer, or type a different number. The
@@ -1175,14 +1192,25 @@ export default function EnquiryFormPage() {
   const saving =
     createMutation.isPending || updateMutation.isPending || statusMutation.isPending || createQuotationMutation.isPending;
 
-  const quotationTotals = quotationDraftTotals(quotationItems, quotationCgst, quotationSgst);
+  const quotationTotals = quotationSectionTotals(quotationSections, quotationCgst, quotationSgst);
+
+  // Sections that have been started, in the preview's shape; an untouched blank one is left out.
+  const previewSections = quotationSections
+    .map((section) => ({
+      title: section.title.trim() || null,
+      amount: Number(section.amount) || 0,
+      items: section.items
+        .filter((item) => item.description.trim() !== '')
+        .map((item) => ({ description: item.description, sizeQty: item.sizeQty.trim() || null })),
+    }))
+    .filter((section) => section.items.length > 0 || section.title || section.amount > 0);
 
   // Backs out of the inline quotation draft: the enquiry is still saved on its own, just without a
   // quotation attached. Ticking the checkbox again starts from an empty table rather than resuming
   // the abandoned one.
   function cancelQuotationDraft() {
     setAddQuotationNow(false);
-    setQuotationItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+    setQuotationSections([newQuotationSectionDraft()]);
     setQuotationCgst('');
     setQuotationSgst('');
     setQuotationItemsError(null);
@@ -1234,16 +1262,9 @@ export default function EnquiryFormPage() {
         <QuotationPreview
           company={quotationBranding}
           recipient={quotationPreviewRecipient}
-          quotationNumber="Auto-generated"
           quotationDate={eventDateValue ? formatDate(eventDateValue) : ''}
-          items={quotationItems
-            .filter((item) => item.itemName.trim() !== '')
-            .map((item) => ({
-              itemName: item.itemName,
-              quantity: Number(item.quantity) || 0,
-              rate: Number(item.rate) || 0,
-              amount: (Number(item.quantity) || 0) * (Number(item.rate) || 0),
-            }))}
+          items={[]}
+          sections={previewSections}
           subtotal={quotationTotals.subtotal}
           cgstPercent={quotationTotals.cgstPercent}
           sgstPercent={quotationTotals.sgstPercent}
@@ -1303,17 +1324,17 @@ export default function EnquiryFormPage() {
 
     // Validated up front — before the enquiry is created — so a mistake here is caught while
     // it's still cheap to fix, rather than after the enquiry is already saved.
-    let quotationItemsInput: QuotationItemInput[] | null = null;
+    let quotationSectionsInput: QuotationSectionInput[] | null = null;
     if (!isEdit && addQuotationNow) {
-      const parsed = toQuotationItemsInput(
-        quotationItems,
+      const parsed = toQuotationSectionsInput(
+        quotationSections,
         'Add at least one item, or turn off "Create a quotation for this enquiry now".',
       );
-      if (parsed.items === null) {
+      if (parsed.sections === null) {
         setQuotationItemsError(parsed.error);
         return;
       }
-      quotationItemsInput = parsed.items;
+      quotationSectionsInput = parsed.sections;
     }
 
     // "md files/Enquiry/flow.md" §3 — the one confirmation the status still gets, raised here at
@@ -1368,7 +1389,7 @@ export default function EnquiryFormPage() {
 
       const created = await createMutation.mutateAsync(toCreateInput(values));
 
-      if (!quotationItemsInput) {
+      if (!quotationSectionsInput) {
         showToast(`Enquiry ${created.enquiryNumber} created.`);
         navigate('/enquiries', { state: { highlightId: created.id } });
         return;
@@ -1381,7 +1402,7 @@ export default function EnquiryFormPage() {
           cgstPercent: quotationTotals.cgstPercent,
           sgstPercent: quotationTotals.sgstPercent,
           advanceAmount: Number(advanceAmountValue) || 0,
-          items: quotationItemsInput,
+          sections: quotationSectionsInput,
         });
         if (quotationImages.length) {
           try {
@@ -1544,6 +1565,7 @@ export default function EnquiryFormPage() {
                 <Autocomplete
                   sx={{ gridColumn: '1 / -1' }}
                   options={customerOptions ?? []}
+                  id="enquiry-customer-search"
                   value={selectedCustomer}
                   openOnFocus
                   getOptionLabel={(option) =>
@@ -1567,7 +1589,6 @@ export default function EnquiryFormPage() {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      autoFocus
                       label="Select or search a customer"
                       error={Boolean(errors.customerId)}
                       helperText={errors.customerId?.message}
@@ -1590,9 +1611,9 @@ export default function EnquiryFormPage() {
             ) : (
               <>
                 <TextField
+                  id="enquiry-customer-name"
                   label="Customer Name"
                   required
-                  autoFocus
                   fullWidth
                   error={Boolean(errors.customerName)}
                   helperText={errors.customerName?.message}
@@ -1948,8 +1969,8 @@ export default function EnquiryFormPage() {
                 enabled: addQuotationNow,
                 onToggle: setAddQuotationNow,
                 onCancel: cancelQuotationDraft,
-                items: quotationItems,
-                onItemsChange: setQuotationItems,
+                sections: quotationSections,
+                onSectionsChange: setQuotationSections,
                 cgstPercent: quotationCgst,
                 sgstPercent: quotationSgst,
                 onCgstChange: setQuotationCgst,

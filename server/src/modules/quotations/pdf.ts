@@ -13,6 +13,13 @@ export interface QuotationPdfItem {
   amount: number;
 }
 
+// One group of items priced as a single amount — printed with the amount spanning its rows.
+export interface QuotationPdfSection {
+  title: string | null;
+  amount: number;
+  items: { description: string; sizeQty: string | null }[];
+}
+
 export interface QuotationPdfData {
   quotationNumber: string;
   version: number;
@@ -22,12 +29,16 @@ export interface QuotationPdfData {
   status: string;
   recipient: CustomerSnapshot;
   items: QuotationPdfItem[];
+  /** Section-wise lines. When present the table is S.NO / DESCRIPTION / SIZE/QTY / AMOUNT. */
+  sections: QuotationPdfSection[];
   subtotal: number;
   discount: number;
   cgstPercent: number;
   sgstPercent: number;
   tax: number;
   totalAmount: number;
+  /** The total spelled out ("Rupees … Only"), printed under the totals when given. */
+  totalInWords?: string;
   /** Advance agreed against the quotation; printed as a deduction from the total when present. */
   advanceAmount?: number;
   remarks: string | null;
@@ -107,15 +118,18 @@ export async function generateQuotationPdf(
     }
   }
 
-  // ---- Meta: Date / Quote No ---------------------------------------------
+  // ---- Meta: Event Date, top right corner ----------------------------------
   let y = bandHeight + 20;
-  doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('Date', left, y);
-  doc.font('Helvetica-Bold').fillColor(INK).text(formatDate(data.quotationDate), left + 55, y);
-  doc.font('Helvetica').fillColor(MUTED).text('Quote No', left, y + 14);
-  doc.font('Helvetica-Bold').fillColor(INK).text(`${data.quotationNumber} (v${data.version})`, left + 55, y + 14);
+  const dateValue = formatDate(data.quotationDate);
+  doc.font('Helvetica-Bold').fontSize(9);
+  const dateValueWidth = doc.widthOfString(dateValue);
+  doc.fillColor(INK).text(dateValue, right - dateValueWidth, y, { lineBreak: false });
+  doc.font('Helvetica').fillColor(MUTED);
+  const dateLabel = 'Event Date';
+  doc.text(dateLabel, right - dateValueWidth - 8 - doc.widthOfString(dateLabel), y, { lineBreak: false });
 
   // ---- Company letterhead -------------------------------------------------
-  y += 40;
+  y += 26;
   doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text(company.companyName.toUpperCase(), left, y, {
     underline: true,
   });
@@ -136,91 +150,203 @@ export async function generateQuotationPdf(
   }
 
   // ---- Recipient ----------------------------------------------------------
+  // The name first, then the phone number and the location (address) beneath it, one per line.
   if (data.recipient.name || data.recipient.phone) {
     y += 6;
-    const parts = [data.recipient.name, data.recipient.phone, data.recipient.gst ? `GST: ${data.recipient.gst}` : null]
-      .filter(Boolean)
-      .join('  ·  ');
     doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('To: ', left, y, { continued: true });
-    doc.fillColor(INK).text(parts);
+    doc.font('Helvetica-Bold').fillColor(INK).text(data.recipient.name ?? '');
+    doc.font('Helvetica').fillColor(INK);
+    const details = [
+      data.recipient.phone,
+      data.recipient.address,
+      data.recipient.gst ? `GST: ${data.recipient.gst}` : null,
+    ].filter(Boolean) as string[];
+    details.forEach((line) => doc.text(line, left, doc.y + 1, { width: right - left }));
     y = doc.y;
   }
 
-  // ---- Items table --------------------------------------------------------
-  y += 12;
-  const cols = [
-    { key: 'item', label: 'ITEM', width: contentWidth - 201, align: 'left' as const },
-    { key: 'qty', label: 'QUANTITY', width: 60, align: 'center' as const },
-    { key: 'rate', label: 'UNIT PRICE', width: 69, align: 'right' as const },
-    { key: 'amount', label: 'SUBTOTAL', width: 72, align: 'right' as const },
-  ];
-  const colX: number[] = [];
-  cols.reduce((x, col, index) => {
-    colX[index] = x;
-    return x + col.width;
-  }, left);
-  const PAD = 6;
-  const headerCells = cols.map((column) => column.label);
+  // Section-wise table: S.NO | DESCRIPTION | SIZE/QTY | AMOUNT. A section's heading is a highlighted
+  // row, its items follow, and its single amount is printed once beside the whole group. A section
+  // that runs onto the next page prints its amount on the page where it starts.
+  function drawSectionedTable(startY: number): number {
+    const widths = [36, contentWidth - 36 - 90 - 90, 90, 90];
+    const xs: number[] = [];
+    widths.reduce((x, width, index) => {
+      xs[index] = x;
+      return x + width;
+    }, left);
+    const PAD_X = 6;
+    const pageEnd = doc.page.height - MARGIN;
+    let top = startY;
+    let cursor = startY;
 
-  function rowHeightFor(cells: string[], isHeader: boolean): number {
-    doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
-    const heights = cells.map((text, index) =>
-      doc.heightOfString(text || '', { width: cols[index].width - PAD * 2 }),
-    );
-    return Math.max(18, ...heights) + 4;
-  }
+    const textHeight = (text: string, width: number, bold: boolean): number => {
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9.5);
+      return doc.heightOfString(text || ' ', { width: width - PAD_X * 2 }) + 10;
+    };
 
-  function drawRow(cells: string[], rowY: number, isHeader: boolean, rowHeight: number): void {
-    doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
-    if (isHeader) {
-      doc.rect(left, rowY, contentWidth, rowHeight).fill('#eeeeee');
+    const drawHeader = (): void => {
+      const height = 22;
+      doc.rect(left, cursor, contentWidth, height).fill('#eeeeee');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(INK);
+      ['S.NO', 'DESCRIPTION', 'SIZE/QTY', 'AMOUNT (Rs.)'].forEach((label, index) => {
+        doc.text(label, xs[index] + PAD_X, cursor + 7, {
+          width: widths[index] - PAD_X * 2,
+          align: index === 1 ? 'left' : index === 3 ? 'right' : 'center',
+          lineBreak: false,
+        });
+      });
+      cursor += height;
+    };
+
+    const closeTable = (): void => {
+      doc.rect(left, top, contentWidth, cursor - top).lineWidth(0.5).strokeColor('#cccccc').stroke();
+      doc.moveTo(xs[3], top).lineTo(xs[3], cursor).lineWidth(0.5).strokeColor('#cccccc').stroke();
+    };
+
+    drawHeader();
+    let serial = 0;
+    for (const section of data.sections) {
+      let chunkTop = cursor;
+      let amountPrinted = false;
+      const printAmount = (): void => {
+        if (amountPrinted) return;
+        amountPrinted = true;
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(10)
+          .fillColor(INK)
+          .text(num(section.amount), xs[3] + PAD_X, chunkTop + (cursor - chunkTop) / 2 - 5, {
+            width: widths[3] - PAD_X * 2,
+            align: 'right',
+            lineBreak: false,
+          });
+      };
+
+      const rows: { heading: boolean; cells: string[] }[] = [];
+      if (section.title) rows.push({ heading: true, cells: ['', section.title.toUpperCase(), '', ''] });
+      section.items.forEach((item) => {
+        serial += 1;
+        rows.push({ heading: false, cells: [String(serial), item.description, item.sizeQty ?? '', ''] });
+      });
+
+      for (const row of rows) {
+        const height = Math.max(
+          20,
+          textHeight(row.cells[1], widths[1], row.heading),
+          textHeight(row.cells[2], widths[2], false),
+        );
+        if (cursor + height > pageEnd) {
+          printAmount();
+          closeTable();
+          doc.addPage();
+          top = MARGIN;
+          cursor = MARGIN;
+          drawHeader();
+          chunkTop = cursor;
+        }
+        if (row.heading) doc.rect(left, cursor, widths[0] + widths[1] + widths[2], height).fill('#fff3b0');
+        doc.font(row.heading ? 'Helvetica-Bold' : 'Helvetica').fontSize(9.5).fillColor('#222222');
+        [0, 1, 2].forEach((index) => {
+          doc.text(row.cells[index], xs[index] + PAD_X, cursor + 5, {
+            width: widths[index] - PAD_X * 2,
+            align: index === 1 ? 'left' : 'center',
+          });
+        });
+        cursor += height;
+        doc
+          .moveTo(left, cursor)
+          .lineTo(xs[3], cursor)
+          .lineWidth(0.5)
+          .strokeColor('#e3e3e3')
+          .stroke();
+      }
+      printAmount();
+      doc.moveTo(left, cursor).lineTo(right, cursor).lineWidth(0.5).strokeColor('#cccccc').stroke();
     }
-    doc.fillColor(isHeader ? INK : '#333333');
-    cells.forEach((text, index) => {
-      doc.text(text || '', colX[index] + PAD, rowY + 6, { width: cols[index].width - PAD * 2, align: cols[index].align });
-    });
-    doc
-      .moveTo(left, rowY + rowHeight)
-      .lineTo(right, rowY + rowHeight)
-      .lineWidth(0.5)
-      .strokeColor('#dddddd')
-      .stroke();
+    closeTable();
+    return cursor;
   }
 
-  // The table repeats its heading and keeps its own outer border on every page, so a long
-  // quotation wraps cleanly instead of dragging the totals block onto a trail of extra pages.
+  // ---- Items table --------------------------------------------------------
   const pageBottom = () => doc.page.height - MARGIN;
-  const firstRowCells = data.items[0]
-    ? [data.items[0].itemName, num(data.items[0].quantity), num(data.items[0].rate), num(data.items[0].amount)]
-    : [];
-  if (firstRowCells.length && y + rowHeightFor(headerCells, true) + rowHeightFor(firstRowCells, false) > pageBottom()) {
-    doc.addPage();
-    y = MARGIN;
-  }
+  if (data.sections.length > 0) {
+    y = drawSectionedTable(y + 12);
+  } else {
+    y += 12;
+    const cols = [
+      { key: 'item', label: 'ITEM', width: contentWidth - 201, align: 'left' as const },
+      { key: 'qty', label: 'QUANTITY', width: 60, align: 'center' as const },
+      { key: 'rate', label: 'UNIT PRICE', width: 69, align: 'right' as const },
+      { key: 'amount', label: 'SUBTOTAL', width: 72, align: 'right' as const },
+    ];
+    const colX: number[] = [];
+    cols.reduce((x, col, index) => {
+      colX[index] = x;
+      return x + col.width;
+    }, left);
+    const PAD = 6;
+    const headerCells = cols.map((column) => column.label);
 
-  let tableTop = y;
-  let rowHeight = rowHeightFor(headerCells, true);
-  drawRow(headerCells, y, true, rowHeight);
-  y += rowHeight;
+    function rowHeightFor(cells: string[], isHeader: boolean): number {
+      doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
+      const heights = cells.map((text, index) =>
+        doc.heightOfString(text || '', { width: cols[index].width - PAD * 2 }),
+      );
+      return Math.max(18, ...heights) + 4;
+    }
 
-  data.items.forEach((item) => {
-    const cells = [item.itemName, num(item.quantity), num(item.rate), num(item.amount)];
-    rowHeight = rowHeightFor(cells, false);
-    if (y + rowHeight > pageBottom()) {
-      doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
+    function drawRow(cells: string[], rowY: number, isHeader: boolean, rowHeight: number): void {
+      doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(isHeader ? 9 : 9.5);
+      if (isHeader) {
+        doc.rect(left, rowY, contentWidth, rowHeight).fill('#eeeeee');
+      }
+      doc.fillColor(isHeader ? INK : '#333333');
+      cells.forEach((text, index) => {
+        doc.text(text || '', colX[index] + PAD, rowY + 6, { width: cols[index].width - PAD * 2, align: cols[index].align });
+      });
+      doc
+        .moveTo(left, rowY + rowHeight)
+        .lineTo(right, rowY + rowHeight)
+        .lineWidth(0.5)
+        .strokeColor('#dddddd')
+        .stroke();
+    }
+
+    // The table repeats its heading and keeps its own outer border on every page, so a long
+    // quotation wraps cleanly instead of dragging the totals block onto a trail of extra pages.
+    const firstRowCells = data.items[0]
+      ? [data.items[0].itemName, num(data.items[0].quantity), num(data.items[0].rate), num(data.items[0].amount)]
+      : [];
+    if (firstRowCells.length && y + rowHeightFor(headerCells, true) + rowHeightFor(firstRowCells, false) > pageBottom()) {
       doc.addPage();
       y = MARGIN;
-      tableTop = y;
-      rowHeight = rowHeightFor(headerCells, true);
-      drawRow(headerCells, y, true, rowHeight);
-      y += rowHeight;
-      rowHeight = rowHeightFor(cells, false);
     }
-    drawRow(cells, y, false, rowHeight);
-    y += rowHeight;
-  });
 
-  doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
+    let tableTop = y;
+    let rowHeight = rowHeightFor(headerCells, true);
+    drawRow(headerCells, y, true, rowHeight);
+    y += rowHeight;
+
+    data.items.forEach((item) => {
+      const cells = [item.itemName, num(item.quantity), num(item.rate), num(item.amount)];
+      rowHeight = rowHeightFor(cells, false);
+      if (y + rowHeight > pageBottom()) {
+        doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
+        doc.addPage();
+        y = MARGIN;
+        tableTop = y;
+        rowHeight = rowHeightFor(headerCells, true);
+        drawRow(headerCells, y, true, rowHeight);
+        y += rowHeight;
+        rowHeight = rowHeightFor(cells, false);
+      }
+      drawRow(cells, y, false, rowHeight);
+      y += rowHeight;
+    });
+
+    doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();
+  }
 
   // ---- Bank box (left) + totals (right) -----------------------------------
   const totalsWidth = 143;
@@ -261,9 +387,12 @@ export async function generateQuotationPdf(
     ? 4 + doc.heightOfString(`If you have any questions, please contact us at ${company.email}`, { width: contentWidth })
     : 0;
 
+  doc.font('Helvetica-Bold').fontSize(9);
+  const wordsHeight = data.totalInWords ? doc.heightOfString(`Amount in words: ${data.totalInWords}`, { width: contentWidth }) + 12 : 0;
+
   const closingGap = 18;
   const closingHeight =
-    closingGap + summaryHeight + 24 + remarksHeight + termsHeight + signatureHeight + footerHeight + emailHeight;
+    closingGap + summaryHeight + 24 + wordsHeight + remarksHeight + termsHeight + signatureHeight + footerHeight + emailHeight;
   if (y + closingHeight > pageBottom()) {
     doc.addPage();
     y = MARGIN;
@@ -323,6 +452,12 @@ export async function generateQuotationPdf(
   ty += 30;
 
   y = Math.max(ty, bankStartY + bankRows.length * 12) + 24;
+
+  if (data.totalInWords) {
+    const words = `Amount in words: ${data.totalInWords}`;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(words, left, y, { width: contentWidth });
+    y += doc.heightOfString(words, { width: contentWidth }) + 12;
+  }
 
   // ---- Notes / terms ------------------------------------------------------
   // The quotation's own remarks are specific to this document; the company's Terms & Conditions

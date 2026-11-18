@@ -113,7 +113,6 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
           <QuotationPreview
             company={branding}
             recipient={quotation.recipient}
-            quotationNumber={`${quotation.quotationNumber} (v${quotation.version})`}
             quotationDate={formatDate(quotation.quotationDate)}
             items={quotation.items.map((item) => ({
               itemName: item.itemName,
@@ -121,6 +120,12 @@ export function QuotationPreviewDialog({ quotationId, onClose }: QuotationPrevie
               rate: Number(item.rate),
               amount: Number(item.amount),
             }))}
+            sections={quotation.sections.map((section) => ({
+              title: section.title,
+              amount: Number(section.amount),
+              items: section.items.map((item) => ({ description: item.description, sizeQty: item.sizeQty })),
+            }))}
+            totalInWords={quotation.totalAmountInWords}
             subtotal={subtotal}
             cgstPercent={cgstPercent}
             sgstPercent={sgstPercent}

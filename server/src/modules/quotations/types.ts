@@ -9,6 +9,21 @@ export interface QuotationItemInput {
   sortOrder?: number;
 }
 
+// An item listed under a section: a description with a free-text Size/Qty ("8nos", "3x2"). The
+// section, not the item, carries the price.
+export interface QuotationSectionItemInput {
+  description: string;
+  sizeQty?: string;
+}
+
+// A named group of items priced as one amount — e.g. "EVENING STAGE", 1,20,000. The title is
+// optional: a group can be priced together without a heading.
+export interface QuotationSectionInput {
+  title?: string;
+  amount: number;
+  items: QuotationSectionItemInput[];
+}
+
 // MANUAL-source quotations capture a lightweight customer snapshot instead of linking a record —
 // see "md files/Quotation/quotation.md" §Mode B.
 export interface ManualCustomerInput {
@@ -36,7 +51,10 @@ export interface CreateQuotationInput {
   /** Advance agreed against the quotation; stored as-is and not deducted from the total. */
   advanceAmount?: number;
   remarks?: string;
-  items: QuotationItemInput[];
+  /** Flat, individually priced items (the original layout). At least one of items / sections is required. */
+  items?: QuotationItemInput[];
+  /** Section-wise layout: each section is priced as one amount. */
+  sections?: QuotationSectionInput[];
 }
 
 export interface UpdateQuotationInput {
@@ -48,7 +66,9 @@ export interface UpdateQuotationInput {
   advanceAmount?: number;
   remarks?: string;
   manualCustomer?: ManualCustomerInput;
+  /** Replaces every line of the quotation — send either items or sections, not both. */
   items?: QuotationItemInput[];
+  sections?: QuotationSectionInput[];
 }
 
 export interface ListQuotationsParams {

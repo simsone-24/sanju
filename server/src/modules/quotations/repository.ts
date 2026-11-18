@@ -1,6 +1,6 @@
 import { Prisma, QuotationSource, QuotationStatus } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
-import { ListQuotationsParams, QuotationItemInput } from './types';
+import { ListQuotationsParams, QuotationItemInput, QuotationSectionInput } from './types';
 
 const customerMiniSelect = {
   id: true,
@@ -79,14 +79,20 @@ const quotationDetailSelect = {
     orderBy: { sortOrder: 'asc' },
     select: {
       id: true,
+      sectionId: true,
       itemName: true,
       description: true,
+      sizeQty: true,
       quantity: true,
       unit: true,
       rate: true,
       amount: true,
       sortOrder: true,
     },
+  },
+  sections: {
+    orderBy: { sortOrder: 'asc' },
+    select: { id: true, title: true, amount: true, sortOrder: true },
   },
   images: {
     where: { deletedAt: null },
@@ -398,6 +404,27 @@ interface CreateQuotationData {
   remarks?: string;
   createdById: number;
   items: QuotationItemWithAmount[];
+  sections?: QuotationSectionInput[];
+}
+
+// Sections and the items listed under them are written after the quotation row exists, because each
+// item needs its section's id. Sort order is the position in the submitted list.
+async function writeSections(quotationId: number, sections: QuotationSectionInput[], client: PrismaClientOrTx) {
+  for (const [sectionIndex, section] of sections.entries()) {
+    const created = await client.quotationSection.create({
+      data: { quotationId, title: section.title || null, amount: section.amount, sortOrder: sectionIndex },
+      select: { id: true },
+    });
+    await client.quotationItem.createMany({
+      data: section.items.map((item, itemIndex) => ({
+        quotationId,
+        sectionId: created.id,
+        itemName: item.description,
+        sizeQty: item.sizeQty || null,
+        sortOrder: itemIndex,
+      })),
+    });
+  }
 }
 
 function itemCreateInput(items: QuotationItemWithAmount[]) {
@@ -412,8 +439,8 @@ function itemCreateInput(items: QuotationItemWithAmount[]) {
   }));
 }
 
-export function createQuotation(data: CreateQuotationData, client: PrismaClientOrTx = prisma) {
-  return client.quotation.create({
+export async function createQuotation(data: CreateQuotationData, client: PrismaClientOrTx = prisma) {
+  const created = await client.quotation.create({
     data: {
       companyId: data.companyId,
       source: data.source,
@@ -443,6 +470,10 @@ export function createQuotation(data: CreateQuotationData, client: PrismaClientO
     },
     select: quotationDetailSelect,
   });
+
+  if (!data.sections?.length) return created;
+  await writeSections(created.id, data.sections, client);
+  return client.quotation.findUniqueOrThrow({ where: { id: created.id }, select: quotationDetailSelect });
 }
 
 export function markQuotationRevised(id: number, client: PrismaClientOrTx = prisma) {
@@ -466,13 +497,16 @@ export async function updateQuotation(
   id: number,
   data: UpdateQuotationData,
   items: QuotationItemWithAmount[] | undefined,
+  sections: QuotationSectionInput[] | undefined,
   client: PrismaClientOrTx = prisma,
 ) {
-  if (items) {
+  // Either replacement rewrites every line of the quotation, so both tables are cleared first.
+  if (items || sections) {
     await client.quotationItem.deleteMany({ where: { quotationId: id } });
+    await client.quotationSection.deleteMany({ where: { quotationId: id } });
   }
 
-  return client.quotation.update({
+  const updated = await client.quotation.update({
     where: { id },
     data: {
       quotationDate: data.quotationDate,
@@ -499,6 +533,10 @@ export async function updateQuotation(
     },
     select: quotationDetailSelect,
   });
+
+  if (!sections) return updated;
+  await writeSections(id, sections, client);
+  return client.quotation.findUniqueOrThrow({ where: { id }, select: quotationDetailSelect });
 }
 
 export function updateQuotationStatus(id: number, status: QuotationStatus, client: PrismaClientOrTx = prisma) {

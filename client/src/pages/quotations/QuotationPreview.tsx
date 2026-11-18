@@ -12,12 +12,20 @@ export interface QuotationPreviewItem {
   amount: number;
 }
 
+// A group of items priced as one amount — shown with the amount beside the whole group.
+export interface QuotationPreviewSection {
+  title: string | null;
+  amount: number;
+  items: { description: string; sizeQty: string | null }[];
+}
+
 interface QuotationPreviewProps {
   company: CompanyDetail | undefined;
   recipient: QuotationRecipient;
-  quotationNumber: string;
   quotationDate: string;
   items: QuotationPreviewItem[];
+  /** Section-wise lines; when present they replace the flat item table. */
+  sections?: QuotationPreviewSection[];
   subtotal: number;
   cgstPercent: number;
   sgstPercent: number;
@@ -26,6 +34,8 @@ interface QuotationPreviewProps {
   total: number;
   /** Advance agreed against the quotation; deducted from the printed total when present. */
   advanceAmount?: number;
+  /** The total spelled out, shown under the totals when known (it comes from the server). */
+  totalInWords?: string;
   images: QuotationPreviewImage[];
 }
 
@@ -38,6 +48,11 @@ function num(value: number): string {
 
 const GREEN = '#4e9a2a';
 const ITEM_GRID = '1fr 80px 92px 96px';
+// Section table: the header spans four columns, rows three, and the amount sits in its own column
+// beside the whole group — SECTION_AMOUNT_WIDTH is that column's width in both.
+const SECTION_AMOUNT_WIDTH = 110;
+const SECTION_ROW_GRID = '44px 1fr 96px';
+const SECTION_GRID = `44px 1fr 96px ${SECTION_AMOUNT_WIDTH - 24}px`;
 
 // A4 at 96 dpi. The sheets are laid out at this exact size and then scaled down to the width of
 // whatever container they are placed in, so the preview keeps the proportions of the printed page.
@@ -131,9 +146,9 @@ function A4Sheet({ scale, children }: { scale: number; children: ReactNode }) {
 export default function QuotationPreview({
   company,
   recipient,
-  quotationNumber,
   quotationDate,
   items,
+  sections = [],
   subtotal,
   cgstPercent,
   sgstPercent,
@@ -141,6 +156,7 @@ export default function QuotationPreview({
   sgstAmount,
   total,
   advanceAmount = 0,
+  totalInWords,
   images,
 }: QuotationPreviewProps) {
   const { ref, scale } = useFitScale();
@@ -198,12 +214,10 @@ export default function QuotationPreview({
         </Box>
 
         <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Meta */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 2, rowGap: 0.5, mb: 2 }}>
-            <Typography sx={{ fontSize: 13, color: '#666' }}>Date</Typography>
+          {/* Event Date, top right corner of the sheet. */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', columnGap: 1.5, mb: 2 }}>
+            <Typography sx={{ fontSize: 13, color: '#666' }}>Event Date</Typography>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{quotationDate || '—'}</Typography>
-            <Typography sx={{ fontSize: 13, color: '#666' }}>Quote No</Typography>
-            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{quotationNumber}</Typography>
           </Box>
 
           {/* Company letterhead */}
@@ -220,17 +234,96 @@ export default function QuotationPreview({
           )}
 
           {/* Recipient */}
+          {/* Name first, then the phone number and the location (address) beneath it. */}
           {recipient.name && (
-            <Typography sx={{ fontSize: 12.5, color: '#333', mt: 1 }}>
-              <Box component="span" sx={{ color: '#888' }}>
-                To:{' '}
-              </Box>
-              {recipient.name}
-              {recipient.phone ? ` · ${recipient.phone}` : ''}
-            </Typography>
+            <Box sx={{ mt: 1, fontSize: 12.5, color: '#333', lineHeight: 1.5 }}>
+              <Typography sx={{ fontSize: 'inherit' }}>
+                <Box component="span" sx={{ color: '#888' }}>
+                  To:{' '}
+                </Box>
+                <Box component="span" sx={{ fontWeight: 700 }}>
+                  {recipient.name}
+                </Box>
+              </Typography>
+              {recipient.phone && <Typography sx={{ fontSize: 'inherit' }}>{recipient.phone}</Typography>}
+              {recipient.address && (
+                <Typography sx={{ fontSize: 'inherit', whiteSpace: 'pre-line' }}>{recipient.address}</Typography>
+              )}
+              {recipient.gst && <Typography sx={{ fontSize: 'inherit' }}>GST: {recipient.gst}</Typography>}
+            </Box>
           )}
 
-          {/* Items table */}
+          {/* Section-wise table: each section's items on the left, its single amount beside the group. */}
+          {sections.length > 0 ? (
+            <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: SECTION_GRID,
+                  bgcolor: '#f0f0f0',
+                  px: 1.5,
+                  py: 0.75,
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  letterSpacing: 0.3,
+                }}
+              >
+                <Box sx={{ textAlign: 'center' }}>S.NO</Box>
+                <Box>DESCRIPTION</Box>
+                <Box sx={{ textAlign: 'center' }}>SIZE/QTY</Box>
+                <Box sx={{ textAlign: 'right' }}>AMOUNT (Rs.)</Box>
+              </Box>
+              {sections.map((section, sectionIndex) => {
+                const firstSerial = sections
+                  .slice(0, sectionIndex)
+                  .reduce((count, previous) => count + previous.items.length, 0);
+                return (
+                  <Box key={sectionIndex} sx={{ display: 'flex', borderTop: '1px solid #e0e0e0' }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      {section.title && (
+                        <Box sx={{ bgcolor: '#fff3b0', px: 1.5, py: 0.75, fontWeight: 800, fontSize: 12.5 }}>
+                          {section.title.toUpperCase()}
+                        </Box>
+                      )}
+                      {section.items.map((item, itemIndex) => (
+                        <Box
+                          key={itemIndex}
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: SECTION_ROW_GRID,
+                            px: 1.5,
+                            py: 0.6,
+                            fontSize: 12.5,
+                            borderTop: section.title || itemIndex > 0 ? '1px solid #f0f0f0' : 'none',
+                          }}
+                        >
+                          <Box sx={{ textAlign: 'center', color: '#666' }}>{firstSerial + itemIndex + 1}</Box>
+                          <Box sx={{ pr: 1, overflowWrap: 'anywhere' }}>{item.description}</Box>
+                          <Box sx={{ textAlign: 'center' }}>{item.sizeQty ?? ''}</Box>
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box
+                      sx={{
+                        width: SECTION_AMOUNT_WIDTH,
+                        flexShrink: 0,
+                        borderLeft: '1px solid #e0e0e0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        px: 1.5,
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      {num(section.amount)}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          ) : (
+          /* Items table */
           <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
             <Box
               sx={{
@@ -274,6 +367,7 @@ export default function QuotationPreview({
               </Box>
             ))}
           </Box>
+          )}
 
           {/* Bank + totals */}
           <Stack direction="row" spacing={2.5} sx={{ mt: 2.5, alignItems: 'flex-start' }}>
@@ -314,6 +408,10 @@ export default function QuotationPreview({
               </Box>
             </Box>
           </Stack>
+
+          {totalInWords && (
+            <Typography sx={{ mt: 1.5, fontSize: 11.5, fontWeight: 700 }}>Amount in words: {totalInWords}</Typography>
+          )}
 
           {/* Standing terms from Company Settings — the same block the PDF prints. */}
           {company?.termsAndConditions && (

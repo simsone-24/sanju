@@ -5,6 +5,7 @@ export type QuotationStatus = 'DRAFT' | 'SENT' | 'APPROVED' | 'REJECTED' | 'REVI
 
 export type QuotationSource = 'ENQUIRY' | 'CUSTOMER' | 'ORDER' | 'MANUAL';
 
+// A flat, individually priced item — the original quotation layout.
 export interface QuotationItem {
   id: number;
   itemName: string;
@@ -14,6 +15,24 @@ export interface QuotationItem {
   rate: string;
   amount: string;
   sortOrder: number;
+}
+
+// An item listed under a section: a description with a free-text Size/Qty ("8nos"). The section
+// carries the price.
+export interface QuotationSectionItem {
+  id: number;
+  description: string;
+  sizeQty: string | null;
+  sortOrder: number;
+}
+
+// A named group of items priced as one amount, e.g. "EVENING STAGE" — 1,20,000.
+export interface QuotationSection {
+  id: number;
+  title: string | null;
+  amount: string;
+  sortOrder: number;
+  items: QuotationSectionItem[];
 }
 
 // Normalized recipient, resolved server-side from whichever source the quotation came from.
@@ -104,7 +123,12 @@ export interface QuotationDetail extends QuotationListItem {
   updatedAt: string;
   createdBy: { id: number; fullName: string } | null;
   whatsappNumber: string | null;
+  /** Flat priced items; empty on a section-wise quotation. */
   items: QuotationItem[];
+  /** Section-wise lines; empty on a flat quotation. */
+  sections: QuotationSection[];
+  /** The total spelled out, e.g. "Rupees Two Lakh Ninety Seven Thousand Only". */
+  totalAmountInWords: string;
   images: QuotationImage[];
   /** Every revision raised against the same enquiry, newest first. Empty for standalone quotations. */
   revisions: QuotationRevision[];
@@ -131,6 +155,12 @@ export interface QuotationItemInput {
   unit?: string;
   rate: number;
   sortOrder?: number;
+}
+
+export interface QuotationSectionInput {
+  title?: string;
+  amount: number;
+  items: { description: string; sizeQty?: string }[];
 }
 
 export interface ManualCustomerInput {
@@ -160,7 +190,9 @@ export interface CreateQuotationInput {
   /** Advance agreed against the quotation; shown on the form and stored with the document. */
   advanceAmount?: number;
   remarks?: string;
-  items: QuotationItemInput[];
+  /** Flat priced items or section-wise lines — at least one of the two. */
+  items?: QuotationItemInput[];
+  sections?: QuotationSectionInput[];
 }
 
 export interface UpdateQuotationInput {
@@ -173,6 +205,7 @@ export interface UpdateQuotationInput {
   remarks?: string;
   manualCustomer?: ManualCustomerInput;
   items?: QuotationItemInput[];
+  sections?: QuotationSectionInput[];
 }
 
 // One row per enquiry on the Quotations module's default (grouped) list — carries only the

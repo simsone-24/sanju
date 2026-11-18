@@ -24,8 +24,18 @@ const invoiceSourceSelect = {
       totalAmount: true,
       items: {
         orderBy: { sortOrder: 'asc' },
-        select: { itemName: true, description: true, quantity: true, unit: true, rate: true, amount: true },
+        select: {
+          sectionId: true,
+          itemName: true,
+          description: true,
+          sizeQty: true,
+          quantity: true,
+          unit: true,
+          rate: true,
+          amount: true,
+        },
       },
+      sections: { orderBy: { sortOrder: 'asc' }, select: { id: true, title: true, amount: true } },
     },
   },
   payments: {

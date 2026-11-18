@@ -18,6 +18,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import * as rentService from '../../services/rentService';
 import { formatCurrency } from '../../utils/format';
+import { QuotationTaxTotals } from './QuotationTaxTotals';
 import {
   applyRentalItemToQuotationDraft,
   editQuotationDraftItem,
@@ -61,10 +62,6 @@ export function QuotationItemsEditor({
   // Four fixed-width numeric columns do not fit a phone, so below `sm` each item becomes a stacked
   // card instead of a table row.
   const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down('sm'));
-
-  const advance = Number(advanceAmount) || 0;
-  // The customer's outstanding balance: the tax-inclusive total less whatever was paid up front.
-  const grandTotal = totals.total - advance;
 
   // Stock Items master for autocomplete suggestions
   const { data: stockItems } = useQuery({
@@ -276,84 +273,15 @@ export function QuotationItemsEditor({
         </Typography>
       )}
 
-      <Stack direction="row" spacing={1.5} sx={{ mt: 2, flexWrap: 'wrap', rowGap: 1.5 }}>
-        <TextField
-          label="CGST %"
-          type="number"
-          size="small"
-          sx={{ width: 130 }}
-          value={cgstPercent}
-          onChange={(event) => onCgstChange(event.target.value)}
-          slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
-        />
-        <TextField
-          label="SGST %"
-          type="number"
-          size="small"
-          sx={{ width: 130 }}
-          value={sgstPercent}
-          onChange={(event) => onSgstChange(event.target.value)}
-          slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } } }}
-        />
-        {onAdvanceChange && (
-          <TextField
-            label="Advance Amount"
-            type="number"
-            size="small"
-            sx={{ width: 170 }}
-            value={advanceAmount ?? ''}
-            onChange={(event) => onAdvanceChange(event.target.value)}
-            slotProps={{ htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right' } } }}
-          />
-        )}
-      </Stack>
-
-      <Stack sx={{ mt: 1.5, alignItems: 'flex-end', gap: 0.5 }}>
-        <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            Subtotal
-          </Typography>
-          <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-            {formatCurrency(totals.subtotal)}
-          </Typography>
-        </Stack>
-        {totals.cgstAmount > 0 && (
-          <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              CGST ({totals.cgstPercent}%)
-            </Typography>
-            <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-              {formatCurrency(totals.cgstAmount)}
-            </Typography>
-          </Stack>
-        )}
-        {totals.sgstAmount > 0 && (
-          <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              SGST ({totals.sgstPercent}%)
-            </Typography>
-            <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-              {formatCurrency(totals.sgstAmount)}
-            </Typography>
-          </Stack>
-        )}
-        {advance > 0 && (
-          <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Advance
-            </Typography>
-            <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right' }}>
-              - {formatCurrency(advance)}
-            </Typography>
-          </Stack>
-        )}
-        <Stack direction="row" sx={{ justifyContent: 'flex-end', width: '100%', alignItems: 'baseline', gap: 1 }}>
-          <Typography variant="h4">Grand Total</Typography>
-          <Typography variant="h4" sx={{ minWidth: 120, textAlign: 'right' }}>
-            {formatCurrency(grandTotal)}
-          </Typography>
-        </Stack>
-      </Stack>
+      <QuotationTaxTotals
+        cgstPercent={cgstPercent}
+        sgstPercent={sgstPercent}
+        onCgstChange={onCgstChange}
+        onSgstChange={onSgstChange}
+        totals={totals}
+        advanceAmount={advanceAmount}
+        onAdvanceChange={onAdvanceChange}
+      />
     </Box>
   );
 }

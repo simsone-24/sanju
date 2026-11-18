@@ -63,14 +63,28 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
         sgstPercent: Number(source.sgstPercent),
         advanceAmount: Number(source.advanceAmount ?? 0),
         remarks: source.remarks ?? undefined,
-        items: source.items.map((item, index) => ({
-          itemName: item.itemName,
-          description: item.description ?? undefined,
-          quantity: Number(item.quantity),
-          unit: item.unit ?? undefined,
-          rate: Number(item.rate),
-          sortOrder: index,
-        })),
+        // A section-wise quotation is copied section by section; a flat one item by item.
+        ...(source.sections.length > 0
+          ? {
+              sections: source.sections.map((section) => ({
+                title: section.title ?? undefined,
+                amount: Number(section.amount),
+                items: section.items.map((item) => ({
+                  description: item.description,
+                  sizeQty: item.sizeQty ?? undefined,
+                })),
+              })),
+            }
+          : {
+              items: source.items.map((item, index) => ({
+                itemName: item.itemName,
+                description: item.description ?? undefined,
+                quantity: Number(item.quantity),
+                unit: item.unit ?? undefined,
+                rate: Number(item.rate),
+                sortOrder: index,
+              })),
+            }),
       });
     },
     onSuccess: (created) => {

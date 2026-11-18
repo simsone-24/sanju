@@ -5,6 +5,7 @@ import { AppError } from '../../utils/AppError';
 import { logActivity } from '../../utils/activityLogger';
 import { generateDocumentNumber } from '../../utils/numberGenerator';
 import * as invoicesRepository from './repository';
+import type { InvoiceSource } from './repository';
 import { generateInvoicePdf } from './pdf';
 import { InvoiceResult } from './types';
 
@@ -15,6 +16,36 @@ import { InvoiceResult } from './types';
  * renumbered or re-dated itself on every reprint would be worthless. Everything else is read live,
  * so a payment collected after the invoice was first opened shows up on the next print.
  */
+// A flat quotation bills line by line. A section-wise one bills one line per section — its heading, the
+// items it covers listed underneath, and the section's single amount.
+function buildInvoiceLines(quotation: NonNullable<InvoiceSource['quotation']> | null) {
+  if (!quotation) return [];
+  const flat = quotation.items
+    .filter((item) => item.sectionId === null)
+    .map((item) => ({
+      itemName: item.itemName,
+      description: item.description,
+      quantity: Number(item.quantity ?? 0),
+      unit: item.unit,
+      rate: Number(item.rate ?? 0),
+      amount: Number(item.amount ?? 0),
+    }));
+  const sectioned = quotation.sections.map((section) => {
+    const covered = quotation.items
+      .filter((item) => item.sectionId === section.id)
+      .map((item) => (item.sizeQty ? `${item.itemName} (${item.sizeQty})` : item.itemName));
+    return {
+      itemName: section.title || 'Decoration items',
+      description: covered.join(', '),
+      quantity: 1,
+      unit: null,
+      rate: Number(section.amount),
+      amount: Number(section.amount),
+    };
+  });
+  return [...sectioned, ...flat];
+}
+
 export async function getForOrder(companyId: number, actorId: number, orderId: number): Promise<InvoiceResult> {
   const source = await invoicesRepository.findInvoiceSource(companyId, orderId);
   if (!source) throw new AppError(404, 'No invoice is available for this order.');
@@ -44,14 +75,7 @@ export async function getForOrder(companyId: number, actorId: number, orderId: n
     },
     customer: source.customer,
     quotationNumber: quotation?.quotationNumber ?? null,
-    items: (quotation?.items ?? []).map((item) => ({
-      itemName: item.itemName,
-      description: item.description,
-      quantity: Number(item.quantity),
-      unit: item.unit,
-      rate: Number(item.rate),
-      amount: Number(item.amount),
-    })),
+    items: buildInvoiceLines(quotation),
     subtotal: quotation ? Number(quotation.subtotal) : 0,
     discount: quotation ? Number(quotation.discount) : 0,
     cgstPercent: quotation ? Number(quotation.cgstPercent) : 0,

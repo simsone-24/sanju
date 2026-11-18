@@ -1,4 +1,4 @@
-import type { QuotationItemInput } from '../../types/quotation';
+import type { QuotationItemInput, QuotationSection, QuotationSectionInput } from '../../types/quotation';
 
 import type { RentalItem } from '../../types/rent';
 
@@ -33,6 +33,10 @@ export function quotationDraftTotals(
   sgstPercent: string,
 ): QuotationDraftTotals {
   const subtotal = items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0), 0);
+  return totalsFromSubtotal(subtotal, cgstPercent, sgstPercent);
+}
+
+function totalsFromSubtotal(subtotal: number, cgstPercent: string, sgstPercent: string): QuotationDraftTotals {
   const cgst = Number(cgstPercent) || 0;
   const sgst = Number(sgstPercent) || 0;
   const cgstAmount = Math.round(((subtotal * cgst) / 100) * 100) / 100;
@@ -120,6 +124,110 @@ export function toQuotationItemsInput(
       quantity: Number(item.quantity),
       rate: Number(item.rate),
       sortOrder: index,
+    })),
+    error: null,
+  };
+}
+
+// ---- Section-wise quotations ------------------------------------------------------------------
+// A section groups items that are priced as one amount ("EVENING STAGE" — 1,20,000). Items inside
+// it are only a description and a free-text Size/Qty. Held as strings for the same reason as
+// QuotationDraftItem: a half-typed amount has to be representable while the user is still typing.
+
+export interface QuotationSectionItemDraft {
+  description: string;
+  sizeQty: string;
+}
+
+export interface QuotationSectionDraft {
+  title: string;
+  amount: string;
+  items: QuotationSectionItemDraft[];
+}
+
+export function emptyQuotationSectionItem(): QuotationSectionItemDraft {
+  return { description: '', sizeQty: '' };
+}
+
+export function newQuotationSectionDraft(): QuotationSectionDraft {
+  return { title: '', amount: '', items: [emptyQuotationSectionItem()] };
+}
+
+/** The subtotal is the sum of the section amounts; tax is worked out exactly as for flat items. */
+export function quotationSectionTotals(
+  sections: QuotationSectionDraft[],
+  cgstPercent: string,
+  sgstPercent: string,
+): QuotationDraftTotals {
+  const subtotal = sections.reduce((sum, section) => sum + (Number(section.amount) || 0), 0);
+  return totalsFromSubtotal(subtotal, cgstPercent, sgstPercent);
+}
+
+/**
+ * Applies one edit to an item of a section. Naming the trailing row spawns a fresh empty one, so
+ * there is never an "Add Item" button to hunt for — the same behaviour as the flat item table.
+ */
+export function editQuotationSectionItem(
+  section: QuotationSectionDraft,
+  index: number,
+  field: keyof QuotationSectionItemDraft,
+  value: string,
+): QuotationSectionDraft {
+  const items = section.items.map((item, i) => (i === index ? { ...item, [field]: value } : item));
+  if (field === 'description' && index === section.items.length - 1 && value.trim() !== '') {
+    items.push(emptyQuotationSectionItem());
+  }
+  return { ...section, items };
+}
+
+export function removeQuotationSectionItem(section: QuotationSectionDraft, index: number): QuotationSectionDraft {
+  return section.items.length > 1 ? { ...section, items: section.items.filter((_, i) => i !== index) } : section;
+}
+
+/** Turns a saved section-wise quotation back into drafts for editing (with a spare row to type into). */
+export function quotationSectionsToDrafts(sections: QuotationSection[]): QuotationSectionDraft[] {
+  return sections.map((section) => ({
+    title: section.title ?? '',
+    amount: String(Number(section.amount)),
+    items: [
+      ...section.items.map((item) => ({ description: item.description, sizeQty: item.sizeQty ?? '' })),
+      emptyQuotationSectionItem(),
+    ],
+  }));
+}
+
+export type QuotationDraftSectionsResult =
+  | { sections: QuotationSectionInput[]; error: null }
+  | { sections: null; error: string };
+
+/**
+ * Drops sections that were never filled in and converts the rest to the API's shape, or reports the
+ * first problem found. `emptyMessage` differs per caller, as for toQuotationItemsInput.
+ */
+export function toQuotationSectionsInput(
+  sections: QuotationSectionDraft[],
+  emptyMessage: string,
+): QuotationDraftSectionsResult {
+  const filled = sections
+    .map((section) => ({ ...section, items: section.items.filter((item) => item.description.trim() !== '') }))
+    .filter((section) => section.items.length > 0 || section.title.trim() !== '' || section.amount.trim() !== '');
+
+  if (filled.length === 0) return { sections: null, error: emptyMessage };
+  if (filled.some((section) => section.items.length === 0)) {
+    return { sections: null, error: 'Add at least one item to every section.' };
+  }
+  if (filled.some((section) => section.amount.trim() === '' || !(Number(section.amount) >= 0))) {
+    return { sections: null, error: 'Enter a valid amount for every section.' };
+  }
+
+  return {
+    sections: filled.map((section) => ({
+      title: section.title.trim() || undefined,
+      amount: Number(section.amount),
+      items: section.items.map((item) => ({
+        description: item.description.trim(),
+        sizeQty: item.sizeQty.trim() || undefined,
+      })),
     })),
     error: null,
   };

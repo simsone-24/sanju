@@ -158,19 +158,29 @@ export function FormPage({
   // The title row carries page-level actions (e.g. the Hide/Show Preview toggle), so it sticks to
   // the top of the scroll container — otherwise those controls disappear as soon as the form is
   // scrolled. Pages without header actions keep the plain, non-sticky header.
+  // The premium (sectioned) form keeps its header compact — a smaller title, no subtitle and little
+  // space underneath — so the first section starts near the top of the screen instead
+  // of below a tall title block. Every other form keeps the standard header.
+  const compactHeader = premium && Boolean(sectionNav);
   const titleRow = (
     <Stack
       direction="row"
-      sx={{ alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}
+      sx={{ alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: compactHeader ? 1.5 : 3 }}
     >
-      <Box>
-        <Typography variant="h1">{title}</Typography>
-        {subtitle && (
-          <Typography variant="body2" color="text.secondary">
-            {subtitle}
-          </Typography>
-        )}
-      </Box>
+      {compactHeader ? (
+        <Typography variant="h2" sx={{ fontSize: 24, lineHeight: 1.3 }}>
+          {title}
+        </Typography>
+      ) : (
+        <Box>
+          <Typography variant="h1">{title}</Typography>
+          {subtitle && (
+            <Typography variant="body2" color="text.secondary">
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+      )}
       {headerActions}
     </Stack>
   );

@@ -70,7 +70,15 @@ import {
   useStagedImageUrls,
   type StagedQuotationImage,
 } from './quotationImages';
-import { quotationDraftTotals } from './quotationDraft';
+import { QuotationSectionsEditor } from './QuotationSectionsEditor';
+import {
+  newQuotationSectionDraft,
+  quotationDraftTotals,
+  quotationSectionsToDrafts,
+  quotationSectionTotals,
+  toQuotationSectionsInput,
+  type QuotationSectionDraft,
+} from './quotationDraft';
 
 const EMPTY_ITEM = { itemName: '', quantity: '1', rate: '' };
 
@@ -119,6 +127,9 @@ export default function QuotationFormPage() {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [itemsError, setItemsError] = useState<string | null>(null);
+  // Section-wise lines, the layout every new quotation uses. A quotation saved with flat priced items
+  // keeps its original item table when edited (see `useSections`).
+  const [sections, setSections] = useState<QuotationSectionDraft[]>(() => [newQuotationSectionDraft()]);
   const [enquirySearch, setEnquirySearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [pickedRecipient, setPickedRecipient] = useState<QuotationRecipient | null>(null);
@@ -291,10 +302,14 @@ export default function QuotationFormPage() {
         rate: item.rate,
       })),
     });
+    if (existingQuotation.sections.length > 0) setSections(quotationSectionsToDrafts(existingQuotation.sections));
   }, [existingQuotation, reset]);
 
   // useWatch gives live, re-rendering values for the item rows (drives totals, preview, auto-row).
   const items = (useWatch({ control, name: 'items' }) ?? []) as QuotationFormValues['items'];
+  // New quotations are section-wise. Editing keeps whichever layout the quotation was saved in, so a
+  // flat quotation is never silently converted (its quantities and rates would be lost).
+  const useSections = !isEdit || (existingQuotation?.sections.length ?? 0) > 0;
   const cgstValue = watch('cgstPercent');
   const sgstValue = watch('sgstPercent');
   const advanceValue = watch('advanceAmount');
@@ -306,7 +321,9 @@ export default function QuotationFormPage() {
     cgstAmount,
     sgstAmount,
     total: grandTotal,
-  } = quotationDraftTotals(items, cgstValue ?? '', sgstValue ?? '');
+  } = useSections
+    ? quotationSectionTotals(sections, cgstValue ?? '', sgstValue ?? '')
+    : quotationDraftTotals(items, cgstValue ?? '', sgstValue ?? '');
   // The advance is what the customer commits up front, so it is shown against the grand total —
   // the same presentation QuotationItemsEditor uses on the enquiry's quotation draft.
   const advanceAmount = Math.min(Math.max(Number(advanceValue) || 0, 0), grandTotal);
@@ -331,6 +348,20 @@ export default function QuotationFormPage() {
   const manualEmail = watch('manualEmail');
   const manualAddress = watch('manualAddress');
   const manualGst = watch('manualGst');
+
+  // Sections that have been started, in the preview's shape. An untouched blank section is left out
+  // so the preview still says "No items yet".
+  const previewSections = useSections
+    ? sections
+        .map((section) => ({
+          title: section.title.trim() || null,
+          amount: Number(section.amount) || 0,
+          items: section.items
+            .filter((item) => item.description.trim() !== '')
+            .map((item) => ({ description: item.description, sizeQty: item.sizeQty.trim() || null })),
+        }))
+        .filter((section) => section.items.length > 0 || section.title || section.amount > 0)
+    : [];
 
   const previewRecipient: QuotationRecipient = useMemo(() => {
     if (source === 'MANUAL') {
@@ -475,23 +506,35 @@ export default function QuotationFormPage() {
     setServerError(null);
     setItemsError(null);
 
-    const validItems = values.items.filter((item) => item.itemName.trim() !== '');
-    if (validItems.length === 0) {
-      setItemsError('Add at least one item.');
-      return;
+    // The lines to save: sections for a section-wise quotation, otherwise the flat priced items.
+    let lines: Pick<CreateQuotationInput, 'items' | 'sections'>;
+    if (useSections) {
+      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.');
+      if (parsed.sections === null) {
+        setItemsError(parsed.error);
+        return;
+      }
+      lines = { sections: parsed.sections };
+    } else {
+      const validItems = values.items.filter((item) => item.itemName.trim() !== '');
+      if (validItems.length === 0) {
+        setItemsError('Add at least one item.');
+        return;
+      }
+      const invalid = validItems.some((item) => !(Number(item.quantity) > 0) || !(Number(item.rate) >= 0));
+      if (invalid) {
+        setItemsError('Enter a valid quantity and unit price for every item.');
+        return;
+      }
+      lines = {
+        items: validItems.map((item, index) => ({
+          itemName: item.itemName.trim(),
+          quantity: Number(item.quantity),
+          rate: Number(item.rate),
+          sortOrder: index,
+        })),
+      };
     }
-    const invalid = validItems.some((item) => !(Number(item.quantity) > 0) || !(Number(item.rate) >= 0));
-    if (invalid) {
-      setItemsError('Enter a valid quantity and unit price for every item.');
-      return;
-    }
-
-    const itemsInput = validItems.map((item, index) => ({
-      itemName: item.itemName.trim(),
-      quantity: Number(item.quantity),
-      rate: Number(item.rate),
-      sortOrder: index,
-    }));
 
     const cgstPercent = values.cgstPercent ? Number(values.cgstPercent) : 0;
     const sgstPercent = values.sgstPercent ? Number(values.sgstPercent) : 0;
@@ -520,7 +563,7 @@ export default function QuotationFormPage() {
           cgstPercent,
           sgstPercent,
           advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : 0,
-          items: itemsInput,
+          ...lines,
           ...(existingQuotation?.source === 'MANUAL' ? { manualCustomer } : {}),
         });
         goBack();
@@ -537,7 +580,7 @@ export default function QuotationFormPage() {
           cgstPercent,
           sgstPercent,
           advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : 0,
-          items: itemsInput,
+          ...lines,
         });
         if (stagedImages.length) {
           try {
@@ -656,9 +699,12 @@ export default function QuotationFormPage() {
         <QuotationPreview
           company={branding}
           recipient={previewRecipient}
-          quotationNumber={existingQuotation?.quotationNumber ?? 'Auto-generated'}
           quotationDate={quotationDateValue ? formatDate(quotationDateValue) : ''}
-          items={items
+          sections={previewSections}
+          totalInWords={isEdit ? existingQuotation?.totalAmountInWords : undefined}
+          items={useSections
+            ? []
+            : items
             .filter((item) => item.itemName.trim() !== '')
             .map((item) => ({
               itemName: item.itemName,
@@ -1028,6 +1074,31 @@ export default function QuotationFormPage() {
       {/* Anchor for links that open this form ready to add items (see SCROLL_ANCHORS). */}
       <FormSection title="Items" id={SCROLL_ANCHORS.quotationItems}>
         <Box sx={{ gridColumn: '1 / -1' }}>
+          {useSections ? (
+            <QuotationSectionsEditor
+              sections={sections}
+              onSectionsChange={(next) => {
+                setSections(next);
+                setItemsError(null);
+              }}
+              cgstPercent={cgstValue ?? ''}
+              sgstPercent={sgstValue ?? ''}
+              onCgstChange={(value) => setValue('cgstPercent', value, { shouldDirty: true })}
+              onSgstChange={(value) => setValue('sgstPercent', value, { shouldDirty: true })}
+              totals={{
+                cgstPercent: cgstPercentNum,
+                sgstPercent: sgstPercentNum,
+                subtotal: itemsSubtotal,
+                cgstAmount,
+                sgstAmount,
+                total: grandTotal,
+              }}
+              error={itemsError}
+              advanceAmount={advanceValue ?? ''}
+              onAdvanceChange={(value) => setValue('advanceAmount', value, { shouldDirty: true })}
+            />
+          ) : (
+          <>
           <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Table size="small" stickyHeader>
               <TableHead>
@@ -1234,6 +1305,8 @@ export default function QuotationFormPage() {
               </Typography>
             </Stack>
           </Stack>
+          </>
+          )}
         </Box>
       </FormSection>
 

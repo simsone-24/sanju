@@ -11,6 +11,17 @@ const quotationItemSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 });
 
+const quotationSectionItemSchema = z.object({
+  description: z.string().trim().min(1, 'Item description is required.').max(500),
+  sizeQty: z.string().trim().max(100, 'Size / Qty is too long.').optional(),
+});
+
+const quotationSectionSchema = z.object({
+  title: z.string().trim().max(150, 'Section heading is too long.').optional(),
+  amount: z.coerce.number().min(0, 'Section amount cannot be negative.'),
+  items: z.array(quotationSectionItemSchema).min(1, 'Add at least one item to each section.'),
+});
+
 const manualCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().min(1).optional(),
@@ -40,9 +51,14 @@ export const createQuotationSchema = z
     sgstPercent: z.coerce.number().min(0).max(100).optional(),
     advanceAmount: z.coerce.number().min(0).optional(),
     remarks: z.string().min(1).optional(),
-    items: z.array(quotationItemSchema).min(1, 'At least one line item is required.'),
+    // Either the flat priced items or section-wise lines.
+    items: z.array(quotationItemSchema).optional(),
+    sections: z.array(quotationSectionSchema).max(50, 'A quotation can have at most 50 sections.').optional(),
   })
   .superRefine((data, ctx) => {
+    if (!data.items?.length && !data.sections?.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'At least one line item is required.' });
+    }
     if (data.source === QuotationSource.ENQUIRY && !data.enquiryId) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['enquiryId'], message: 'Select an enquiry.' });
     }
@@ -74,8 +90,10 @@ export const updateQuotationSchema = z
     remarks: z.string().min(1).optional(),
     manualCustomer: manualCustomerSchema.optional(),
     items: z.array(quotationItemSchema).min(1).optional(),
+    sections: z.array(quotationSectionSchema).min(1).max(50).optional(),
   })
-  .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required.' });
+  .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required.' })
+  .refine((data) => !(data.items && data.sections), { message: 'Send either items or sections, not both.' });
 
 export const changeQuotationStatusSchema = z.object({
   status: z.enum(['SENT', 'REJECTED']),
