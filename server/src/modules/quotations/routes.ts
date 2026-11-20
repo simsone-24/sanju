@@ -61,6 +61,8 @@ router.patch(
   validate(changeQuotationStatusSchema),
   quotationsController.changeStatus,
 );
+// Soft delete — the row is kept with deleted_at set. See quotationsService.remove for what blocks it.
+router.delete('/:id', authorize(ModuleName.QUOTATIONS, 'canDelete'), quotationsController.remove);
 // Approval is gated on canApprove specifically, not canEdit — per the seeded matrix, Sales
 // Executive can create/edit quotations but only Manager/Super Admin can approve them.
 router.patch('/:id/approve', authorize(ModuleName.QUOTATIONS, 'canApprove'), quotationsController.approve);

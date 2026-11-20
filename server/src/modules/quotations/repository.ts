@@ -330,15 +330,22 @@ export function getQuotationActivityLog(id: number, client: PrismaClientOrTx = p
   });
 }
 
+// `includeDeleted` is for numbering only: a deleted revision still holds its (enquiry, version) pair
+// under the unique index, so the next revision has to count past it.
 export function findLatestQuotationForEnquiry(
   companyId: number,
   enquiryId: number,
   client: PrismaClientOrTx = prisma,
+  includeDeleted = false,
 ) {
   return client.quotation.findFirst({
-    where: { enquiryId, deletedAt: null, companyId },
+    where: { enquiryId, companyId, ...(includeDeleted ? {} : { deletedAt: null }) },
     orderBy: { version: 'desc' },
   });
+}
+
+export function softDeleteQuotation(id: number, client: PrismaClientOrTx = prisma) {
+  return client.quotation.update({ where: { id }, data: { deletedAt: new Date() }, select: { id: true } });
 }
 
 export function findApprovedQuotationForEnquiry(

@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { CompanyDetail } from '../../types/company';
 import type { QuotationRecipient } from '../../types/quotation';
 import { getPublicAssetUrl } from '../../utils/format';
+import { flatItemAsSection } from './quotationDraft';
 import type { QuotationPreviewImage } from './quotationImages';
 
 export interface QuotationPreviewItem {
@@ -160,6 +161,10 @@ export default function QuotationPreview({
   images,
 }: QuotationPreviewProps) {
   const { ref, scale } = useFitScale();
+  // A quotation that mixes both prints as one section table: its priced line items follow the sections
+  // as groups of one. Without sections the original item table is used.
+  const sectionRows: QuotationPreviewSection[] =
+    sections.length > 0 ? [...sections, ...items.map((item) => flatItemAsSection(item))] : [];
 
   const bankRows = [
     ['Bank Name', company?.bankName],
@@ -254,7 +259,7 @@ export default function QuotationPreview({
           )}
 
           {/* Section-wise table: each section's items on the left, its single amount beside the group. */}
-          {sections.length > 0 ? (
+          {sectionRows.length > 0 ? (
             <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
               <Box
                 sx={{
@@ -273,8 +278,8 @@ export default function QuotationPreview({
                 <Box sx={{ textAlign: 'center' }}>SIZE/QTY</Box>
                 <Box sx={{ textAlign: 'right' }}>AMOUNT (Rs.)</Box>
               </Box>
-              {sections.map((section, sectionIndex) => {
-                const firstSerial = sections
+              {sectionRows.map((section, sectionIndex) => {
+                const firstSerial = sectionRows
                   .slice(0, sectionIndex)
                   .reduce((count, previous) => count + previous.items.length, 0);
                 return (
@@ -361,9 +366,10 @@ export default function QuotationPreview({
                 <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pr: 1 }}>
                   {item.itemName || `Item ${index + 1}`}
                 </Box>
-                <Box sx={{ textAlign: 'center' }}>{item.quantity ? num(item.quantity) : '—'}</Box>
-                <Box sx={{ textAlign: 'right', color: '#555' }}>{num(item.rate)}</Box>
-                <Box sx={{ textAlign: 'right', fontWeight: 600 }}>{num(item.amount)}</Box>
+                {/* Blank, never 0 or a dash: a quantity of 1 (the default) or 0, and a zero price or subtotal, are not shown. */}
+                <Box sx={{ textAlign: 'center' }}>{item.quantity > 0 && item.quantity !== 1 ? num(item.quantity) : ''}</Box>
+                <Box sx={{ textAlign: 'right', color: '#555' }}>{item.rate ? num(item.rate) : ''}</Box>
+                <Box sx={{ textAlign: 'right', fontWeight: 600 }}>{item.amount ? num(item.amount) : ''}</Box>
               </Box>
             ))}
           </Box>

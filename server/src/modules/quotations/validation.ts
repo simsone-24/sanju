@@ -92,8 +92,7 @@ export const updateQuotationSchema = z
     items: z.array(quotationItemSchema).min(1).optional(),
     sections: z.array(quotationSectionSchema).min(1).max(50).optional(),
   })
-  .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required.' })
-  .refine((data) => !(data.items && data.sections), { message: 'Send either items or sections, not both.' });
+  .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required.' });
 
 export const changeQuotationStatusSchema = z.object({
   status: z.enum(['SENT', 'REJECTED']),

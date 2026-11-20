@@ -43,11 +43,13 @@ import {
 } from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
+import { layoutForSavedQuotation, QuotationLayoutToggle, type QuotationLayout } from '../quotations/QuotationLayoutToggle';
 import { QuotationSectionsEditor } from '../quotations/QuotationSectionsEditor';
 import {
   EMPTY_QUOTATION_DRAFT_ITEM,
   newQuotationSectionDraft,
   quotationDraftTotals,
+  quotationMixedTotals,
   quotationSectionsToDrafts,
   quotationSectionTotals,
   toQuotationItemsInput,
@@ -97,7 +99,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
 
   const [items, setItems] = useState<QuotationDraftItem[]>([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
-  // New quotations are section-wise; one saved with flat priced items keeps the item table when edited.
+  // The layout a quotation is entered in (toggle above the lines): section-wise, line items, or both. A
+  // saved quotation opens in its own layout and can only gain the other kind of line.
+  const [layout, setLayout] = useState<QuotationLayout>('BOTH');
   const [sections, setSections] = useState<QuotationSectionDraft[]>(() => [newQuotationSectionDraft()]);
   const [cgstPercent, setCgstPercent] = useState('');
   const [sgstPercent, setSgstPercent] = useState('');
@@ -140,6 +144,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
       prefilledFor.current = 0;
       setItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
       setSections([newQuotationSectionDraft()]);
+      setLayout('BOTH');
       setCgstPercent('');
       setSgstPercent('');
       setAdvanceAmount(
@@ -169,6 +174,9 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
         ? quotationSectionsToDrafts(existingQuotation.sections)
         : [newQuotationSectionDraft()],
     );
+    setLayout(
+      layoutForSavedQuotation(existingQuotation.sections.length > 0, existingQuotation.items.length > 0).layout,
+    );
     setCgstPercent(Number(existingQuotation.cgstPercent) ? existingQuotation.cgstPercent : '');
     setSgstPercent(Number(existingQuotation.sgstPercent) ? existingQuotation.sgstPercent : '');
     // The quotation's own advance wins; a quotation that never carried one inherits the enquiry's
@@ -193,14 +201,24 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
     (option) => option !== 'REVISED' || existingQuotation?.status === 'REVISED',
   );
 
-  // Editing keeps the layout the quotation was saved in, so a flat quotation is never silently converted.
-  const useSections = !isEdit || (existingQuotation?.sections.length ?? 0) > 0;
-  const totals = useSections
-    ? quotationSectionTotals(sections, cgstPercent, sgstPercent)
-    : quotationDraftTotals(items, cgstPercent, sgstPercent);
+  // A new quotation uses the layout picked on the toggle; editing keeps the layout it was saved in, so
+  // a quotation is never silently converted.
+  const layoutOptions: QuotationLayout[] = isEdit
+    ? existingQuotation
+      ? layoutForSavedQuotation(existingQuotation.sections.length > 0, existingQuotation.items.length > 0).options
+      : []
+    : ['SECTIONS', 'ITEMS', 'BOTH'];
+  const showSections = layout !== 'ITEMS';
+  const showItems = layout !== 'SECTIONS';
+  const totals =
+    showSections && showItems
+      ? quotationMixedTotals(sections, items, cgstPercent, sgstPercent)
+      : showSections
+        ? quotationSectionTotals(sections, cgstPercent, sgstPercent)
+        : quotationDraftTotals(items, cgstPercent, sgstPercent);
 
   // Sections that have been started, in the preview's shape; an untouched blank one is left out.
-  const previewSections = useSections
+  const previewSections = showSections
     ? sections
         .map((section) => ({
           title: section.title.trim() || null,
@@ -291,22 +309,29 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
     setServerError(null);
     setItemsError(null);
 
-    // The lines to save: sections for a section-wise quotation, otherwise the flat priced items.
-    let lines: Pick<CreateQuotationInput, 'items' | 'sections'>;
-    if (useSections) {
-      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.');
+    // The lines to save: sections, flat priced items, or both. When both are offered either may be left
+    // empty, as long as the quotation has at least one line.
+    const bothOffered = showSections && showItems;
+    const lines: Pick<CreateQuotationInput, 'items' | 'sections'> = {};
+    if (showSections) {
+      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.', bothOffered);
       if (parsed.sections === null) {
         setItemsError(parsed.error);
         return;
       }
-      lines = { sections: parsed.sections };
-    } else {
-      const parsed = toQuotationItemsInput(items, 'Add at least one item.');
+      if (parsed.sections.length > 0) lines.sections = parsed.sections;
+    }
+    if (showItems) {
+      const parsed = toQuotationItemsInput(items, 'Add at least one item.', bothOffered);
       if (parsed.items === null) {
         setItemsError(parsed.error);
         return;
       }
-      lines = { items: parsed.items };
+      if (parsed.items.length > 0) lines.items = parsed.items;
+    }
+    if (!lines.sections && !lines.items) {
+      setItemsError('Add at least one item.');
+      return;
     }
 
     try {
@@ -424,7 +449,10 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
               </Alert>
             )}
 
-            {useSections ? (
+            {layoutOptions.length > 1 && (
+              <QuotationLayoutToggle value={layout} onChange={setLayout} options={layoutOptions} />
+            )}
+            {showSections && (
               <QuotationSectionsEditor
                 sections={sections}
                 onSectionsChange={(next) => {
@@ -436,11 +464,13 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                 onCgstChange={setCgstPercent}
                 onSgstChange={setSgstPercent}
                 totals={totals}
-                error={itemsError}
+                error={showItems ? null : itemsError}
                 advanceAmount={advanceAmount}
                 onAdvanceChange={setAdvanceAmount}
+                showTotals={!showItems}
               />
-            ) : (
+            )}
+            {showItems && (
               <QuotationItemsEditor
                 items={items}
                 onItemsChange={setItems}
@@ -520,7 +550,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   quotationDate={enquiry?.eventDate ? formatDate(enquiry.eventDate) : ''}
                   sections={previewSections}
                   totalInWords={isEdit ? existingQuotation?.totalAmountInWords : undefined}
-                  items={useSections
+                  items={!showItems
                     ? []
                     : items
                     .filter((item) => item.itemName.trim() !== '')

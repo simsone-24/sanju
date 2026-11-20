@@ -1,5 +1,6 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -7,6 +8,8 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Stack } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
+import { useState } from 'react';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { IconButton } from '../../components/ui/IconButton';
 import { usePermission } from '../../hooks/usePermission';
 import * as quotationService from '../../services/quotationService';
@@ -39,6 +42,8 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
   const canCreate = usePermission('QUOTATIONS', 'canCreate');
   const canPrint = usePermission('QUOTATIONS', 'canPrint');
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
+  const canDelete = usePermission('QUOTATIONS', 'canDelete');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['quotations'] });
@@ -63,7 +68,8 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
         sgstPercent: Number(source.sgstPercent),
         advanceAmount: Number(source.advanceAmount ?? 0),
         remarks: source.remarks ?? undefined,
-        // A section-wise quotation is copied section by section; a flat one item by item.
+        // Every kind of line is copied: sections section by section, priced line items item by item (a
+        // quotation may carry both).
         ...(source.sections.length > 0
           ? {
               sections: source.sections.map((section) => ({
@@ -75,7 +81,9 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
                 })),
               })),
             }
-          : {
+          : {}),
+        ...(source.items.length > 0
+          ? {
               items: source.items.map((item, index) => ({
                 itemName: item.itemName,
                 description: item.description ?? undefined,
@@ -84,7 +92,8 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
                 rate: Number(item.rate),
                 sortOrder: index,
               })),
-            }),
+            }
+          : {}),
       });
     },
     onSuccess: (created) => {
@@ -93,6 +102,20 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
       onEdit(created.id);
     },
     onError: (error) => showToast(errorMessage(error, 'Unable to duplicate this quotation.'), 'error'),
+  });
+
+  // Soft delete: the quotation drops out of the enquiry's table; its record is kept.
+  const deleteMutation = useMutation({
+    mutationFn: () => quotationService.remove(row.id),
+    onSuccess: () => {
+      invalidate();
+      setConfirmingDelete(false);
+      showToast('Quotation deleted.', 'success');
+    },
+    onError: (error) => {
+      setConfirmingDelete(false);
+      showToast(errorMessage(error, 'Unable to delete this quotation.'), 'error');
+    },
   });
 
   const confirmMutation = useMutation({
@@ -123,10 +146,11 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
     window.open(link, '_blank', 'noopener');
   }
 
+  // IconButton's `title` is both the tooltip and the accessible name, so no Tooltip wrapper.
+  // The row itself is clickable, so the click is stopped here for the whole group: without it
+  // every action would also fire the row handler and open the preview on top of what was asked for.
   return (
-    // IconButton's `title` is both the tooltip and the accessible name, so no Tooltip wrapper.
-    // The row itself is clickable, so the click is stopped here for the whole group: without it
-    // every action would also fire the row handler and open the preview on top of what was asked for.
+    <>
     <Stack
       direction="row"
       spacing={0.25}
@@ -179,6 +203,26 @@ export function EnquiryQuotationActions({ row, onView, onEdit }: EnquiryQuotatio
         </IconButton>
       )}
 
+      {canDelete && (
+        <IconButton size="sm" title="Delete" disabled={deleteMutation.isPending} onClick={() => setConfirmingDelete(true)}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      )}
     </Stack>
+
+    {/* A dialog's clicks bubble through the React tree to the clickable table row, so they are stopped here too. */}
+    <span onClick={(event) => event.stopPropagation()}>
+    <ConfirmDialog
+      open={confirmingDelete}
+      title="Delete Quotation?"
+      message={`Delete quotation "${row.quotationNumber}" (v${row.version})? It will no longer appear in the app, but its record is kept. A confirmed quotation, or one an order was raised from, cannot be deleted.`}
+      confirmLabel="Delete"
+      danger
+      loading={deleteMutation.isPending}
+      onConfirm={() => deleteMutation.mutate()}
+      onClose={() => setConfirmingDelete(false)}
+    />
+    </span>
+    </>
   );
 }

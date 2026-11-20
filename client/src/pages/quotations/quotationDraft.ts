@@ -112,9 +112,11 @@ export type QuotationDraftItemsResult =
 export function toQuotationItemsInput(
   items: QuotationDraftItem[],
   emptyMessage: string,
+  /** A mixed quotation may leave its line items empty (it has sections instead). */
+  allowEmpty = false,
 ): QuotationDraftItemsResult {
   const named = items.filter((item) => item.itemName.trim() !== '');
-  if (named.length === 0) return { items: null, error: emptyMessage };
+  if (named.length === 0) return allowEmpty ? { items: [], error: null } : { items: null, error: emptyMessage };
   if (named.some((item) => !(Number(item.quantity) > 0) || !(Number(item.rate) >= 0))) {
     return { items: null, error: 'Enter a valid quantity and unit price for every item.' };
   }
@@ -163,6 +165,42 @@ export function quotationSectionTotals(
   return totalsFromSubtotal(subtotal, cgstPercent, sgstPercent);
 }
 
+/** A quotation that carries both section-priced groups and priced line items: the subtotal is both added up. */
+export function quotationMixedTotals(
+  sections: QuotationSectionDraft[],
+  items: QuotationDraftItem[],
+  cgstPercent: string,
+  sgstPercent: string,
+): QuotationDraftTotals {
+  const sectionsSubtotal = sections.reduce((sum, section) => sum + (Number(section.amount) || 0), 0);
+  const itemsSubtotal = items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.rate) || 0), 0);
+  return totalsFromSubtotal(sectionsSubtotal + itemsSubtotal, cgstPercent, sgstPercent);
+}
+
+/**
+ * A priced line item shown inside the section table (the document of a quotation that mixes both): a
+ * group of one, with quantity × rate in the Size/Qty column and the item's amount as the group's amount.
+ */
+export function flatItemAsSection(item: {
+  itemName: string;
+  quantity: number | string;
+  rate: number | string;
+  amount: number | string;
+}): { title: null; amount: number; items: { description: string; sizeQty: string }[] } {
+  const format = (value: number | string) => Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  return {
+    title: null,
+    amount: Number(item.amount),
+    // A quantity of 1 (the default) or 0 is left blank, like the item table's Quantity column.
+    items: [
+      {
+        description: item.itemName,
+        sizeQty: Number(item.quantity) && Number(item.quantity) !== 1 ? `${format(item.quantity)} × ${format(item.rate)}` : '',
+      },
+    ],
+  };
+}
+
 /**
  * Applies one edit to an item of a section. Naming the trailing row spawns a fresh empty one, so
  * there is never an "Add Item" button to hunt for — the same behaviour as the flat item table.
@@ -207,12 +245,14 @@ export type QuotationDraftSectionsResult =
 export function toQuotationSectionsInput(
   sections: QuotationSectionDraft[],
   emptyMessage: string,
+  /** A mixed quotation may leave its sections empty (it has line items instead). */
+  allowEmpty = false,
 ): QuotationDraftSectionsResult {
   const filled = sections
     .map((section) => ({ ...section, items: section.items.filter((item) => item.description.trim() !== '') }))
     .filter((section) => section.items.length > 0 || section.title.trim() !== '' || section.amount.trim() !== '');
 
-  if (filled.length === 0) return { sections: null, error: emptyMessage };
+  if (filled.length === 0) return allowEmpty ? { sections: [], error: null } : { sections: null, error: emptyMessage };
   if (filled.some((section) => section.items.length === 0)) {
     return { sections: null, error: 'Add at least one item to every section.' };
   }

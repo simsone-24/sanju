@@ -2,6 +2,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
@@ -74,7 +75,7 @@ const QUOTATION_ROW_ACCENT: Record<QuotationStatus, string> = {
 interface PendingAction {
   id: number;
   quotationNumber: string;
-  action: 'send' | 'reject';
+  action: 'send' | 'reject' | 'delete';
 }
 
 const ACTION_COPY: Record<PendingAction['action'], { title: string; message: (num: string) => string; danger?: boolean }> = {
@@ -85,6 +86,11 @@ const ACTION_COPY: Record<PendingAction['action'], { title: string; message: (nu
   reject: {
     title: 'Reject Quotation?',
     message: (num) => `Mark quotation "${num}" as rejected?`,
+    danger: true,
+  },
+  delete: {
+    title: 'Delete Quotation?',
+    message: (num) => `Delete quotation "${num}"? It will no longer appear in the app, but its record is kept.`,
     danger: true,
   },
 };
@@ -182,6 +188,7 @@ export default function QuotationListPage() {
   const canCreate = usePermission('QUOTATIONS', 'canCreate');
   const canExport = usePermission('QUOTATIONS', 'canExport');
   const canEdit = usePermission('QUOTATIONS', 'canEdit');
+  const canDelete = usePermission('QUOTATIONS', 'canDelete');
   const canPrint = usePermission('QUOTATIONS', 'canPrint');
   const canViewCustomers = usePermission('CUSTOMERS', 'canView');
 
@@ -304,7 +311,18 @@ export default function QuotationListPage() {
     onSuccess: onActionSettled,
   });
 
-  const actionPending = sendMutation.isPending || rejectMutation.isPending;
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => quotationService.remove(id),
+    onSuccess: () => {
+      onActionSettled();
+      // The enquiry's own page shows its latest quotation, which a delete can change.
+      queryClient.invalidateQueries({ queryKey: ['enquiry'] });
+      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+      showToast('Quotation deleted.');
+    },
+  });
+
+  const actionPending = sendMutation.isPending || rejectMutation.isPending || deleteMutation.isPending;
 
   function resetFilters() {
     setSearchParams(new URLSearchParams(), { replace: true });
@@ -340,7 +358,8 @@ export default function QuotationListPage() {
     setActionError(null);
     try {
       if (pendingAction.action === 'send') await sendMutation.mutateAsync(pendingAction.id);
-      else await rejectMutation.mutateAsync(pendingAction.id);
+      else if (pendingAction.action === 'reject') await rejectMutation.mutateAsync(pendingAction.id);
+      else await deleteMutation.mutateAsync(pendingAction.id);
       setPendingAction(null);
     } catch (error) {
       if (isAxiosError<ApiErrorResponse>(error) && error.response) {
@@ -978,6 +997,18 @@ export default function QuotationListPage() {
             }}
           >
             Reject
+          </MenuItem>
+        )}
+
+        {canDelete && menuRow && (
+          <MenuItem
+            icon={<DeleteIcon fontSize="small" />}
+            onClick={() => {
+              setPendingAction({ id: menuRow.quotationId, quotationNumber: menuRow.quotationNumber, action: 'delete' });
+              setMenuState(null);
+            }}
+          >
+            Delete
           </MenuItem>
         )}
       </Menu>

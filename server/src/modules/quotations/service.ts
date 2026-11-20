@@ -32,6 +32,23 @@ function computeItemsWithAmount(items: QuotationItemInput[]) {
   return items.map((item) => ({ ...item, amount: roundCurrency(item.quantity * item.rate) }));
 }
 
+// A flat priced item shown inside the section table (a quotation that mixes both): a group of one,
+// with its quantity and rate in the Size/Qty column and its amount as the group's amount.
+function flatItemAsSection(item: { itemName: string; quantity: number; rate: number; amount: number }) {
+  const format = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  return {
+    title: null,
+    amount: item.amount,
+    // A quantity of 1 (the default) or 0 is left blank, like the item table's Quantity column.
+    items: [
+      {
+        description: item.itemName,
+        sizeQty: item.quantity && item.quantity !== 1 ? `${format(item.quantity)} x ${format(item.rate)}` : '',
+      },
+    ],
+  };
+}
+
 // The subtotal is what the lines add up to: every section's amount plus any flat priced items.
 function sumLines(items: { amount: number }[], sections: QuotationSectionInput[]): number {
   return roundCurrency(
@@ -196,6 +213,16 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
   if (!company) return null;
 
   const snapshot = buildSnapshot(record);
+  const flatItems = record.items
+    .filter((item) => item.sectionId === null)
+    .map((item) => ({
+      itemName: item.itemName,
+      description: item.description,
+      quantity: Number(item.quantity ?? 0),
+      unit: item.unit,
+      rate: Number(item.rate ?? 0),
+      amount: Number(item.amount ?? 0),
+    }));
   const pdfPath = await generateQuotationPdf(
     record.id,
     {
@@ -204,23 +231,22 @@ async function regeneratePdf(companyId: number, record: QuotationDetailRecord): 
       quotationDate: record.quotationDate,
       status: record.status,
       recipient: snapshot,
-      items: record.items
-        .filter((item) => item.sectionId === null)
-        .map((item) => ({
-          itemName: item.itemName,
-          description: item.description,
-          quantity: Number(item.quantity ?? 0),
-          unit: item.unit,
-          rate: Number(item.rate ?? 0),
-          amount: Number(item.amount ?? 0),
-        })),
-      sections: record.sections.map((section) => ({
-        title: section.title,
-        amount: Number(section.amount),
-        items: record.items
-          .filter((item) => item.sectionId === section.id)
-          .map((item) => ({ description: item.itemName, sizeQty: item.sizeQty })),
-      })),
+      // A quotation with sections prints as one section table: line items it also carries are shown as
+      // one-item groups after the sections. Without sections the original item table is used.
+      items: record.sections.length > 0 ? [] : flatItems.map((item) => ({ ...item, description: item.description })),
+      sections:
+        record.sections.length > 0
+          ? [
+              ...record.sections.map((section) => ({
+                title: section.title,
+                amount: Number(section.amount),
+                items: record.items
+                  .filter((item) => item.sectionId === section.id)
+                  .map((item) => ({ description: item.itemName, sizeQty: item.sizeQty })),
+              })),
+              ...flatItems.map(flatItemAsSection),
+            ]
+          : [],
       totalInWords: amountInWords(Number(record.totalAmount)),
       subtotal: Number(record.subtotal),
       discount: Number(record.discount),
@@ -476,10 +502,12 @@ export async function create(companyId: number, actorId: number, input: CreateQu
     // v1 with a fresh number.
     if (input.source === QuotationSource.ENQUIRY) {
       const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, input.enquiryId!, tx);
-      if (latest) {
-        quotationNumber = latest.quotationNumber;
-        version = latest.version + 1;
-        if (latest.status === QuotationStatus.DRAFT || latest.status === QuotationStatus.SENT) {
+      // Numbering counts deleted revisions too, so a new one never reuses the version of a deleted one.
+      const lastEver = await quotationsRepository.findLatestQuotationForEnquiry(companyId, input.enquiryId!, tx, true);
+      if (lastEver) {
+        quotationNumber = lastEver.quotationNumber;
+        version = lastEver.version + 1;
+        if (latest && (latest.status === QuotationStatus.DRAFT || latest.status === QuotationStatus.SENT)) {
           await quotationsRepository.markQuotationRevised(latest.id, tx);
         }
       } else {
@@ -888,6 +916,48 @@ export async function updateImageCaption(
   });
 
   return mapDetail(refreshed ?? quotation);
+}
+
+/**
+ * Soft-deletes a quotation: the row stays (deleted_at is set) and disappears from every list, view
+ * and total. Refused while an order was raised from it, or while it is confirmed — a confirmed
+ * quotation feeds the enquiry's final budget and the order, so it has to be un-confirmed first.
+ */
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
+  const existing = await quotationsRepository.findQuotationById(companyId, id);
+  if (!existing) throw new AppError(404, 'Quotation not found.');
+
+  const linkedOrder = await ordersRepository.findOrderByQuotationId(companyId, id);
+  if (linkedOrder) {
+    throw new AppError(400, `Cannot delete this quotation because order "${linkedOrder.orderNumber}" was raised from it.`);
+  }
+  if (existing.status === QuotationStatus.APPROVED) {
+    throw new AppError(400, 'A confirmed quotation cannot be deleted. Change its status first, then delete it.');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await quotationsRepository.softDeleteQuotation(id, tx);
+
+    // The enquiry shows its latest quotation's amount and version, so they follow the newest one
+    // that is left (or clear when none is).
+    if (existing.source === QuotationSource.ENQUIRY && existing.enquiry) {
+      const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, existing.enquiry.id, tx);
+      await enquiriesRepository.updateEnquiry(
+        existing.enquiry.id,
+        { quotationAmount: latest?.totalAmount ?? null, quotationVersion: latest?.version ?? null },
+        tx,
+      );
+    }
+  });
+
+  await logActivity({
+    companyId,
+    module: 'QUOTATIONS',
+    referenceId: id,
+    action: 'DELETE',
+    description: `Quotation "${existing.quotationNumber}" (v${existing.version}) deleted.`,
+    performedById: actorId,
+  });
 }
 
 export async function removeImage(companyId: number, actorId: number, quotationId: number, imageId: number) {

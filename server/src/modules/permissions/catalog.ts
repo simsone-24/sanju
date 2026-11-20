@@ -98,8 +98,8 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     module: ModuleName.QUOTATIONS,
     label: 'Quotations',
     description: 'Quotations, revisions and approvals',
-    // Enforced by: modules/quotations/routes.ts.
-    actions: [VIEW, CREATE, EDIT, { key: 'canApprove', label: 'Approve' }, PRINT, EXPORT],
+    // Enforced by: modules/quotations/routes.ts (canDelete on DELETE /:id).
+    actions: [VIEW, CREATE, EDIT, DELETE, { key: 'canApprove', label: 'Approve' }, PRINT, EXPORT],
   },
   {
     module: ModuleName.ORDERS,

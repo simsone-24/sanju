@@ -70,10 +70,12 @@ import {
   useStagedImageUrls,
   type StagedQuotationImage,
 } from './quotationImages';
+import { layoutForSavedQuotation, QuotationLayoutToggle, type QuotationLayout } from './QuotationLayoutToggle';
 import { QuotationSectionsEditor } from './QuotationSectionsEditor';
 import {
   newQuotationSectionDraft,
   quotationDraftTotals,
+  quotationMixedTotals,
   quotationSectionsToDrafts,
   quotationSectionTotals,
   toQuotationSectionsInput,
@@ -127,8 +129,10 @@ export default function QuotationFormPage() {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [itemsError, setItemsError] = useState<string | null>(null);
-  // Section-wise lines, the layout every new quotation uses. A quotation saved with flat priced items
-  // keeps its original item table when edited (see `useSections`).
+  // How a new quotation's lines are entered (chosen with the toggle above the lines). Both drafts are
+  // kept, so switching back and forth never loses what was typed. A quotation may also use both at once.
+  // A saved quotation opens in the layout it was saved in and can only gain the other kind of line.
+  const [layout, setLayout] = useState<QuotationLayout>('BOTH');
   const [sections, setSections] = useState<QuotationSectionDraft[]>(() => [newQuotationSectionDraft()]);
   const [enquirySearch, setEnquirySearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -303,13 +307,22 @@ export default function QuotationFormPage() {
       })),
     });
     if (existingQuotation.sections.length > 0) setSections(quotationSectionsToDrafts(existingQuotation.sections));
+    setLayout(
+      layoutForSavedQuotation(existingQuotation.sections.length > 0, existingQuotation.items.length > 0).layout,
+    );
   }, [existingQuotation, reset]);
 
   // useWatch gives live, re-rendering values for the item rows (drives totals, preview, auto-row).
   const items = (useWatch({ control, name: 'items' }) ?? []) as QuotationFormValues['items'];
-  // New quotations are section-wise. Editing keeps whichever layout the quotation was saved in, so a
-  // flat quotation is never silently converted (its quantities and rates would be lost).
-  const useSections = !isEdit || (existingQuotation?.sections.length ?? 0) > 0;
+  // A new quotation uses the layout picked on the toggle. Editing keeps whichever layout the quotation
+  // was saved in, so a quotation is never silently converted (its quantities and rates would be lost).
+  const layoutOptions: QuotationLayout[] = isEdit
+    ? existingQuotation
+      ? layoutForSavedQuotation(existingQuotation.sections.length > 0, existingQuotation.items.length > 0).options
+      : []
+    : ['SECTIONS', 'ITEMS', 'BOTH'];
+  const showSections = layout !== 'ITEMS';
+  const showItems = layout !== 'SECTIONS';
   const cgstValue = watch('cgstPercent');
   const sgstValue = watch('sgstPercent');
   const advanceValue = watch('advanceAmount');
@@ -321,9 +334,11 @@ export default function QuotationFormPage() {
     cgstAmount,
     sgstAmount,
     total: grandTotal,
-  } = useSections
-    ? quotationSectionTotals(sections, cgstValue ?? '', sgstValue ?? '')
-    : quotationDraftTotals(items, cgstValue ?? '', sgstValue ?? '');
+  } = showSections && showItems
+    ? quotationMixedTotals(sections, items, cgstValue ?? '', sgstValue ?? '')
+    : showSections
+      ? quotationSectionTotals(sections, cgstValue ?? '', sgstValue ?? '')
+      : quotationDraftTotals(items, cgstValue ?? '', sgstValue ?? '');
   // The advance is what the customer commits up front, so it is shown against the grand total —
   // the same presentation QuotationItemsEditor uses on the enquiry's quotation draft.
   const advanceAmount = Math.min(Math.max(Number(advanceValue) || 0, 0), grandTotal);
@@ -351,7 +366,7 @@ export default function QuotationFormPage() {
 
   // Sections that have been started, in the preview's shape. An untouched blank section is left out
   // so the preview still says "No items yet".
-  const previewSections = useSections
+  const previewSections = showSections
     ? sections
         .map((section) => ({
           title: section.title.trim() || null,
@@ -506,34 +521,37 @@ export default function QuotationFormPage() {
     setServerError(null);
     setItemsError(null);
 
-    // The lines to save: sections for a section-wise quotation, otherwise the flat priced items.
-    let lines: Pick<CreateQuotationInput, 'items' | 'sections'>;
-    if (useSections) {
-      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.');
+    // The lines to save: sections, flat priced items, or both. When both are offered either may be left
+    // empty, as long as the quotation has at least one line.
+    const bothOffered = showSections && showItems;
+    const lines: Pick<CreateQuotationInput, 'items' | 'sections'> = {};
+    if (showSections) {
+      const parsed = toQuotationSectionsInput(sections, 'Add at least one item.', bothOffered);
       if (parsed.sections === null) {
         setItemsError(parsed.error);
         return;
       }
-      lines = { sections: parsed.sections };
-    } else {
+      if (parsed.sections.length > 0) lines.sections = parsed.sections;
+    }
+    if (showItems) {
       const validItems = values.items.filter((item) => item.itemName.trim() !== '');
-      if (validItems.length === 0) {
-        setItemsError('Add at least one item.');
-        return;
-      }
       const invalid = validItems.some((item) => !(Number(item.quantity) > 0) || !(Number(item.rate) >= 0));
       if (invalid) {
         setItemsError('Enter a valid quantity and unit price for every item.');
         return;
       }
-      lines = {
-        items: validItems.map((item, index) => ({
+      if (validItems.length > 0) {
+        lines.items = validItems.map((item, index) => ({
           itemName: item.itemName.trim(),
           quantity: Number(item.quantity),
           rate: Number(item.rate),
           sortOrder: index,
-        })),
-      };
+        }));
+      }
+    }
+    if (!lines.sections && !lines.items) {
+      setItemsError('Add at least one item.');
+      return;
     }
 
     const cgstPercent = values.cgstPercent ? Number(values.cgstPercent) : 0;
@@ -702,7 +720,7 @@ export default function QuotationFormPage() {
           quotationDate={quotationDateValue ? formatDate(quotationDateValue) : ''}
           sections={previewSections}
           totalInWords={isEdit ? existingQuotation?.totalAmountInWords : undefined}
-          items={useSections
+          items={!showItems
             ? []
             : items
             .filter((item) => item.itemName.trim() !== '')
@@ -1074,7 +1092,10 @@ export default function QuotationFormPage() {
       {/* Anchor for links that open this form ready to add items (see SCROLL_ANCHORS). */}
       <FormSection title="Items" id={SCROLL_ANCHORS.quotationItems}>
         <Box sx={{ gridColumn: '1 / -1' }}>
-          {useSections ? (
+          {layoutOptions.length > 1 && (
+            <QuotationLayoutToggle value={layout} onChange={setLayout} options={layoutOptions} />
+          )}
+          {showSections && (
             <QuotationSectionsEditor
               sections={sections}
               onSectionsChange={(next) => {
@@ -1093,12 +1114,19 @@ export default function QuotationFormPage() {
                 sgstAmount,
                 total: grandTotal,
               }}
-              error={itemsError}
+              error={showItems ? null : itemsError}
               advanceAmount={advanceValue ?? ''}
               onAdvanceChange={(value) => setValue('advanceAmount', value, { shouldDirty: true })}
+              showTotals={!showItems}
             />
-          ) : (
+          )}
+          {showItems && (
           <>
+          {showSections && (
+            <Typography variant="subtitle2" sx={{ mt: 2.5, mb: 1 }}>
+              Line items
+            </Typography>
+          )}
           <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Table size="small" stickyHeader>
               <TableHead>

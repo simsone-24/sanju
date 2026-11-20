@@ -66,7 +66,10 @@ export interface UpdateQuotationInput {
   advanceAmount?: number;
   remarks?: string;
   manualCustomer?: ManualCustomerInput;
-  /** Replaces every line of the quotation — send either items or sections, not both. */
+  /**
+   * Sending items and / or sections replaces every line of the quotation. A quotation may carry both:
+   * section-priced groups plus individually priced line items.
+   */
   items?: QuotationItemInput[];
   sections?: QuotationSectionInput[];
 }

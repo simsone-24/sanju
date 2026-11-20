@@ -42,6 +42,8 @@ interface QuotationItemsEditorProps {
    */
   advanceAmount?: string;
   onAdvanceChange?: (value: string) => void;
+  /** False when the sections editor above it shows the totals for the whole quotation instead. */
+  showTotals?: boolean;
 }
 
 // The item table, tax percentages and totals of a quotation being composed — the same grid the
@@ -58,6 +60,7 @@ export function QuotationItemsEditor({
   error,
   advanceAmount,
   onAdvanceChange,
+  showTotals = true,
 }: QuotationItemsEditorProps) {
   // Four fixed-width numeric columns do not fit a phone, so below `sm` each item becomes a stacked
   // card instead of a table row.
@@ -273,15 +276,17 @@ export function QuotationItemsEditor({
         </Typography>
       )}
 
-      <QuotationTaxTotals
-        cgstPercent={cgstPercent}
-        sgstPercent={sgstPercent}
-        onCgstChange={onCgstChange}
-        onSgstChange={onSgstChange}
-        totals={totals}
-        advanceAmount={advanceAmount}
-        onAdvanceChange={onAdvanceChange}
-      />
+      {showTotals && (
+        <QuotationTaxTotals
+          cgstPercent={cgstPercent}
+          sgstPercent={sgstPercent}
+          onCgstChange={onCgstChange}
+          onSgstChange={onSgstChange}
+          totals={totals}
+          advanceAmount={advanceAmount}
+          onAdvanceChange={onAdvanceChange}
+        />
+      )}
     </Box>
   );
 }

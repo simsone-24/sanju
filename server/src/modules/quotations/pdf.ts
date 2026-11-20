@@ -71,6 +71,16 @@ function num(value: number): string {
   return value.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+// The document leaves a figure blank rather than printing 0 or a dash: a zero price or subtotal is
+// simply not shown, and a quantity of 1 (the default) or 0 is not shown either.
+function blankIfZero(value: number): string {
+  return value ? num(value) : '';
+}
+
+function quantityText(value: number): string {
+  return value && value !== 1 ? num(value) : '';
+}
+
 function formatDate(value: Date): string {
   return value.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
@@ -316,7 +326,12 @@ export async function generateQuotationPdf(
     // The table repeats its heading and keeps its own outer border on every page, so a long
     // quotation wraps cleanly instead of dragging the totals block onto a trail of extra pages.
     const firstRowCells = data.items[0]
-      ? [data.items[0].itemName, num(data.items[0].quantity), num(data.items[0].rate), num(data.items[0].amount)]
+      ? [
+          data.items[0].itemName,
+          quantityText(data.items[0].quantity),
+          blankIfZero(data.items[0].rate),
+          blankIfZero(data.items[0].amount),
+        ]
       : [];
     if (firstRowCells.length && y + rowHeightFor(headerCells, true) + rowHeightFor(firstRowCells, false) > pageBottom()) {
       doc.addPage();
@@ -329,7 +344,7 @@ export async function generateQuotationPdf(
     y += rowHeight;
 
     data.items.forEach((item) => {
-      const cells = [item.itemName, num(item.quantity), num(item.rate), num(item.amount)];
+      const cells = [item.itemName, quantityText(item.quantity), blankIfZero(item.rate), blankIfZero(item.amount)];
       rowHeight = rowHeightFor(cells, false);
       if (y + rowHeight > pageBottom()) {
         doc.rect(left, tableTop, contentWidth, y - tableTop).lineWidth(0.5).strokeColor('#cccccc').stroke();

@@ -1,6 +1,8 @@
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import * as rentService from '../../services/rentService';
 import { QuotationTaxTotals } from './QuotationTaxTotals';
 import {
   editQuotationSectionItem,
@@ -22,6 +24,8 @@ interface QuotationSectionsEditorProps {
   /** Optional advance, offered beside the tax percentages (see QuotationTaxTotals). */
   advanceAmount?: string;
   onAdvanceChange?: (value: string) => void;
+  /** False when the totals are shown once for the whole quotation by whoever hosts both editors. */
+  showTotals?: boolean;
 }
 
 // The section-wise way of composing a quotation, as on Sanju's printed quotation: items are listed
@@ -39,10 +43,20 @@ export function QuotationSectionsEditor({
   error,
   advanceAmount,
   onAdvanceChange,
+  showTotals = true,
 }: QuotationSectionsEditorProps) {
   function updateSection(index: number, next: QuotationSectionDraft) {
     onSectionsChange(sections.map((section, i) => (i === index ? next : section)));
   }
+
+  // Item suggestions for the description box: just the names from the Stock Items master — no quantity,
+  // stock or price. Typing anything else is fine (free text), the list only saves retyping.
+  const { data: stockItems } = useQuery({
+    queryKey: ['rent-items-active'],
+    queryFn: () => rentService.listItems({ page: 1, limit: 500, status: 'ACTIVE' }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const itemNameOptions = Array.from(new Set((stockItems?.records ?? []).map((item) => item.itemName)));
 
   // Serial numbers run on across sections, like the printed S.NO column.
   let serial = 0;
@@ -99,17 +113,29 @@ export function QuotationSectionsEditor({
                     <Typography variant="body2" color="text.secondary" sx={{ width: 28, textAlign: 'center', flexShrink: 0 }}>
                       {item.description.trim() ? serial : ''}
                     </Typography>
-                    <TextField
+                    <Autocomplete
+                      freeSolo
                       size="small"
                       fullWidth
-                      placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item description'}
-                      value={item.description}
-                      onChange={(event) =>
-                        updateSection(
-                          sectionIndex,
-                          editQuotationSectionItem(section, itemIndex, 'description', event.target.value),
-                        )
-                      }
+                      options={itemNameOptions}
+                      inputValue={item.description}
+                      // A pick from the list sets the description; typing sets it as free text. MUI also fires
+                      // an input change with reason "reset" after a pick, which is ignored so it is not applied twice.
+                      onChange={(_event, value) => {
+                        if (typeof value === 'string') {
+                          updateSection(sectionIndex, editQuotationSectionItem(section, itemIndex, 'description', value));
+                        }
+                      }}
+                      onInputChange={(_event, value, reason) => {
+                        if (reason === 'reset') return;
+                        updateSection(sectionIndex, editQuotationSectionItem(section, itemIndex, 'description', value));
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder={isTrailingEmpty ? 'Type to add an item…' : 'Item description'}
+                        />
+                      )}
                     />
                     <TextField
                       size="small"
@@ -158,15 +184,17 @@ export function QuotationSectionsEditor({
         </Typography>
       )}
 
-      <QuotationTaxTotals
-        cgstPercent={cgstPercent}
-        sgstPercent={sgstPercent}
-        onCgstChange={onCgstChange}
-        onSgstChange={onSgstChange}
-        totals={totals}
-        advanceAmount={advanceAmount}
-        onAdvanceChange={onAdvanceChange}
-      />
+      {showTotals && (
+        <QuotationTaxTotals
+          cgstPercent={cgstPercent}
+          sgstPercent={sgstPercent}
+          onCgstChange={onCgstChange}
+          onSgstChange={onSgstChange}
+          totals={totals}
+          advanceAmount={advanceAmount}
+          onAdvanceChange={onAdvanceChange}
+        />
+      )}
     </Box>
   );
 }

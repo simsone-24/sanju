@@ -219,6 +219,16 @@ export async function updateImage(
   }
 }
 
+export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await quotationsService.remove(actor.companyId, actor.id, parseId(req.params.id));
+    sendSuccess(res, null, 'Quotation deleted successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function deleteImage(
   req: Request<{ id: string; imageId: string }>,
   res: Response,

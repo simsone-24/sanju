@@ -67,6 +67,7 @@ import type {
 import type { CustomerOption } from '../../types/masters';
 import type {
   CreateQuotationInput,
+  QuotationItemInput,
   QuotationSectionInput,
   QuotationListItem,
   QuotationRecipient,
@@ -89,11 +90,18 @@ import {
 } from '../quotations/quotationImages';
 import QuotationPreview from '../quotations/QuotationPreview';
 import { QuotationPreviewDialog } from '../quotations/QuotationPreviewDialog';
+import { QuotationItemsEditor } from '../quotations/QuotationItemsEditor';
+import { QuotationLayoutToggle, type QuotationLayout } from '../quotations/QuotationLayoutToggle';
 import { QuotationSectionsEditor } from '../quotations/QuotationSectionsEditor';
 import {
+  EMPTY_QUOTATION_DRAFT_ITEM,
   newQuotationSectionDraft,
+  quotationDraftTotals,
+  quotationMixedTotals,
   quotationSectionTotals,
+  toQuotationItemsInput,
   toQuotationSectionsInput,
+  type QuotationDraftItem,
   type QuotationDraftTotals,
   type QuotationSectionDraft,
 } from '../quotations/quotationDraft';
@@ -292,8 +300,13 @@ interface QuotationDraftControls {
   onToggle: (enabled: boolean) => void;
   /** Discards the draft entirely — clears the items and taxes and unticks the checkbox. */
   onCancel: () => void;
+  /** Section-wise or one priced line per item - both drafts are kept so switching never loses what was typed. */
+  layout: QuotationLayout;
+  onLayoutChange: (layout: QuotationLayout) => void;
   sections: QuotationSectionDraft[];
   onSectionsChange: (sections: QuotationSectionDraft[]) => void;
+  items: QuotationDraftItem[];
+  onItemsChange: (items: QuotationDraftItem[]) => void;
   cgstPercent: string;
   sgstPercent: string;
   onCgstChange: (value: string) => void;
@@ -436,18 +449,36 @@ function QuotationSection({
 
           {draft.enabled && (
             <Box sx={{ mt: 2 }}>
-              <QuotationSectionsEditor
-                sections={draft.sections}
-                onSectionsChange={draft.onSectionsChange}
-                cgstPercent={draft.cgstPercent}
-                sgstPercent={draft.sgstPercent}
-                onCgstChange={draft.onCgstChange}
-                onSgstChange={draft.onSgstChange}
-                totals={draft.totals}
-                error={draft.error}
-                advanceAmount={draft.advanceAmount}
-                onAdvanceChange={draft.onAdvanceChange}
-              />
+              <QuotationLayoutToggle value={draft.layout} onChange={draft.onLayoutChange} />
+              {draft.layout !== 'ITEMS' && (
+                <QuotationSectionsEditor
+                  sections={draft.sections}
+                  onSectionsChange={draft.onSectionsChange}
+                  cgstPercent={draft.cgstPercent}
+                  sgstPercent={draft.sgstPercent}
+                  onCgstChange={draft.onCgstChange}
+                  onSgstChange={draft.onSgstChange}
+                  totals={draft.totals}
+                  error={draft.layout === 'BOTH' ? null : draft.error}
+                  advanceAmount={draft.advanceAmount}
+                  onAdvanceChange={draft.onAdvanceChange}
+                  showTotals={draft.layout !== 'BOTH'}
+                />
+              )}
+              {draft.layout !== 'SECTIONS' && (
+                <QuotationItemsEditor
+                  items={draft.items}
+                  onItemsChange={draft.onItemsChange}
+                  cgstPercent={draft.cgstPercent}
+                  sgstPercent={draft.sgstPercent}
+                  onCgstChange={draft.onCgstChange}
+                  onSgstChange={draft.onSgstChange}
+                  totals={draft.totals}
+                  error={draft.error}
+                  advanceAmount={draft.advanceAmount}
+                  onAdvanceChange={draft.onAdvanceChange}
+                />
+              )}
 
               <Box sx={{ mt: 2 }}>
                 <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -872,10 +903,12 @@ export default function EnquiryFormPage() {
   // state rather than part of the enquiry form/schema since it submits as a separate request only
   // after the enquiry itself is saved.
   const [addQuotationNow, setAddQuotationNow] = useState(false);
-  // A quotation raised together with a new enquiry is always section-wise.
+  // A quotation raised together with a new enquiry can be entered section-wise or as priced line items.
+  const [quotationLayout, setQuotationLayout] = useState<QuotationLayout>('BOTH');
   const [quotationSections, setQuotationSections] = useState<QuotationSectionDraft[]>(() => [
     newQuotationSectionDraft(),
   ]);
+  const [quotationItems, setQuotationItems] = useState<QuotationDraftItem[]>([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
   const [quotationCgst, setQuotationCgst] = useState('');
   const [quotationSgst, setQuotationSgst] = useState('');
   const [quotationItemsError, setQuotationItemsError] = useState<string | null>(null);
@@ -1192,10 +1225,15 @@ export default function EnquiryFormPage() {
   const saving =
     createMutation.isPending || updateMutation.isPending || statusMutation.isPending || createQuotationMutation.isPending;
 
-  const quotationTotals = quotationSectionTotals(quotationSections, quotationCgst, quotationSgst);
+  const quotationTotals =
+    quotationLayout === 'BOTH'
+      ? quotationMixedTotals(quotationSections, quotationItems, quotationCgst, quotationSgst)
+      : quotationLayout === 'SECTIONS'
+        ? quotationSectionTotals(quotationSections, quotationCgst, quotationSgst)
+        : quotationDraftTotals(quotationItems, quotationCgst, quotationSgst);
 
   // Sections that have been started, in the preview's shape; an untouched blank one is left out.
-  const previewSections = quotationSections
+  const previewSections = (quotationLayout !== 'ITEMS' ? quotationSections : [])
     .map((section) => ({
       title: section.title.trim() || null,
       amount: Number(section.amount) || 0,
@@ -1211,6 +1249,8 @@ export default function EnquiryFormPage() {
   function cancelQuotationDraft() {
     setAddQuotationNow(false);
     setQuotationSections([newQuotationSectionDraft()]);
+    setQuotationItems([{ ...EMPTY_QUOTATION_DRAFT_ITEM }]);
+    setQuotationLayout('BOTH');
     setQuotationCgst('');
     setQuotationSgst('');
     setQuotationItemsError(null);
@@ -1263,7 +1303,18 @@ export default function EnquiryFormPage() {
           company={quotationBranding}
           recipient={quotationPreviewRecipient}
           quotationDate={eventDateValue ? formatDate(eventDateValue) : ''}
-          items={[]}
+          items={
+            quotationLayout !== 'SECTIONS'
+              ? quotationItems
+                  .filter((item) => item.itemName.trim() !== '')
+                  .map((item) => ({
+                    itemName: item.itemName,
+                    quantity: Number(item.quantity) || 0,
+                    rate: Number(item.rate) || 0,
+                    amount: (Number(item.quantity) || 0) * (Number(item.rate) || 0),
+                  }))
+              : []
+          }
           sections={previewSections}
           subtotal={quotationTotals.subtotal}
           cgstPercent={quotationTotals.cgstPercent}
@@ -1324,17 +1375,33 @@ export default function EnquiryFormPage() {
 
     // Validated up front — before the enquiry is created — so a mistake here is caught while
     // it's still cheap to fix, rather than after the enquiry is already saved.
-    let quotationSectionsInput: QuotationSectionInput[] | null = null;
+    let quotationLines: { sections?: QuotationSectionInput[]; items?: QuotationItemInput[] } | null = null;
     if (!isEdit && addQuotationNow) {
-      const parsed = toQuotationSectionsInput(
-        quotationSections,
-        'Add at least one item, or turn off "Create a quotation for this enquiry now".',
-      );
-      if (parsed.sections === null) {
-        setQuotationItemsError(parsed.error);
+      const emptyMessage = 'Add at least one item, or turn off "Create a quotation for this enquiry now".';
+      // With both layouts on, either may be left empty as long as the quotation has one line.
+      const bothOffered = quotationLayout === 'BOTH';
+      const lines: { sections?: QuotationSectionInput[]; items?: QuotationItemInput[] } = {};
+      if (quotationLayout !== 'ITEMS') {
+        const parsed = toQuotationSectionsInput(quotationSections, emptyMessage, bothOffered);
+        if (parsed.sections === null) {
+          setQuotationItemsError(parsed.error);
+          return;
+        }
+        if (parsed.sections.length > 0) lines.sections = parsed.sections;
+      }
+      if (quotationLayout !== 'SECTIONS') {
+        const parsed = toQuotationItemsInput(quotationItems, emptyMessage, bothOffered);
+        if (parsed.items === null) {
+          setQuotationItemsError(parsed.error);
+          return;
+        }
+        if (parsed.items.length > 0) lines.items = parsed.items;
+      }
+      if (!lines.sections && !lines.items) {
+        setQuotationItemsError(emptyMessage);
         return;
       }
-      quotationSectionsInput = parsed.sections;
+      quotationLines = lines;
     }
 
     // "md files/Enquiry/flow.md" §3 — the one confirmation the status still gets, raised here at
@@ -1389,7 +1456,7 @@ export default function EnquiryFormPage() {
 
       const created = await createMutation.mutateAsync(toCreateInput(values));
 
-      if (!quotationSectionsInput) {
+      if (!quotationLines) {
         showToast(`Enquiry ${created.enquiryNumber} created.`);
         navigate('/enquiries', { state: { highlightId: created.id } });
         return;
@@ -1402,7 +1469,7 @@ export default function EnquiryFormPage() {
           cgstPercent: quotationTotals.cgstPercent,
           sgstPercent: quotationTotals.sgstPercent,
           advanceAmount: Number(advanceAmountValue) || 0,
-          sections: quotationSectionsInput,
+          ...quotationLines,
         });
         if (quotationImages.length) {
           try {
@@ -1969,8 +2036,12 @@ export default function EnquiryFormPage() {
                 enabled: addQuotationNow,
                 onToggle: setAddQuotationNow,
                 onCancel: cancelQuotationDraft,
+                layout: quotationLayout,
+                onLayoutChange: setQuotationLayout,
                 sections: quotationSections,
                 onSectionsChange: setQuotationSections,
+                items: quotationItems,
+                onItemsChange: setQuotationItems,
                 cgstPercent: quotationCgst,
                 sgstPercent: quotationSgst,
                 onCgstChange: setQuotationCgst,

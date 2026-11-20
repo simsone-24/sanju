@@ -2,6 +2,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
@@ -37,9 +38,10 @@ import { formatCurrency, formatDate } from '../../utils/format';
 import { QuotationActivityDrawer } from './QuotationActivityDrawer';
 import { QuotationPreviewDialog } from './QuotationPreviewDialog';
 import { buildQuotationWhatsAppLink, canShareQuotation } from './quotationActions';
+import { flatItemAsSection } from './quotationDraft';
 import { isQuotationEditable } from './quotationStatusTransitions';
 
-type PendingAction = 'send' | 'reject' | 'approve' | 'convert' | 'whatsapp';
+type PendingAction = 'send' | 'reject' | 'approve' | 'convert' | 'whatsapp' | 'delete';
 
 function DetailSkeleton() {
   return (
@@ -67,6 +69,7 @@ export default function QuotationDetailPage() {
   const canCreate = usePermission('QUOTATIONS', 'canCreate');
   const canPrint = usePermission('QUOTATIONS', 'canPrint');
   const canApprove = usePermission('QUOTATIONS', 'canApprove');
+  const canDelete = usePermission('QUOTATIONS', 'canDelete');
   const canEditEnquiry = usePermission('ENQUIRIES', 'canEdit');
   // Converting drives the enquiry to ORDER_CONFIRMED (see convertMutation below), so it takes the
   // two enquiry permissions that guard that transition rather than an Orders one.
@@ -124,6 +127,17 @@ export default function QuotationDetailPage() {
     mutationFn: () => quotationService.approve(id),
     onSuccess: invalidateAfterAction,
   });
+  // Soft delete. The quotation no longer exists as far as the app is concerned, so its own cached
+  // read is dropped (refetching it would 404) and the user lands back on the Quotations list.
+  const deleteMutation = useMutation({
+    mutationFn: () => quotationService.remove(id),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['quotation', id] });
+      invalidateAfterAction();
+      showToast('Quotation deleted.');
+      navigate('/quotations', { replace: true });
+    },
+  });
 
   // An order is only ever created by confirming the enquiry — the server converts automatically the
   // moment an enquiry reaches ORDER_CONFIRMED (enquiries/service.ts changeStatus → orders/service.ts
@@ -150,7 +164,11 @@ export default function QuotationDetailPage() {
   });
 
   const actionPending =
-    sendMutation.isPending || rejectMutation.isPending || approveMutation.isPending || convertMutation.isPending;
+    sendMutation.isPending ||
+    rejectMutation.isPending ||
+    approveMutation.isPending ||
+    convertMutation.isPending ||
+    deleteMutation.isPending;
 
   async function copyToClipboard(value: string, label: string) {
     try {
@@ -208,6 +226,7 @@ export default function QuotationDetailPage() {
       if (pendingAction === 'send') await sendMutation.mutateAsync();
       else if (pendingAction === 'reject') await rejectMutation.mutateAsync();
       else if (pendingAction === 'approve') await approveMutation.mutateAsync();
+      else if (pendingAction === 'delete') await deleteMutation.mutateAsync();
       else if (pendingAction === 'convert') await convertMutation.mutateAsync(quotation.link.enquiry!.id);
       setPendingAction(null);
     } catch (error) {
@@ -304,6 +323,24 @@ export default function QuotationDetailPage() {
   const advanceAmount = Number(quotation.advanceAmount ?? 0);
 
   const confirmCopy = CONFIRM_COPY[pendingAction ?? 'send'];
+
+  // A quotation with sections shows as one section table: any priced line items it also carries follow
+  // the sections as groups of one. Without sections the original item table is shown.
+  const displaySections =
+    quotation.sections.length > 0
+      ? [
+          ...quotation.sections.map((section) => ({
+            key: `section-${section.id}`,
+            title: section.title,
+            amount: section.amount,
+            items: section.items.map((item) => ({ description: item.description, sizeQty: item.sizeQty })),
+          })),
+          ...quotation.items.map((item) => {
+            const group = flatItemAsSection(item);
+            return { key: `item-${item.id}`, title: group.title, amount: String(group.amount), items: group.items };
+          }),
+        ]
+      : [];
 
   return (
     <div>
@@ -575,7 +612,7 @@ export default function QuotationDetailPage() {
           </h2>
         </div>
 
-        {quotation.sections.length > 0 ? (
+        {displaySections.length > 0 ? (
           // Section-wise: each section's items on the left, its single amount beside the group.
           <div>
             <div className="tw-flex tw-border-b tw-border-hairline tw-px-4 tw-py-2 tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.06em] tw-text-ink-muted dark:tw-border-hairline-dark dark:tw-text-ink-dark-muted">
@@ -584,13 +621,13 @@ export default function QuotationDetailPage() {
               <span className="tw-w-28 tw-text-center">Size / Qty</span>
               <span className="tw-w-32 tw-text-right">Amount</span>
             </div>
-            {quotation.sections.map((section, sectionIndex) => {
-              const firstSerial = quotation.sections
+            {displaySections.map((section, sectionIndex) => {
+              const firstSerial = displaySections
                 .slice(0, sectionIndex)
                 .reduce((count, previous) => count + previous.items.length, 0);
               return (
                 <div
-                  key={section.id}
+                  key={section.key}
                   className="tw-flex tw-border-b tw-border-hairline last:tw-border-b-0 dark:tw-border-hairline-dark"
                 >
                   <div className="tw-min-w-0 tw-flex-1">
@@ -603,7 +640,7 @@ export default function QuotationDetailPage() {
                       </div>
                     )}
                     {section.items.map((item, itemIndex) => (
-                      <div key={item.id} className="tw-flex tw-items-baseline tw-px-4 tw-py-1.5 tw-text-sm">
+                      <div key={itemIndex} className="tw-flex tw-items-baseline tw-px-4 tw-py-1.5 tw-text-sm">
                         <span className="tw-w-10 tw-text-center tw-text-ink-muted dark:tw-text-ink-dark-muted">
                           {firstSerial + itemIndex + 1}
                         </span>
@@ -761,6 +798,17 @@ export default function QuotationDetailPage() {
             }}
           >
             Reject Quotation
+          </MenuItem>
+        )}
+        {canDelete && (
+          <MenuItem
+            icon={<DeleteIcon fontSize="small" />}
+            onClick={() => {
+              setPendingAction('delete');
+              setMenuAnchor(null);
+            }}
+          >
+            Delete Quotation
           </MenuItem>
         )}
       </Menu>
@@ -959,6 +1007,13 @@ const CONFIRM_COPY: Record<PendingAction, ConfirmCopyEntry> = {
     message: (quotation) =>
       `Confirm the enquiry and create an order from quotation "${quotation.quotationNumber}" (v${quotation.version})? This marks the enquiry as Order Confirmed and cannot be undone.`,
     confirmLabel: 'Convert',
+  },
+  delete: {
+    title: 'Delete Quotation?',
+    message: (quotation) =>
+      `Delete quotation "${quotation.quotationNumber}" (v${quotation.version})? It will no longer appear in the app, but its record is kept. A confirmed quotation, or one an order was raised from, cannot be deleted.`,
+    confirmLabel: 'Delete',
+    danger: true,
   },
   whatsapp: {
     title: 'Send on WhatsApp?',

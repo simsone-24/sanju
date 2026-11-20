@@ -110,6 +110,11 @@ export async function updateImageCaption(id: number, imageId: number, caption: s
   return response.data.data;
 }
 
+// Soft delete: the quotation disappears from the app but its record is kept.
+export async function remove(id: number): Promise<void> {
+  await apiClient.delete<ApiSuccessResponse<null>>(`/quotations/${id}`);
+}
+
 export async function deleteImage(id: number, imageId: number): Promise<QuotationDetail> {
   const response = await apiClient.delete<ApiSuccessResponse<QuotationDetail>>(`/quotations/${id}/images/${imageId}`);
   return response.data.data;
