@@ -1,3 +1,4 @@
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import BoltIcon from '@mui/icons-material/Bolt';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -46,6 +47,8 @@ import { usePreservedScroll } from '../hooks/usePreservedScroll';
 import { useScrollToAnchor } from '../hooks/useScrollToAnchor';
 import { useAuth, useLogout } from '../hooks/useAuth';
 import { hasPermission, type ModuleName } from '../hooks/usePermission';
+import { useProfilePhotoUrl } from '../hooks/useProfilePhotoUrl';
+import { ProfileDialog } from '../pages/profile/ProfileDialog';
 import { useAuthStore } from '../store/authStore';
 import { getPublicAssetUrl } from '../utils/format';
 
@@ -185,6 +188,8 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profilePhotoUrl = useProfilePhotoUrl(user?.profilePhoto);
   const { mode, systemMode, setMode } = useColorScheme();
   const isMobile = useMediaQuery('(max-width: 900px)');
 
@@ -469,7 +474,12 @@ export default function AppLayout() {
                 '&:hover': { backgroundColor: SIDEBAR_HOVER_BG },
               }}
             >
-              <Avatar sx={{ width: 34, height: 34, bgcolor: '#3B82F6', fontSize: '0.9rem' }}>{userInitial}</Avatar>
+              <Avatar
+                src={profilePhotoUrl ?? undefined}
+                sx={{ width: 34, height: 34, bgcolor: '#3B82F6', fontSize: '0.9rem' }}
+              >
+                {userInitial}
+              </Avatar>
               {!footerCollapsed && (
                 <>
                   <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -511,6 +521,27 @@ export default function AppLayout() {
             </ButtonBase>
 
             <Collapse in={accountOpen || footerCollapsed}>
+              <ButtonBase
+                onClick={() => {
+                  setProfileOpen(true);
+                  if (isMobile) setMobileDrawerOpen(false);
+                }}
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  justifyContent: footerCollapsed ? 'center' : 'flex-start',
+                  px: footerCollapsed ? 0 : 1.25,
+                  py: 1,
+                  color: SIDEBAR_TEXT_MUTED,
+                  '&:hover': { backgroundColor: SIDEBAR_HOVER_BG, color: SIDEBAR_TEXT },
+                }}
+              >
+                <AccountCircleIcon fontSize="small" />
+                {!footerCollapsed && <Typography sx={{ fontSize: '0.85rem' }}>My Profile</Typography>}
+              </ButtonBase>
+
               {/* Theme switch reads as a labelled preference here, not a bare icon toggle — the
                   label states which mode is active, matching the rest of the panel's rows. */}
               <ButtonBase
@@ -621,6 +652,8 @@ export default function AppLayout() {
           <Outlet />
         </Box>
       </Box>
+
+      {user && <ProfileDialog open={profileOpen} user={user} onClose={() => setProfileOpen(false)} />}
     </Box>
   );
 }

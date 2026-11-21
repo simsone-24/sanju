@@ -12,8 +12,8 @@ const usernameSchema = z
   .max(50, 'Username must be at most 50 characters.')
   .regex(/^[a-z0-9._-]+$/, 'Username may only contain letters, numbers, dots, hyphens and underscores.');
 
-const passwordSchema = z.string().min(8, 'Password must be at least 8 characters.');
-const mobileSchema = z
+export const passwordSchema = z.string().min(8, 'Password must be at least 8 characters.');
+export const mobileSchema = z
   .string()
   .trim()
   .min(7, 'Enter a valid mobile number.')
@@ -21,8 +21,8 @@ const mobileSchema = z
   .regex(/^[0-9+\s-]+$/, 'Mobile number may only contain digits, spaces, + and -.');
 
 // Optional text fields accept an empty string so a value can be cleared; the service stores null.
-const optionalText = z.string().trim().max(191);
-const optionalEmail = z.union([z.string().trim().email('Enter a valid email address.'), z.literal('')]);
+export const optionalText = z.string().trim().max(191);
+export const optionalEmail = z.union([z.string().trim().email('Enter a valid email address.'), z.literal('')]);
 
 export const createUserSchema = z
   .object({

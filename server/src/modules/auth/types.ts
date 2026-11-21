@@ -5,6 +5,19 @@ export interface LoginInput {
   password: string;
 }
 
+export interface UpdateProfileInput {
+  fullName?: string;
+  mobile?: string;
+  /** Empty string clears the value. */
+  email?: string;
+  city?: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface AuthenticatedUser {
   id: number;
   companyId: number;

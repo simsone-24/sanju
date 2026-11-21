@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 
 // The whole access picture in one read: the group the user belongs to, that group's permissions,
@@ -22,6 +23,10 @@ export function findUserById(id: number) {
     where: { id, deletedAt: null },
     include: userWithAccessInclude,
   });
+}
+
+export function updateUser(id: number, data: Prisma.UserUncheckedUpdateInput) {
+  return prisma.user.update({ where: { id }, data, include: userWithAccessInclude });
 }
 
 export function getUserWithPermissions(id: number) {
