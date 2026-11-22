@@ -264,3 +264,13 @@ export async function downloadPdf(req: Request<{ id: string }>, res: Response, n
     next(error);
   }
 }
+
+export async function restore(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await quotationsService.restore(actor.companyId, actor.id, parseId(req.params.id));
+    sendSuccess(res, null, 'Quotation restored successfully.');
+  } catch (error) {
+    next(error);
+  }
+}

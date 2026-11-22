@@ -5,6 +5,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CategoryIcon from '@mui/icons-material/Category';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import GroupsIcon from '@mui/icons-material/Groups';
+import HistoryIcon from '@mui/icons-material/History';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -17,7 +18,6 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import PeopleIcon from '@mui/icons-material/People';
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -48,6 +48,7 @@ import { useScrollToAnchor } from '../hooks/useScrollToAnchor';
 import { useAuth, useLogout } from '../hooks/useAuth';
 import { hasPermission, type ModuleName } from '../hooks/usePermission';
 import { useProfilePhotoUrl } from '../hooks/useProfilePhotoUrl';
+import { useProfileSync } from '../hooks/useProfileSync';
 import { ProfileDialog } from '../pages/profile/ProfileDialog';
 import { useAuthStore } from '../store/authStore';
 import { getPublicAssetUrl } from '../utils/format';
@@ -174,7 +175,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Reports', path: '/reports', icon: <AssessmentIcon />, module: 'REPORTS' },
       { label: 'Masters', path: '/masters', icon: <SettingsIcon />, module: 'MASTERS' },
       { label: 'Users', path: '/masters?tab=users', icon: <PeopleIcon />, module: 'MASTERS' },
-      { label: 'User Groups', path: '/masters?tab=user-groups', icon: <SecurityIcon />, module: 'MASTERS' },
+      { label: 'Audit Log', path: '/audit-log', icon: <HistoryIcon />, module: 'AUDIT_LOG' },
     ],
   },
 ];
@@ -198,6 +199,8 @@ export default function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   usePreservedScroll(mainRef, contentRef);
+  // Picks up permission changes made after sign-in, so a newly granted action shows without re-login.
+  useProfileSync();
   // A link may instead name the section the incoming page should open on (state.scrollTo).
   useScrollToAnchor(mainRef);
 

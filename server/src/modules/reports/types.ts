@@ -1,4 +1,4 @@
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, PaymentTrackerStatus } from '@prisma/client';
 
 export interface RevenueReportParams {
   companyId: number;
@@ -7,6 +7,10 @@ export interface RevenueReportParams {
   dateFrom?: Date;
   dateTo?: Date;
   eventTypeId?: number;
+  /** Orders list only: keep orders currently in this Payment Tracker status. */
+  paymentStatus?: PaymentTrackerStatus;
+  /** Orders list only: keep orders with money received (COLLECTED) or a balance still owing (PENDING). */
+  orderBalance?: 'COLLECTED' | 'PENDING';
 }
 
 export interface OutstandingReportParams {
@@ -17,6 +21,8 @@ export interface OutstandingReportParams {
   dateTo?: Date;
   eventTypeId?: number;
   customerId?: number;
+  /** Orders table only: keep orders currently in this Payment Tracker status. */
+  paymentStatus?: PaymentTrackerStatus;
 }
 
 export interface CustomerReportParams {
@@ -55,4 +61,12 @@ export interface OrderReportParams {
   dateFrom?: Date;
   dateTo?: Date;
   eventTypeId?: number;
+}
+
+/** Orders per Payment Tracker status — see payment-tracker's PaymentTrackerStatus. */
+export interface PaymentStatusCounts {
+  pending: number;
+  advancePaid: number;
+  partialPayment: number;
+  fullyPaid: number;
 }

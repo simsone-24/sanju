@@ -6,7 +6,7 @@ import type { PaymentMethodType, PaymentType } from './payment';
 export type PaymentTrackerStatus = 'PENDING' | 'ADVANCE_PAID' | 'PARTIAL_PAYMENT' | 'FULLY_PAID';
 
 /** Dashboard-card buckets over the four statuses (server: PAYMENT_TRACKER_STATUS_GROUPS). */
-export type PaymentTrackerStatusGroup = 'PENDING' | 'PARTIAL' | 'PAID';
+export type PaymentTrackerStatusGroup = 'COLLECTED' | 'PENDING';
 
 export interface PaymentTrackerStatusInfo {
   id: number;

@@ -31,7 +31,7 @@ import { usePermission } from '../../hooks/usePermission';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { CustomerOption } from '../../types/masters';
 import type { OrderStatus } from '../../types/order';
-import type { PaymentTrackerRecord, PaymentTrackerStatus } from '../../types/paymentTracker';
+import type { PaymentTrackerRecord, PaymentTrackerStatus, PaymentTrackerStatusGroup } from '../../types/paymentTracker';
 import { DATE_RANGE_LABELS, dateRangeBounds, type DateRangePreset } from '../../utils/dateRange';
 import { eventProximity, formatCurrency, formatDate } from '../../utils/format';
 import { PaymentHistoryDialog } from './PaymentHistoryDialog';
@@ -72,6 +72,11 @@ const DATE_RANGE_PRESETS: readonly DateRangePreset[] = [
   'NEXT_MONTH',
 ];
 
+const STATUS_GROUP_LABELS: Record<PaymentTrackerStatusGroup, string> = {
+  COLLECTED: 'Collected',
+  PENDING: 'Pending',
+};
+
 function trackerStatus(row: PaymentTrackerRecord): PaymentTrackerStatus {
   return row.paymentTracker?.paymentStatus ?? 'PENDING';
 }
@@ -92,6 +97,7 @@ export default function PaymentTrackerListPage() {
   const [limit, setLimit] = useState(20);
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentTrackerStatus | ''>('');
+  const [statusGroup, setStatusGroup] = useState<PaymentTrackerStatusGroup | ''>('');
   const [orderStatus, setOrderStatus] = useState<OrderStatus | ''>('');
   const [dateRange, setDateRange] = useState<DateRangeValue>('');
   const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
@@ -116,8 +122,8 @@ export default function PaymentTrackerListPage() {
   const dateFilterCount = [customFrom, customTo].filter(Boolean).length;
 
   // Narrows along with every active filter (customer, payment status, order status, event
-  // date range) — these are plain summary tiles, not click-filters, so unlike the Enquiry/Order
-  // dashboard cards there's no "own" filter to leave out.
+  // date range) except the card selection itself — the tiles are click-filters, so they keep
+  // showing their full counts while one is selected.
   const { data: stats } = useQuery({
     queryKey: [
       'payment-tracker',
@@ -136,7 +142,9 @@ export default function PaymentTrackerListPage() {
     placeholderData: keepPreviousData,
   });
 
-  // Compute subtext for Collected Amount card
+  // The cards count orders, not money. Collected = any order with a receipt (Advance, Partial or
+  // Fully Paid); Pending = every order not yet Fully Paid, i.e. still carrying a balance.
+  const totalOrders = stats?.totalOrders ?? 0;
   const advanceCount = stats?.advanceCount ?? 0;
   const partialCount = stats?.partialCount ?? 0;
   const completedCount = stats?.completedCount ?? 0;
@@ -148,7 +156,7 @@ export default function PaymentTrackerListPage() {
     queryKey: [
       'payment-tracker',
       'list',
-      { page, limit, paymentStatus, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
+      { page, limit, paymentStatus, statusGroup, orderStatus, customerId: customer?.id, eventDateFrom, eventDateTo },
     ],
     queryFn: () =>
       paymentTrackerService.list({
@@ -156,6 +164,7 @@ export default function PaymentTrackerListPage() {
         limit,
         customerId: customer?.id,
         paymentStatus: paymentStatus || undefined,
+        statusGroup: statusGroup || undefined,
         orderStatus: orderStatus || undefined,
         eventDateFrom,
         eventDateTo,
@@ -167,10 +176,19 @@ export default function PaymentTrackerListPage() {
   function resetFilters() {
     setCustomer(null);
     setPaymentStatus('');
+    setStatusGroup('');
     setOrderStatus('');
     setDateRange('');
     setCustomFrom(null);
     setCustomTo(null);
+    setPage(1);
+  }
+
+  // Clicking the active card again releases it; the Total card is simply "no group". A card and
+  // the Payment Status dropdown are two routes to the same filter, so choosing one clears the other.
+  function toggleStatusGroup(group: PaymentTrackerStatusGroup | '') {
+    setStatusGroup((current) => (current === group ? '' : group));
+    setPaymentStatus('');
     setPage(1);
   }
 
@@ -207,6 +225,13 @@ export default function PaymentTrackerListPage() {
       onClear: () => {
         setCustomer(null);
       },
+    });
+  }
+  if (statusGroup) {
+    activeFilters.push({
+      key: 'statusGroup',
+      label: `Orders: ${STATUS_GROUP_LABELS[statusGroup]}`,
+      onClear: () => setStatusGroup(''),
     });
   }
   if (paymentStatus) {
@@ -458,27 +483,32 @@ export default function PaymentTrackerListPage() {
         }
       />
 
-      {/* §Dashboard Cards — three money totals. Plain summary tiles rather than click-filters. */}
+      {/* §Dashboard Cards — three order counts, each a click-filter on the list below. */}
       <div className="tw-mb-4 tw-grid tw-grid-cols-1 tw-gap-2 sm:tw-grid-cols-3 sm:tw-gap-4">
         <StatCard
-          label="Total Expected Amount"
-          value={formatCurrency(stats?.totalExpectedAmount ?? 0)}
+          label="Total Orders"
+          value={totalOrders}
           icon={<SavingsIcon />}
           tone="cyan"
-          subtext={stats?.totalOrders ? `${stats.totalOrders} orders` : ''}
+          selected={statusGroup === '' && !paymentStatus}
+          onClick={() => toggleStatusGroup('')}
         />
         <StatCard
-          label="Collected Amount"
-          value={formatCurrency(stats?.totalCollected ?? 0)}
+          label="Collected Orders"
+          value={advanceCount + partialCount + completedCount}
           icon={<TrendingUpIcon />}
           tone="green"
           subtext={collectedSubtext}
+          selected={statusGroup === 'COLLECTED'}
+          onClick={() => toggleStatusGroup('COLLECTED')}
         />
         <StatCard
-          label="Pending Amount"
-          value={formatCurrency(stats?.pendingAmount ?? 0)}
+          label="Pending Orders"
+          value={totalOrders - completedCount}
           icon={<AccountBalanceWalletIcon />}
           tone="orange"
+          selected={statusGroup === 'PENDING'}
+          onClick={() => toggleStatusGroup('PENDING')}
         />
       </div>
 
@@ -506,6 +536,7 @@ export default function PaymentTrackerListPage() {
             value={paymentStatus}
             onChange={(value) => {
               setPaymentStatus(value as PaymentTrackerStatus | '');
+              setStatusGroup('');
               setPage(1);
             }}
             options={PAYMENT_STATUS_OPTIONS.map((option) => ({

@@ -57,6 +57,13 @@ router.patch(
   validate(changeOrderStatusSchema),
   ordersController.changeStatus,
 );
+// A soft delete that also takes the order's payments, invoice, tasks and documents — see
+// service.remove. Guarded by the module's own Delete permission, which no group holds until an admin
+// grants it (the Super Admin from the seed).
+router.delete('/:id', authorize(ModuleName.ORDERS, 'canDelete'), ordersController.remove);
+// The inverse, from Audit Log → Deleted Items. Same permission as deleting: whoever may remove an order
+// may bring it back.
+router.post('/:id/restore', authorize(ModuleName.ORDERS, 'canDelete'), ordersController.restore);
 router.use('/:id/payments', orderPaymentsRouter);
 router.use('/:id/tasks', orderTasksRouter);
 router.use('/:id/task-plan', orderTaskPlanRouter);

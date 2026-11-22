@@ -1,6 +1,6 @@
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
-import { ListOrdersParams, OrderStatsParams } from './types';
+import { ListOrdersParams, OrderStatsParams, OrderStatsResult, OrderStatusCounts } from './types';
 
 // Shared by listOrders and getOrderStats — every filter that isn't pagination, the dashboard
 // cards' own status/date-window, or eventDate, so the two stay in lockstep by construction.
@@ -163,11 +163,24 @@ function addUTCDays(date: Date, days: number): Date {
   return result;
 }
 
-// Dashboard-card counts. The total and Order Closed narrow along with every other active list
-// filter (search, customer, event date range), same as before. The four event-date windows are
+// Dashboard-card counts, each broken down by order status. The total scope narrows along with every
+// other active list filter (search, customer, event date range). The four event-date windows are
 // fixed, absolute ranges ("today" always means today) — built from buildOrderWhereBase so an
 // active eventDate quick-filter never doubles up with, or hides, what these actually count.
-export async function getOrderStats(params: OrderStatsParams) {
+async function countByStatus(where: Prisma.OrderWhereInput): Promise<OrderStatusCounts> {
+  const rows = await prisma.order.groupBy({ by: ['status'], where, _count: { _all: true } });
+  const countOf = (status: OrderStatus) => rows.find((row) => row.status === status)?._count._all ?? 0;
+  return {
+    yetToStart: countOf(OrderStatus.YET_TO_START),
+    inProgress: countOf(OrderStatus.IN_PROGRESS),
+    closed: countOf(OrderStatus.ORDER_CLOSED),
+    rejected: countOf(OrderStatus.REJECTED),
+  };
+}
+
+const sumOf = (counts: OrderStatusCounts) => counts.yetToStart + counts.inProgress + counts.closed + counts.rejected;
+
+export async function getOrderStats(params: OrderStatsParams): Promise<OrderStatsResult> {
   const baseWhere = buildOrderWhere(params);
   const dateWindowWhere = buildOrderWhereBase(params);
 
@@ -180,18 +193,31 @@ export async function getOrderStats(params: OrderStatsParams) {
   const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
 
   const countEventWindow = (from: Date, to: Date) =>
-    prisma.order.count({ where: { ...dateWindowWhere, eventDate: { gte: from, lte: to } } });
+    countByStatus({ ...dateWindowWhere, eventDate: { gte: from, lte: to } });
 
-  const [total, todayEvents, tomorrowEvents, thisWeekEvents, thisMonthEvents, closed] = await Promise.all([
-    prisma.order.count({ where: baseWhere }),
+  const [all, todayCounts, tomorrowCounts, weekCounts, monthCounts] = await Promise.all([
+    countByStatus(baseWhere),
     countEventWindow(today, today),
     countEventWindow(tomorrow, tomorrow),
     countEventWindow(weekStart, weekEnd),
     countEventWindow(monthStart, monthEnd),
-    prisma.order.count({ where: { ...baseWhere, status: OrderStatus.ORDER_CLOSED } }),
   ]);
 
-  return { total, todayEvents, tomorrowEvents, thisWeekEvents, thisMonthEvents, closed };
+  return {
+    total: sumOf(all),
+    todayEvents: sumOf(todayCounts),
+    tomorrowEvents: sumOf(tomorrowCounts),
+    thisWeekEvents: sumOf(weekCounts),
+    thisMonthEvents: sumOf(monthCounts),
+    closed: all.closed,
+    byStatus: {
+      total: all,
+      today: todayCounts,
+      tomorrow: tomorrowCounts,
+      thisWeek: weekCounts,
+      thisMonth: monthCounts,
+    },
+  };
 }
 
 export function findOrderById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
@@ -278,4 +304,154 @@ export function getOrderActivityLog(id: number, client: PrismaClientOrTx = prism
       performedBy: { select: { id: true, fullName: true } },
     },
   });
+}
+
+/**
+ * Soft-deletes one order together with everything that exists only because of it: its payments,
+ * invoice, payment tracker, task plan (groups and items), documents, and any quotation raised later
+ * from the order. The same chain the enquiry cascade takes (enquiries/repository.ts), scoped to this
+ * order — the enquiry itself and the quotation the order was converted from are left alone, so the
+ * enquiry simply becomes eligible for conversion again.
+ *
+ * One transaction, so an order can never end up deleted while live children still point at it. Only
+ * models that carry a `deleted_at` column are stamped; order_tasks has none and is read exclusively
+ * through the (now deleted) order, so it becomes unreachable rather than orphaned.
+ *
+ * Returns what was taken with the order, so the log line can say so — afterwards, "which payments did
+ * this delete remove" is exactly what someone auditing it needs.
+ */
+export async function deleteOrderCascade(tx: PrismaClientOrTx, companyId: number, orderId: number) {
+  const deletedAt = new Date();
+
+  const payments = await tx.payment.findMany({
+    where: { orderId, deletedAt: null },
+    select: { amount: true },
+  });
+
+  const quotations = await tx.quotation.findMany({
+    where: { orderId, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  const quotationIds = quotations.map((quotation) => quotation.id);
+
+  const taskGroups = await tx.taskGroup.findMany({
+    where: { orderId, deletedAt: null },
+    select: { id: true },
+  });
+  const taskGroupIds = taskGroups.map((taskGroup) => taskGroup.id);
+
+  if (quotationIds.length) {
+    await tx.quotationImage.updateMany({
+      where: { quotationId: { in: quotationIds }, deletedAt: null },
+      data: { deletedAt },
+    });
+    await tx.quotation.updateMany({ where: { id: { in: quotationIds } }, data: { deletedAt } });
+  }
+
+  if (taskGroupIds.length) {
+    await tx.taskItem.updateMany({
+      where: { taskGroupId: { in: taskGroupIds }, deletedAt: null },
+      data: { deletedAt },
+    });
+    await tx.taskGroup.updateMany({ where: { id: { in: taskGroupIds } }, data: { deletedAt } });
+  }
+
+  await tx.payment.updateMany({ where: { orderId, deletedAt: null }, data: { deletedAt } });
+  await tx.invoice.updateMany({ where: { orderId, deletedAt: null }, data: { deletedAt } });
+  await tx.paymentTracker.updateMany({ where: { orderId, deletedAt: null }, data: { deletedAt } });
+  await tx.orderDocument.updateMany({ where: { orderId, deletedAt: null }, data: { deletedAt } });
+  await tx.order.update({ where: { id: orderId }, data: { deletedAt } });
+
+  return {
+    paymentCount: payments.length,
+    paymentTotal: payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+    quotationCount: quotationIds.length,
+  };
+}
+
+/** The cascade in its own transaction — what the delete endpoint runs. */
+export function softDeleteOrderCascade(companyId: number, orderId: number) {
+  return prisma.$transaction((tx) => deleteOrderCascade(tx, companyId, orderId));
+}
+
+/** An order that has been soft-deleted, with the enquiry it came from — what a restore checks first. */
+export function findDeletedOrderById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
+  return client.order.findFirst({
+    where: { id, companyId, deletedAt: { not: null } },
+    select: {
+      id: true,
+      orderNumber: true,
+      enquiryId: true,
+      deletedAt: true,
+      enquiry: { select: { id: true, enquiryNumber: true, deletedAt: true } },
+    },
+  });
+}
+
+/**
+ * Brings back what a delete took with its orders — payments, invoice, payment tracker, documents, the
+ * task plan (groups and items) and any quotation raised from the order — and nothing else.
+ *
+ * "What a delete took" is identified by timestamp: a cascade stamps every record it removes with the
+ * same instant (deleteOrderCascade, enquiries' softDeleteEnquiryCascade), so a record carrying that
+ * exact instant went with its parent, while one carrying a different instant was deleted on its own
+ * earlier — a payment someone removed by hand — and stays deleted. The order's own amounts were never
+ * touched by the cascade, so they are still right once its payments return.
+ */
+export async function restoreOrderDependants(tx: PrismaClientOrTx, orderIds: number[], stamp: Date) {
+  if (orderIds.length === 0) return { paymentCount: 0, paymentTotal: 0, quotationCount: 0 };
+
+  const payments = await tx.payment.findMany({
+    where: { orderId: { in: orderIds }, deletedAt: stamp },
+    select: { amount: true },
+  });
+  const quotations = await tx.quotation.findMany({
+    where: { orderId: { in: orderIds }, deletedAt: stamp },
+    select: { id: true },
+  });
+  const quotationIds = quotations.map((quotation) => quotation.id);
+  const taskGroups = await tx.taskGroup.findMany({
+    where: { orderId: { in: orderIds }, deletedAt: stamp },
+    select: { id: true },
+  });
+  const taskGroupIds = taskGroups.map((taskGroup) => taskGroup.id);
+
+  if (quotationIds.length) {
+    await tx.quotationImage.updateMany({
+      where: { quotationId: { in: quotationIds }, deletedAt: stamp },
+      data: { deletedAt: null },
+    });
+    await tx.quotation.updateMany({ where: { id: { in: quotationIds } }, data: { deletedAt: null } });
+  }
+  if (taskGroupIds.length) {
+    await tx.taskItem.updateMany({
+      where: { taskGroupId: { in: taskGroupIds }, deletedAt: stamp },
+      data: { deletedAt: null },
+    });
+    await tx.taskGroup.updateMany({ where: { id: { in: taskGroupIds } }, data: { deletedAt: null } });
+  }
+
+  await tx.payment.updateMany({ where: { orderId: { in: orderIds }, deletedAt: stamp }, data: { deletedAt: null } });
+  await tx.invoice.updateMany({ where: { orderId: { in: orderIds }, deletedAt: stamp }, data: { deletedAt: null } });
+  await tx.paymentTracker.updateMany({
+    where: { orderId: { in: orderIds }, deletedAt: stamp },
+    data: { deletedAt: null },
+  });
+  await tx.orderDocument.updateMany({
+    where: { orderId: { in: orderIds }, deletedAt: stamp },
+    data: { deletedAt: null },
+  });
+
+  return {
+    paymentCount: payments.length,
+    paymentTotal: payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+    quotationCount: quotationIds.length,
+  };
+}
+
+/** The inverse of deleteOrderCascade, on the caller's transaction. */
+export async function restoreOrderCascade(tx: PrismaClientOrTx, orderId: number, stamp: Date) {
+  const restored = await restoreOrderDependants(tx, [orderId], stamp);
+  await tx.order.update({ where: { id: orderId }, data: { deletedAt: null } });
+  return restored;
 }

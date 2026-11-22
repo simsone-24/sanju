@@ -1,4 +1,5 @@
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Alert,
@@ -17,11 +18,14 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useDeletePayment } from '../../hooks/useDeletePayment';
+import { usePermission } from '../../hooks/usePermission';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { PaymentTrackerRecord } from '../../types/paymentTracker';
 import { formatCurrency, formatDate } from '../../utils/format';
@@ -38,6 +42,8 @@ interface PaymentHistoryDialogProps {
 export function PaymentHistoryDialog({ open, record, onClose }: PaymentHistoryDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const canDelete = usePermission('PAYMENTS', 'canDelete');
+  const paymentDelete = useDeletePayment(record?.orderNumber ?? '');
 
   const {
     data: payments,
@@ -112,6 +118,7 @@ export function PaymentHistoryDialog({ open, record, onClose }: PaymentHistoryDi
                   <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Receipt No</TableCell>
                   <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Reference</TableCell>
                   <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Received By</TableCell>
+                  {canDelete && <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }} />}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -126,6 +133,20 @@ export function PaymentHistoryDialog({ open, record, onClose }: PaymentHistoryDi
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{payment.receiptNumber}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{payment.referenceNumber ?? '—'}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{payment.receivedBy?.fullName ?? '—'}</TableCell>
+                    {canDelete && (
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                        <Tooltip title="Delete payment">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={`Delete receipt ${payment.receiptNumber}`}
+                            onClick={() => paymentDelete.request(payment)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
 
@@ -137,7 +158,7 @@ export function PaymentHistoryDialog({ open, record, onClose }: PaymentHistoryDi
                   <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', borderBottom: 'none' }}>
                     {formatCurrency(total)}
                   </TableCell>
-                  <TableCell colSpan={4} sx={{ borderBottom: 'none' }} />
+                  <TableCell colSpan={canDelete ? 5 : 4} sx={{ borderBottom: 'none' }} />
                 </TableRow>
               </TableBody>
             </Table>
@@ -150,6 +171,7 @@ export function PaymentHistoryDialog({ open, record, onClose }: PaymentHistoryDi
           Close
         </Button>
       </DialogActions>
+      {paymentDelete.dialog}
     </Dialog>
   );
 }

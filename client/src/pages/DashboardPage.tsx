@@ -21,8 +21,16 @@ import * as enquiryService from '../services/enquiryService';
 import * as reportService from '../services/reportService';
 import { startOfWeekMonday } from './calendar/weekUtils';
 import type { CalendarEvent } from '../types/calendar';
+import type { OrderStatus } from '../types/order';
 import DashboardEventSection from './dashboard/DashboardEventSection';
 import { DashboardReports } from './dashboard/DashboardReports';
+
+// An event is "pending" while its order is still open — not yet closed out or rejected.
+const PENDING_EVENT_STATUSES: readonly OrderStatus[] = ['YET_TO_START', 'IN_PROGRESS'];
+
+function countPendingEvents(events: CalendarEvent[] | undefined): number {
+  return events?.filter((event) => PENDING_EVENT_STATUSES.includes(event.status)).length ?? 0;
+}
 
 // docs/03_MODULES.md §2 (Dashboard Widgets) and docs/06_UI_UX_GUIDELINES.md §6 (Dashboard
 // Layout). No backend /dashboard endpoint exists — every tile here is assembled client-side from
@@ -33,8 +41,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   // The Reports tab shows order and expense graphs from the Reports endpoints; each needs its own
-  // module's View permission as well as Reports.
-  const canViewReports = usePermission('REPORTS', 'canView');
+  // module's View permission as well as Dashboard Reports.
+  const canViewReports = usePermission('DASHBOARD_REPORTS', 'canView');
   const canViewOrders = usePermission('ORDERS', 'canView');
   const canViewExpenses = usePermission('EXPENSES', 'canView');
   const showReportsTab = canViewReports && (canViewOrders || canViewExpenses);
@@ -59,7 +67,6 @@ export default function DashboardPage() {
   const weekStart = startOfWeekMonday(dayjs());
   const weekEnd = weekStart.add(6, 'day');
   const monthReference = dayjs().startOf('month');
-
   const { data: weekEvents, isLoading: weekEventsLoading } = useQuery({
     queryKey: ['dashboard', 'week-events', weekStart.format('YYYY-MM-DD')],
     queryFn: () => calendarService.getWeek(today),
@@ -99,6 +106,32 @@ export default function DashboardPage() {
       enquiryService.list({ page: 1, limit: 10, appointmentDateFrom: tomorrow, appointmentDateTo: tomorrow }),
   });
 
+  // Pending appointments use the Enquiry list's own APPOINTMENT_PENDING group (appointment still
+  // Pending or In Progress), so the number matches what the tile's drill-down lists.
+  const { data: todayPendingAppointments, isLoading: todayPendingAppointmentsLoading } = useQuery({
+    queryKey: ['dashboard', 'appointments-pending', today],
+    queryFn: () =>
+      enquiryService.list({
+        page: 1,
+        limit: 10,
+        appointmentDateFrom: today,
+        appointmentDateTo: today,
+        statusGroup: 'APPOINTMENT_PENDING',
+      }),
+  });
+
+  const { data: tomorrowPendingAppointments, isLoading: tomorrowPendingAppointmentsLoading } = useQuery({
+    queryKey: ['dashboard', 'appointments-pending', tomorrow],
+    queryFn: () =>
+      enquiryService.list({
+        page: 1,
+        limit: 10,
+        appointmentDateFrom: tomorrow,
+        appointmentDateTo: tomorrow,
+        statusGroup: 'APPOINTMENT_PENDING',
+      }),
+  });
+
   function handleEventClick(event: CalendarEvent) {
     navigate(`/orders/${event.id}`);
   }
@@ -121,8 +154,8 @@ export default function DashboardPage() {
       >
         <StatCard
           label="Today's Events"
-          value={todayEvents?.length ?? 0}
-          subtext={dayjs(today).format('ddd, D MMM YYYY')}
+          value={countPendingEvents(todayEvents)}
+          subtext={[`${todayEvents?.length ?? 0} total`, dayjs(today).format('ddd, D MMM YYYY')]}
           icon={<TodayIcon />}
           tone="blue"
           loading={todayEventsLoading}
@@ -130,8 +163,8 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Tomorrow's Events"
-          value={tomorrowEvents?.length ?? 0}
-          subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}
+          value={countPendingEvents(tomorrowEvents)}
+          subtext={[`${tomorrowEvents?.length ?? 0} total`, dayjs(tomorrow).format('ddd, D MMM YYYY')]}
           icon={<EventRepeatIcon />}
           tone="cyan"
           loading={tomorrowEventsLoading}
@@ -139,8 +172,11 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Events This Week"
-          value={weekEvents?.length ?? 0}
-          subtext={`${weekStart.format('D MMM')} – ${weekEnd.format('D MMM YYYY')}`}
+          value={countPendingEvents(weekEvents)}
+          subtext={[
+            `${weekEvents?.length ?? 0} total`,
+            `${weekStart.format('D MMM')} – ${weekEnd.format('D MMM YYYY')}`,
+          ]}
           icon={<DateRangeIcon />}
           tone="green"
           loading={weekEventsLoading}
@@ -148,8 +184,8 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Events This Month"
-          value={monthEvents?.length ?? 0}
-          subtext={monthReference.format('MMMM YYYY')}
+          value={countPendingEvents(monthEvents)}
+          subtext={[`${monthEvents?.length ?? 0} total`, monthReference.format('MMMM YYYY')]}
           icon={<CalendarMonthIcon />}
           tone="slate"
           loading={monthEventsLoading}
@@ -157,30 +193,36 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Upcoming Events"
-          value={allUpcomingEvents?.summary.totalEvents ?? 0}
-          subtext="All future dates"
+          value={
+            allUpcomingEvents?.summary.statusCounts
+              .filter((entry) => PENDING_EVENT_STATUSES.includes(entry.status))
+              .reduce((sum, entry) => sum + entry.count, 0) ?? 0
+          }
+          subtext={[`${allUpcomingEvents?.summary.totalEvents ?? 0} total`, 'All future dates']}
           icon={<UpcomingIcon />}
           tone="orange"
           loading={allUpcomingEventsLoading}
-          onClick={() => navigate(`/reports?tab=events&from=${today}`)}
         />
         <StatCard
           label="Today's Appointments"
-          value={todayAppointments?.meta.totalRecords ?? 0}
-          subtext={dayjs(today).format('ddd, D MMM YYYY')}
+          value={todayPendingAppointments?.meta.totalRecords ?? 0}
+          subtext={[`${todayAppointments?.meta.totalRecords ?? 0} total`, dayjs(today).format('ddd, D MMM YYYY')]}
           icon={<PendingActionsIcon />}
           tone="violet"
-          loading={todayAppointmentsLoading}
-          onClick={() => navigate(`/enquiries?apptFrom=${today}&apptTo=${today}`)}
+          loading={todayAppointmentsLoading || todayPendingAppointmentsLoading}
+          onClick={() => navigate(`/enquiries?apptFrom=${today}&apptTo=${today}&view=APPOINTMENT_PENDING`)}
         />
         <StatCard
           label="Tomorrow's Appointments"
-          value={tomorrowAppointments?.meta.totalRecords ?? 0}
-          subtext={dayjs(tomorrow).format('ddd, D MMM YYYY')}
+          value={tomorrowPendingAppointments?.meta.totalRecords ?? 0}
+          subtext={[
+            `${tomorrowAppointments?.meta.totalRecords ?? 0} total`,
+            dayjs(tomorrow).format('ddd, D MMM YYYY'),
+          ]}
           icon={<ScheduleIcon />}
           tone="amber"
-          loading={tomorrowAppointmentsLoading}
-          onClick={() => navigate(`/enquiries?apptFrom=${tomorrow}&apptTo=${tomorrow}`)}
+          loading={tomorrowAppointmentsLoading || tomorrowPendingAppointmentsLoading}
+          onClick={() => navigate(`/enquiries?apptFrom=${tomorrow}&apptTo=${tomorrow}&view=APPOINTMENT_PENDING`)}
         />
       </Box>
 

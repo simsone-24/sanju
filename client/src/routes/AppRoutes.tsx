@@ -1,6 +1,8 @@
 import { Route, Navigate, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 import AuthLayout from '../layouts/AuthLayout';
+import AuditLogPage from '../pages/audit-log/AuditLogPage';
+import DeletedItemViewPage from '../pages/audit-log/DeletedItemViewPage';
 import DashboardPage from '../pages/DashboardPage';
 import LoginPage from '../pages/auth/LoginPage';
 import CalendarPage from '../pages/calendar/CalendarPage';
@@ -101,6 +103,9 @@ export const router = createBrowserRouter(
           <Route path="/masters" element={<MastersPage />} />
 
           <Route path="/reports" element={<ReportsPage />} />
+
+          <Route path="/audit-log" element={<AuditLogPage />} />
+          <Route path="/audit-log/deleted/:type/:id" element={<DeletedItemViewPage />} />
         </Route>
       </Route>
 

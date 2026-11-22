@@ -8,6 +8,10 @@ export const revenueReportQuerySchema = z.object({
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
   eventTypeId: idSchema().optional(),
+  // Narrows the orders list only — the summary cards always describe the whole period.
+  paymentStatus: z.enum(['PENDING', 'ADVANCE_PAID', 'PARTIAL_PAYMENT', 'FULLY_PAID']).optional(),
+  // Same, for the Collected / Pending summary cards: orders with money received / still owing.
+  orderBalance: z.enum(['COLLECTED', 'PENDING']).optional(),
 });
 
 export const outstandingReportQuerySchema = z.object({
@@ -17,6 +21,8 @@ export const outstandingReportQuerySchema = z.object({
   dateTo: z.coerce.date().optional(),
   eventTypeId: idSchema().optional(),
   customerId: idSchema().optional(),
+  // Narrows the orders table only — the summary cards always describe the whole period.
+  paymentStatus: z.enum(['PENDING', 'ADVANCE_PAID', 'PARTIAL_PAYMENT', 'FULLY_PAID']).optional(),
 });
 
 export const customerReportQuerySchema = z.object({

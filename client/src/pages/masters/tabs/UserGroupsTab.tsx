@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../../components/DataTable';
 import { SearchBar } from '../../../components/SearchBar';
 import { StatusBadge } from '../../../components/StatusBadge';
+import { PROFILE_QUERY_KEY } from '../../../hooks/useProfileSync';
 import { usePermission } from '../../../hooks/usePermission';
 import * as userGroupService from '../../../services/userGroupService';
 import type { ApiErrorResponse } from '../../../types/api';
@@ -52,6 +53,8 @@ export default function UserGroupsTab() {
   function invalidateGroups() {
     queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     queryClient.invalidateQueries({ queryKey: ['user-group-options'] });
+    // The signed-in user may belong to the group just changed — re-read their own permissions.
+    queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
   }
 
   function closeDialog() {

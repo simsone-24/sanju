@@ -141,3 +141,8 @@ export async function openPdf(id: number): Promise<void> {
   window.open(url, '_blank', 'noopener');
   setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
+
+/** Brings a soft-deleted quotation back (see Audit Log → Deleted Items). */
+export async function restore(id: number): Promise<void> {
+  await apiClient.post(`/quotations/${id}/restore`);
+}

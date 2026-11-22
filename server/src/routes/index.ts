@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import auditLogsRoutes from '../modules/audit-logs/routes';
 import authRoutes from '../modules/auth/routes';
 import calendarRoutes from '../modules/calendar/routes';
 import customersRoutes from '../modules/customers/routes';
@@ -63,6 +64,7 @@ router.use('/expense-categories', expenseCategoriesRoutes);
 router.use('/expenses', expensesRoutes);
 
 router.use('/reports', reportsRoutes);
+router.use('/audit-logs', auditLogsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/documents', documentsRoutes);
 

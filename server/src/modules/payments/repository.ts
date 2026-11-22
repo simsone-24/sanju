@@ -31,7 +31,7 @@ export function listPaymentsForOrder(companyId: number, orderId: number) {
 
 export function findPaymentById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
   return client.payment.findFirst({
-    where: { id, deletedAt: null, order: { companyId } },
+    where: { id, deletedAt: null, order: { companyId, deletedAt: null } },
     select: paymentDetailSelect,
   });
 }
@@ -46,4 +46,34 @@ export function countAdvancePayments(orderId: number, client: PrismaClientOrTx =
   return client.payment.count({
     where: { orderId, deletedAt: null, paymentType: PaymentType.ADVANCE },
   });
+}
+
+export function softDeletePayment(id: number, client: PrismaClientOrTx = prisma) {
+  return client.payment.update({ where: { id }, data: { deletedAt: new Date() }, select: { id: true } });
+}
+
+/** What an order has actually been paid: the sum of its live payments. */
+export async function sumPaymentsForOrder(orderId: number, client: PrismaClientOrTx = prisma): Promise<number> {
+  const result = await client.payment.aggregate({
+    where: { orderId, deletedAt: null },
+    _sum: { amount: true },
+  });
+  return Number(result._sum.amount ?? 0);
+}
+
+/** A payment that has been soft-deleted, with the order it belongs to — what a restore checks first. */
+export function findDeletedPaymentById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
+  return client.payment.findFirst({
+    where: { id, deletedAt: { not: null }, order: { companyId } },
+    select: {
+      id: true,
+      receiptNumber: true,
+      amount: true,
+      order: { select: { id: true, orderNumber: true, totalAmount: true, deletedAt: true } },
+    },
+  });
+}
+
+export function restorePayment(id: number, client: PrismaClientOrTx = prisma) {
+  return client.payment.update({ where: { id }, data: { deletedAt: null }, select: { id: true } });
 }

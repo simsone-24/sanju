@@ -77,6 +77,7 @@ export default function CustomerReportTab() {
 
       <ReportPanel icon={<PeopleAltOutlinedIcon fontSize="small" />} title="Customers">
         <DataTable
+          showSerialNumber
           disableContainer
           columns={columns}
           rows={data?.customers ?? []}

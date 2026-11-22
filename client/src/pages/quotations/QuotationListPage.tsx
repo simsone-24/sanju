@@ -687,9 +687,8 @@ export default function QuotationListPage() {
         </div>
       </section>
 
-      {/* Summary tiles, matching the Orders index. Each status metric doubles as a one-click
-          filter; Revenue is a total, not a filter, so it carries no onClick. */}
-      <div className="tw-mb-4 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-grid-cols-3 sm:tw-gap-4 lg:tw-grid-cols-5">
+      {/* Summary tiles, matching the Orders index. Each status metric doubles as a one-click filter. */}
+      <div className="tw-mb-4 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-grid-cols-4 sm:tw-gap-4">
         <StatCard
           label="Draft"
           value={stats?.draft ?? 0}
@@ -725,13 +724,6 @@ export default function QuotationListPage() {
           loading={statsLoading}
           onClick={() => toggleStatusCard('REJECTED')}
           selected={status === 'REJECTED'}
-        />
-        <StatCard
-          label="Revenue"
-          value={formatCurrency(stats?.revenue ?? 0)}
-          icon={<RequestQuoteIcon />}
-          tone="blue"
-          loading={statsLoading}
         />
       </div>
 

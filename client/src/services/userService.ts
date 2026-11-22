@@ -52,3 +52,8 @@ export async function getProfilePhotoObjectUrl(id: number): Promise<string> {
 export async function remove(id: number): Promise<void> {
   await apiClient.delete(`/users/${id}`);
 }
+
+/** Brings a soft-deleted user back (see Audit Log → Deleted Items). */
+export async function restore(id: number): Promise<void> {
+  await apiClient.post(`/users/${id}/restore`);
+}

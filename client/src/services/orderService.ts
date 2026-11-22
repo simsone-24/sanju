@@ -48,3 +48,14 @@ export async function changeStatus(id: number, input: ChangeOrderStatusInput): P
   const response = await apiClient.patch<ApiSuccessResponse<OrderDetail>>(`/orders/${id}/status`, input);
   return response.data.data;
 }
+
+/** Soft-deletes an order along with its payments, invoice, task plan and documents. */
+export async function remove(id: number): Promise<void> {
+  await apiClient.delete(`/orders/${id}`);
+}
+
+
+/** Brings a soft-deleted order back, with what was deleted along with it (see Audit Log → Deleted Items). */
+export async function restore(id: number): Promise<void> {
+  await apiClient.post(`/orders/${id}/restore`);
+}

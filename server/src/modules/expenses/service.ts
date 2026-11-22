@@ -210,3 +210,30 @@ export async function remove(companyId: number, actorId: number, id: number): Pr
     performedById: actorId,
   });
 }
+
+/**
+ * Brings a deleted expense back. Its receipts were never touched by the delete, so they return with it.
+ * Refused when its category has been deleted since — an expense has to sit under a category that exists.
+ */
+export async function restore(companyId: number, actorId: number, id: number): Promise<void> {
+  const deleted = await expensesRepository.findDeletedExpenseById(companyId, id);
+  if (!deleted) throw new AppError(404, 'Deleted expense not found.');
+
+  if (deleted.category.deletedAt) {
+    throw new AppError(
+      409,
+      `Its category "${deleted.category.name}" has been deleted, so this expense cannot be restored.`,
+    );
+  }
+
+  await expensesRepository.restoreExpense(id);
+
+  await logActivity({
+    companyId,
+    module: MODULE,
+    referenceId: id,
+    action: 'RESTORE',
+    description: `Expense #${id} under "${deleted.category.name}" restored.`,
+    performedById: actorId,
+  });
+}

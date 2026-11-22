@@ -1,6 +1,7 @@
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChecklistIcon from '@mui/icons-material/Checklist';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import FlagIcon from '@mui/icons-material/Flag';
 import HistoryIcon from '@mui/icons-material/History';
@@ -15,11 +16,13 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppTabs } from '../../components/AppTabs';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
+import { useConfirmedAction } from '../../hooks/useConfirmedAction';
 import { usePermission } from '../../hooks/usePermission';
 import { useRouteId } from '../../hooks/useRouteId';
 import * as orderService from '../../services/orderService';
 import * as quotationService from '../../services/quotationService';
 import { useToast } from '../../store/ToastContext';
+import { formatCurrency } from '../../utils/format';
 import { resolveCreatedBy, resolveStageDates } from './orderActivity';
 import { OrderProgressTracker } from './OrderProgressTracker';
 import { OrderStatusDialog } from './OrderStatusDialog';
@@ -65,6 +68,7 @@ export default function OrderDetailPage() {
   const canEdit = usePermission('ORDERS', 'canEdit');
   const canCancel = usePermission('ORDERS', 'canCancel');
   const canCompleteEvent = usePermission('ORDERS', 'canCompleteEvent');
+  const canDelete = usePermission('ORDERS', 'canDelete');
   const requestedTab = searchParams.get('tab') ?? 'info';
   const resolvedTab = TAB_SLUG_ALIASES[requestedTab] ?? (requestedTab as (typeof TAB_SLUGS)[number]);
   const initialIndex = Math.max(0, TAB_SLUGS.indexOf(resolvedTab));
@@ -81,6 +85,26 @@ export default function OrderDetailPage() {
   const [editRequestId, setEditRequestId] = useState(searchParams.get('edit') === '1' ? 1 : 0);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
+
+  // Declared with the other hooks, above the page's early returns. Once the order is gone there is
+  // nothing left to show here, so a successful delete goes back to the list.
+  const orderDelete = useConfirmedAction<{ id: number; orderNumber: string; customerName: string; paidAmount: string }>({
+    title: 'Delete order?',
+    message: (target) => (
+      <>
+        Delete order <strong>{target.orderNumber}</strong> for {target.customerName}? Its payments (
+        {formatCurrency(target.paidAmount)} collected), invoice, tasks and documents are deleted with it, and its
+        enquiry can be converted to an order again. The record is kept and listed under Audit Log → Deleted Items.
+      </>
+    ),
+    action: (target) => orderService.remove(target.id),
+    invalidate: [['orders'], ['order'], ['payment-tracker'], ['calendar'], ['dashboard'], ['reports'], ['enquiries']],
+    fallbackError: 'Unable to delete the order. Please try again.',
+    onDone: () => {
+      showToast('Order deleted.', 'success');
+      navigate('/orders', { replace: true });
+    },
+  });
 
   function requestEdit() {
     setActiveTab(TAB_SLUGS.indexOf('info'));
@@ -224,7 +248,27 @@ export default function OrderDetailPage() {
             </ListItemIcon>
             <ListItemText primary={`Open enquiry ${order.enquiry.enquiryNumber}`} />
           </MenuItem>
+          {canDelete && (
+            <MenuItem
+              onClick={() => {
+                closeActions();
+                orderDelete.request({
+                  id: order.id,
+                  orderNumber: order.orderNumber,
+                  customerName: order.customer.customerName,
+                  paidAmount: order.paidAmount,
+                });
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon sx={{ color: 'inherit' }}>
+                <DeleteIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Delete Order" />
+            </MenuItem>
+          )}
         </Menu>
+        {orderDelete.dialog}
       </Stack>
 
       <OrderSummaryCard

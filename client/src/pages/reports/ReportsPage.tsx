@@ -1,5 +1,4 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import EventNoteIcon from '@mui/icons-material/EventNote';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
@@ -11,7 +10,6 @@ import { PageHeader } from '../../components/PageHeader';
 import { usePermission } from '../../hooks/usePermission';
 import CustomerReportTab from './tabs/CustomerReportTab';
 import ExpenseReportTab from './tabs/ExpenseReportTab';
-import EventReportTab from './tabs/EventReportTab';
 import OrderReportTab from './tabs/OrderReportTab';
 import OutstandingReportTab from './tabs/OutstandingReportTab';
 import RevenueReportTab from './tabs/RevenueReportTab';
@@ -31,7 +29,7 @@ export default function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Slug per tab, in tab order — the active tab lives in the query string so a report can be linked
-  // to directly (the Dashboard's event tiles open `?tab=events&from=…`) and survives a refresh.
+  // to directly and survives a refresh.
   const tabs: (AppTabItem & { slug: string })[] = [
     { slug: 'revenue', label: 'Revenue', icon: <TrendingUpIcon fontSize="small" />, content: <RevenueReportTab /> },
     {
@@ -41,7 +39,6 @@ export default function ReportsPage() {
       content: <OutstandingReportTab />,
     },
     { slug: 'customers', label: 'Customers', icon: <PeopleAltOutlinedIcon fontSize="small" />, content: <CustomerReportTab /> },
-    { slug: 'events', label: 'Events', icon: <EventNoteIcon fontSize="small" />, content: <EventReportTab /> },
     ...(canViewOrders
       ? [{ slug: 'orders', label: 'Orders', icon: <ShoppingBagOutlinedIcon fontSize="small" />, content: <OrderReportTab /> }]
       : []),
@@ -66,10 +63,7 @@ export default function ReportsPage() {
 
   return (
     <Box>
-      <PageHeader
-        title="Reports"
-        breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Reports' }]}
-      />
+      <PageHeader title="Reports" />
 
       {canView ? (
         <AppTabs

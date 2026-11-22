@@ -15,38 +15,53 @@ export async function getRevenueReport(params: RevenueReportParams) {
   const {
     records,
     totalRecords,
+    paymentCount,
     totalRevenue,
     expectedAmount,
     collectedAmount,
     pendingAmount,
+    orderCount,
+    collectedOrderCount,
+    pendingOrderCount,
+    collectedByStatus,
+    pendingByStatus,
     monthly,
     methodBreakdown,
-  } = await reportsRepository.listPaymentsForRevenue(params);
+  } = await reportsRepository.listOrdersForRevenue(params);
   return {
     data: {
       summary: {
         // Payment-date based: money that came in during the window.
         totalRevenue,
-        paymentCount: totalRecords,
+        paymentCount,
         // Event-date based, and reconciling: expected = collected + pending for the events in the
         // window. Deliberately a different lens from totalRevenue above — see the repository.
         expectedAmount,
         collectedAmount,
         pendingAmount,
+        orderCount,
+        collectedOrderCount,
+        pendingOrderCount,
+        collectedByStatus,
+        pendingByStatus,
         monthly,
         methodBreakdown,
       },
-      payments: records,
+      // One row per order (event date in the window), like the Payment Tracker — not per payment.
+      orders: records,
     },
     meta: buildPaginationMeta(params.page, params.limit, totalRecords),
   };
 }
 
 export async function getOutstandingReport(params: OutstandingReportParams) {
-  const { records, totalRecords, totalOutstanding } = await reportsRepository.listOutstandingOrders(params);
+  const { records, totalRecords, orderCount, totalOutstanding, byStatus, monthly } =
+    await reportsRepository.listOutstandingOrders(params);
   return {
     data: {
-      summary: { totalOutstanding, orderCount: totalRecords },
+      // `orderCount` and `byStatus` describe the whole period; `totalRecords` (the table's own,
+      // possibly status-narrowed, row count) only feeds the pagination meta below.
+      summary: { totalOutstanding, orderCount, byStatus, monthly },
       orders: records,
     },
     meta: buildPaginationMeta(params.page, params.limit, totalRecords),

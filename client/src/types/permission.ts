@@ -13,8 +13,10 @@ export type ModuleName =
   | 'RENT'
   | 'EXPENSES'
   | 'REPORTS'
+  | 'DASHBOARD_REPORTS'
   | 'MASTERS'
-  | 'SETTINGS';
+  | 'SETTINGS'
+  | 'AUDIT_LOG';
 
 export type PermissionAction =
   | 'canView'

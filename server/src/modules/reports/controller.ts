@@ -30,6 +30,8 @@ export async function revenue(req: Request, res: Response, next: NextFunction): 
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
       eventTypeId: query.eventTypeId,
+      paymentStatus: query.paymentStatus,
+      orderBalance: query.orderBalance,
     });
     sendSuccess(res, result.data, 'Revenue report retrieved successfully.', 200, result.meta);
   } catch (error) {
@@ -49,6 +51,7 @@ export async function outstanding(req: Request, res: Response, next: NextFunctio
       dateTo: query.dateTo,
       eventTypeId: query.eventTypeId,
       customerId: query.customerId,
+      paymentStatus: query.paymentStatus,
     });
     sendSuccess(res, result.data, 'Outstanding report retrieved successfully.', 200, result.meta);
   } catch (error) {

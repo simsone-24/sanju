@@ -200,3 +200,31 @@ export async function remove(companyId: number, actorId: number, id: number): Pr
     performedById: actorId,
   });
 }
+
+/**
+ * Brings a deleted user back, in the state they were deleted in (an inactive user comes back inactive).
+ * Their username and email stayed reserved while they were deleted, so nothing can have taken them;
+ * what can have changed is their group, so a restore is refused when that group has been deleted.
+ */
+export async function restore(companyId: number, actorId: number, id: number): Promise<void> {
+  const deleted = await usersRepository.findDeletedUserById(companyId, id);
+  if (!deleted) throw new AppError(404, 'Deleted user not found.');
+
+  if (deleted.userGroup.deletedAt) {
+    throw new AppError(
+      409,
+      `Their user group "${deleted.userGroup.groupName}" has been deleted, so this user cannot be restored.`,
+    );
+  }
+
+  await usersRepository.restoreUser(id);
+
+  await logActivity({
+    companyId,
+    module: ACTIVITY_MODULE,
+    referenceId: id,
+    action: 'RESTORE',
+    description: `User "${deleted.fullName}" (${deleted.username}) restored.`,
+    performedById: actorId,
+  });
+}

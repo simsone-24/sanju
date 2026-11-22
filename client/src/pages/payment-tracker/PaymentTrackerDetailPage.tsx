@@ -3,6 +3,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BadgeIcon from '@mui/icons-material/Badge';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CelebrationIcon from '@mui/icons-material/Celebration';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import LaunchIcon from '@mui/icons-material/Launch';
@@ -18,6 +19,7 @@ import {
   Box,
   Button,
   Divider,
+  IconButton,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -25,6 +27,7 @@ import {
   Paper,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -35,6 +38,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { ProgressDonut } from '../../components/ProgressDonut';
 import { RecordHeaderCard } from '../../components/RecordHeaderCard';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useDeletePayment } from '../../hooks/useDeletePayment';
 import { usePermission } from '../../hooks/usePermission';
 import { useRouteId } from '../../hooks/useRouteId';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
@@ -79,6 +83,7 @@ export default function PaymentTrackerDetailPage() {
   const navigate = useNavigate();
   const canEdit = usePermission('PAYMENTS', 'canEdit');
   const canExport = usePermission('PAYMENTS', 'canExport');
+  const canDelete = usePermission('PAYMENTS', 'canDelete');
   const [editOpen, setEditOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
@@ -88,6 +93,9 @@ export default function PaymentTrackerDetailPage() {
     queryFn: () => paymentTrackerService.getByOrderId(id),
     enabled: Boolean(id),
   });
+
+  // Above the early returns below, like every hook on this page.
+  const paymentDelete = useDeletePayment(data?.orderNumber ?? '');
 
   const breadcrumbs = [
     { label: 'Dashboard', to: '/' },
@@ -153,6 +161,28 @@ export default function PaymentTrackerDetailPage() {
       render: (row) => row.receivedBy?.fullName ?? '—',
       exportValue: (row) => row.receivedBy?.fullName ?? '',
     },
+    ...(canDelete
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'center' as const,
+            render: (row: PaymentTrackerPayment) => (
+              <Tooltip title="Delete payment">
+                <IconButton
+                  size="small"
+                  color="error"
+                  aria-label={`Delete receipt ${row.receiptNumber}`}
+                  onClick={() => paymentDelete.request(row)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ),
+            exportValue: () => '',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -364,6 +394,8 @@ export default function PaymentTrackerDetailPage() {
       <PaymentTrackerEditDialog open={editOpen} record={data} onClose={() => setEditOpen(false)} />
 
       <PaymentHistoryDialog open={historyOpen} record={data} onClose={() => setHistoryOpen(false)} />
+
+      {paymentDelete.dialog}
     </Box>
   );
 }

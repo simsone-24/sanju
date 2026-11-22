@@ -39,6 +39,8 @@ router.put(
   expensesController.update,
 );
 router.delete('/:id', authorize(ModuleName.EXPENSES, 'canDelete'), expensesController.remove);
+// The inverse, from Audit Log → Deleted Items. Same permission as deleting.
+router.post('/:id/restore', authorize(ModuleName.EXPENSES, 'canDelete'), expensesController.restore);
 
 router.use(discardReceiptOnError);
 

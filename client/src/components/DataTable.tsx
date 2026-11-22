@@ -90,6 +90,12 @@ interface DataTableProps<T> {
    * default gutter reads as wasted space rather than separation.
    */
   dense?: boolean;
+  /**
+   * Adds a leading "S.No" column numbering the rows. The count continues across pages (page 2 of 20
+   * starts at 21) and follows the order the rows are shown in, so it stays 1, 2, 3… when a column is
+   * sorted. Also written first in the CSV export.
+   */
+  showSerialNumber?: boolean;
 }
 
 const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
@@ -198,6 +204,7 @@ export function DataTable<T>({
   refreshing = false,
   rowAccentColor,
   dense = false,
+  showSerialNumber = false,
 }: DataTableProps<T>) {
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(
     () => new Set(columns.filter((column) => column.hideByDefault).map((column) => column.key)),
@@ -206,6 +213,10 @@ export function DataTable<T>({
   const [sort, setSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const visibleColumns = columns.filter((column) => !hiddenColumns.has(column.key));
+  // The server's own page and size when it sent them, so S.No stays right even if a parent's local
+  // state is a render behind; tables with no pagination (meta absent) start from 1.
+  const serialOffset = ((meta?.page ?? page) - 1) * (meta?.limit ?? limit);
+  const columnCount = visibleColumns.length + (showSerialNumber ? 1 : 0);
 
   const sortedRows = (() => {
     if (!sort) return rows;
@@ -233,9 +244,12 @@ export function DataTable<T>({
   }
 
   function exportCsv() {
-    const header = visibleColumns.map((column) => column.header).join(',');
-    const lines = sortedRows.map((row) =>
-      visibleColumns.map((column) => `"${cellValue(column, row).replace(/"/g, '""')}"`).join(','),
+    const header = [...(showSerialNumber ? ['S.No'] : []), ...visibleColumns.map((column) => column.header)].join(',');
+    const lines = sortedRows.map((row, index) =>
+      [
+        ...(showSerialNumber ? [`"${serialOffset + index + 1}"`] : []),
+        ...visibleColumns.map((column) => `"${cellValue(column, row).replace(/"/g, '""')}"`),
+      ].join(','),
     );
     const csv = [header, ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -352,6 +366,21 @@ export function DataTable<T>({
         >
           <thead>
             <tr>
+              {showSerialNumber && (
+                <th
+                  scope="col"
+                  style={{ width: 64 }}
+                  className={[
+                    cellPadding,
+                    'tw-text-center tw-border-b',
+                    headerStyle.cell,
+                    'tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.05em]',
+                    stickyHeader ? 'tw-sticky tw-top-0 tw-z-10' : '',
+                  ].join(' ')}
+                >
+                  S.No
+                </th>
+              )}
               {visibleColumns.map((column) => {
                 const align = column.align ?? 'left';
                 const active = sort?.key === column.key;
@@ -410,6 +439,11 @@ export function DataTable<T>({
             {loading &&
               Array.from({ length: Math.min(limit, 10) }).map((_, index) => (
                 <tr key={`skeleton-${index}`}>
+                  {showSerialNumber && (
+                    <td className={`${cellPadding} ${ROW_DIVIDER}`}>
+                      <span className="tw-mx-auto tw-block tw-h-4 tw-w-6 tw-animate-pulse tw-rounded tw-bg-slate-100 dark:tw-bg-slate-700" />
+                    </td>
+                  )}
                   {visibleColumns.map((column) => (
                     <td key={column.key} className={`${cellPadding} ${ROW_DIVIDER}`}>
                       <span className="tw-block tw-h-4 tw-w-full tw-animate-pulse tw-rounded tw-bg-slate-100 dark:tw-bg-slate-700" />
@@ -420,7 +454,7 @@ export function DataTable<T>({
 
             {!loading && sortedRows.length === 0 && (
               <tr>
-                <td colSpan={visibleColumns.length} className={emptyState ? 'tw-px-4 tw-py-16' : 'tw-px-4 tw-py-12'}>
+                <td colSpan={columnCount} className={emptyState ? 'tw-px-4 tw-py-16' : 'tw-px-4 tw-py-12'}>
                   {emptyState ? (
                     <div className="tw-flex tw-flex-col tw-items-center tw-gap-3 tw-text-center">
                       <div className="tw-flex tw-h-[72px] tw-w-[72px] tw-items-center tw-justify-center tw-rounded-full tw-bg-brand/10 tw-text-brand dark:tw-bg-brand-light/20">
@@ -444,7 +478,7 @@ export function DataTable<T>({
             )}
 
             {!loading &&
-              sortedRows.map((row) => {
+              sortedRows.map((row, rowIndex) => {
                 const accentColor = rowAccentColor?.(row);
                 return (
                   <tr
@@ -460,6 +494,18 @@ export function DataTable<T>({
                     ].join(' ')}
                     style={accentColor ? { boxShadow: `inset 4px 0 0 ${accentColor}` } : undefined}
                   >
+                    {showSerialNumber && (
+                      <td
+                        style={{ width: 64 }}
+                        className={[
+                          cellPadding,
+                          ROW_DIVIDER,
+                          'tw-text-center tw-align-middle tw-tabular-nums tw-text-ink-muted dark:tw-text-ink-dark-muted',
+                        ].join(' ')}
+                      >
+                        {serialOffset + rowIndex + 1}
+                      </td>
+                    )}
                     {visibleColumns.map((column) => (
                       <td
                         key={column.key}

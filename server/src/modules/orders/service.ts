@@ -457,3 +457,79 @@ export async function changeStatus(companyId: number, actorId: number, id: numbe
 
   return order;
 }
+
+/**
+ * Deletes an order and what hangs off it — payments, invoice, payment tracker, task plan, documents
+ * and any quotation raised from it (repository softDeleteOrderCascade). Soft delete throughout, so
+ * the records stay auditable and appear under the Audit Log's Deleted Items.
+ *
+ * There is deliberately no "has payments" guard, matching the enquiry delete: the cascade is what
+ * makes it safe, and the log line records exactly how much money went with the order.
+ */
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
+  const existing = await ordersRepository.findOrderById(companyId, id);
+  if (!existing) throw new AppError(404, 'Order not found.');
+
+  const { paymentCount, paymentTotal, quotationCount } = await ordersRepository.softDeleteOrderCascade(companyId, id);
+
+  const cascaded = [
+    paymentCount > 0 ? `${paymentCount} payment(s) totalling ${paymentTotal}` : null,
+    quotationCount > 0 ? `${quotationCount} quotation(s)` : null,
+  ].filter((part): part is string => part !== null);
+
+  await logActivity({
+    companyId,
+    module: 'ORDERS',
+    referenceId: id,
+    action: 'DELETE',
+    description: `Order "${existing.orderNumber}" deleted${cascaded.length ? `, along with ${cascaded.join(' and ')}` : ''}.`,
+    metadata: { paymentCount, paymentTotal, quotationCount },
+    performedById: actorId,
+  });
+}
+
+/**
+ * Brings a deleted order back, with the payments, invoice, tasks and documents that went with it.
+ * Refused while the order's enquiry is itself deleted (restore the enquiry, which brings its orders
+ * back), and while that enquiry has meanwhile been converted to a different order — an enquiry has one
+ * live order, and restoring this one would make a second.
+ */
+export async function restore(companyId: number, actorId: number, id: number): Promise<void> {
+  const deleted = await ordersRepository.findDeletedOrderById(companyId, id);
+  if (!deleted || !deleted.deletedAt) throw new AppError(404, 'Deleted order not found.');
+
+  if (deleted.enquiry.deletedAt) {
+    throw new AppError(
+      409,
+      `Its enquiry ${deleted.enquiry.enquiryNumber} is deleted. Restore the enquiry first — that brings its orders back too.`,
+    );
+  }
+
+  const replacement = await ordersRepository.findOrderByEnquiryId(companyId, deleted.enquiryId);
+  if (replacement) {
+    throw new AppError(
+      409,
+      `Enquiry ${deleted.enquiry.enquiryNumber} has since been converted to order ${replacement.orderNumber}, so ${deleted.orderNumber} cannot be restored.`,
+    );
+  }
+
+  const stamp = deleted.deletedAt;
+  const { paymentCount, paymentTotal, quotationCount } = await prisma.$transaction((tx) =>
+    ordersRepository.restoreOrderCascade(tx, id, stamp),
+  );
+
+  const returned = [
+    paymentCount > 0 ? `${paymentCount} payment(s) totalling ${paymentTotal}` : null,
+    quotationCount > 0 ? `${quotationCount} quotation(s)` : null,
+  ].filter((part): part is string => part !== null);
+
+  await logActivity({
+    companyId,
+    module: 'ORDERS',
+    referenceId: id,
+    action: 'RESTORE',
+    description: `Order "${deleted.orderNumber}" restored${returned.length ? `, along with ${returned.join(' and ')}` : ''}.`,
+    metadata: { paymentCount, paymentTotal, quotationCount },
+    performedById: actorId,
+  });
+}

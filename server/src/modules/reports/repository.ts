@@ -1,4 +1,4 @@
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, PaymentTrackerStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
   EventReportParams,
@@ -6,10 +6,12 @@ import {
   ExpenseReportParams,
   OrderReportParams,
   OutstandingReportParams,
+  PaymentStatusCounts,
   RevenueReportParams,
 } from './types';
 
-export async function listPaymentsForRevenue(params: RevenueReportParams) {
+export async function listOrdersForRevenue(params: RevenueReportParams) {
+  // Payments, by payment date — behind the revenue-received figures (total, by method, by month).
   const where: Prisma.PaymentWhereInput = {
     deletedAt: null,
     order: {
@@ -45,22 +47,50 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
       : {}),
   };
 
-  const [records, totalRecords, totalAggregate, methodBreakdown, orderAggregate, monthly] = await Promise.all([
-    prisma.payment.findMany({
-      where,
+  // The orders table alone narrows — to the Collected / Pending card and/or one payment status. The
+  // totals and counts keep describing the whole period, so choosing a filter never changes the
+  // figures the summary cards are showing.
+  const listWhere: Prisma.OrderWhereInput = {
+    ...orderWhere,
+    ...(params.orderBalance === 'COLLECTED' ? { paidAmount: { gt: 0 } } : {}),
+    ...(params.orderBalance === 'PENDING' ? { pendingAmount: { gt: 0 } } : {}),
+    ...(params.paymentStatus ? { paymentTracker: { paymentStatus: params.paymentStatus, deletedAt: null } } : {}),
+  };
+
+  const [
+    records,
+    totalRecords,
+    paymentCount,
+    totalAggregate,
+    methodBreakdown,
+    orderAggregate,
+    monthly,
+    orderCount,
+    collectedOrderCount,
+    pendingOrderCount,
+    collectedByStatus,
+    pendingByStatus,
+  ] = await Promise.all([
+    prisma.order.findMany({
+      where: listWhere,
       select: {
         id: true,
-        paymentDate: true,
-        paymentType: true,
-        amount: true,
-        paymentMethod: true,
-        receiptNumber: true,
-        order: { select: { id: true, orderNumber: true, customer: { select: { customerName: true } } } },
+        orderNumber: true,
+        eventDate: true,
+        status: true,
+        totalAmount: true,
+        paidAmount: true,
+        pendingAmount: true,
+        customer: { select: { id: true, customerName: true, mobile: true } },
+        enquiry: { select: { eventName: true, eventType: { select: { eventName: true } } } },
+        paymentTracker: { select: { paymentStatus: true, statusManual: true } },
       },
-      orderBy: { paymentDate: 'desc' },
+      // Soonest event first, as in the Payment Tracker: money is chased against the event calendar.
+      orderBy: [{ eventDate: 'asc' }, { createdAt: 'desc' }],
       skip: (params.page - 1) * params.limit,
       take: params.limit,
     }),
+    prisma.order.count({ where: listWhere }),
     prisma.payment.count({ where }),
     prisma.payment.aggregate({ where, _sum: { amount: true } }),
     prisma.payment.groupBy({ by: ['paymentMethod'], where, _sum: { amount: true } }),
@@ -69,11 +99,24 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
       _sum: { totalAmount: true, paidAmount: true, pendingAmount: true },
     }),
     listMonthlyRevenue(params),
+    // The same orders as the amounts above, counted: all of them, those with something received on
+    // them, and those still carrying a balance.
+    prisma.order.count({ where: orderWhere }),
+    prisma.order.count({ where: { ...orderWhere, paidAmount: { gt: 0 } } }),
+    prisma.order.count({ where: { ...orderWhere, pendingAmount: { gt: 0 } } }),
+    countPaymentStatuses({ ...orderWhere, paidAmount: { gt: 0 } }),
+    countPaymentStatuses({ ...orderWhere, pendingAmount: { gt: 0 } }),
   ]);
 
   return {
     records,
     totalRecords,
+    paymentCount,
+    orderCount,
+    collectedOrderCount,
+    pendingOrderCount,
+    collectedByStatus,
+    pendingByStatus,
     totalRevenue: totalAggregate._sum.amount ?? new Prisma.Decimal(0),
     expectedAmount: orderAggregate._sum.totalAmount ?? new Prisma.Decimal(0),
     collectedAmount: orderAggregate._sum.paidAmount ?? new Prisma.Decimal(0),
@@ -83,6 +126,26 @@ export async function listPaymentsForRevenue(params: RevenueReportParams) {
       paymentMethod: entry.paymentMethod,
       amount: entry._sum.amount ?? new Prisma.Decimal(0),
     })),
+  };
+}
+
+/**
+ * How many of the matching orders sit in each Payment Tracker status. Counted from the stored
+ * status — the same source the Payment Tracker page uses — so a manual override shows here exactly
+ * as it does there.
+ */
+async function countPaymentStatuses(orderWhere: Prisma.OrderWhereInput): Promise<PaymentStatusCounts> {
+  const rows = await prisma.paymentTracker.groupBy({
+    by: ['paymentStatus'],
+    where: { deletedAt: null, order: orderWhere },
+    _count: { _all: true },
+  });
+  const countOf = (status: PaymentTrackerStatus) => rows.find((row) => row.paymentStatus === status)?._count._all ?? 0;
+  return {
+    pending: countOf(PaymentTrackerStatus.PENDING),
+    advancePaid: countOf(PaymentTrackerStatus.ADVANCE_PAID),
+    partialPayment: countOf(PaymentTrackerStatus.PARTIAL_PAYMENT),
+    fullyPaid: countOf(PaymentTrackerStatus.FULLY_PAID),
   };
 }
 
@@ -147,28 +210,110 @@ export async function listOutstandingOrders(params: OutstandingReportParams) {
       : {}),
   };
 
-  const [records, totalRecords, aggregate] = await Promise.all([
-    prisma.order.findMany({
-      where,
-      select: {
-        id: true,
-        orderNumber: true,
-        eventDate: true,
-        totalAmount: true,
-        paidAmount: true,
-        pendingAmount: true,
-        status: true,
-        customer: { select: { id: true, customerName: true, mobile: true } },
-      },
-      orderBy: { eventDate: 'asc' },
-      skip: (params.page - 1) * params.limit,
-      take: params.limit,
-    }),
-    prisma.order.count({ where }),
-    prisma.order.aggregate({ where, _sum: { pendingAmount: true } }),
-  ]);
+  // The table alone narrows to one payment status; the totals and the per-status figures keep
+  // describing every outstanding order in the period, so choosing a status never changes the cards.
+  const listWhere: Prisma.OrderWhereInput = params.paymentStatus
+    ? { ...where, paymentTracker: { paymentStatus: params.paymentStatus, deletedAt: null } }
+    : where;
 
-  return { records, totalRecords, totalOutstanding: aggregate._sum.pendingAmount ?? new Prisma.Decimal(0) };
+  /** Orders carrying a balance in one Payment Tracker status, and how much they still owe. */
+  const statusFigure = async (status: PaymentTrackerStatus) => {
+    const result = await prisma.order.aggregate({
+      where: { ...where, paymentTracker: { paymentStatus: status, deletedAt: null } },
+      _sum: { pendingAmount: true },
+      _count: { _all: true },
+    });
+    return { orderCount: result._count._all, amount: result._sum.pendingAmount ?? new Prisma.Decimal(0) };
+  };
+
+  const [records, totalRecords, orderCount, aggregate, monthly, pending, advancePaid, partialPayment] =
+    await Promise.all([
+      prisma.order.findMany({
+        where: listWhere,
+        select: {
+          id: true,
+          orderNumber: true,
+          eventDate: true,
+          totalAmount: true,
+          paidAmount: true,
+          pendingAmount: true,
+          status: true,
+          customer: { select: { id: true, customerName: true, mobile: true } },
+          enquiry: { select: { eventName: true, eventType: { select: { eventName: true } } } },
+          paymentTracker: { select: { paymentStatus: true, statusManual: true } },
+        },
+        orderBy: { eventDate: 'asc' },
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+      }),
+      prisma.order.count({ where: listWhere }),
+      prisma.order.count({ where }),
+      prisma.order.aggregate({ where, _sum: { pendingAmount: true } }),
+      listMonthlyOutstanding(params),
+      statusFigure(PaymentTrackerStatus.PENDING),
+      statusFigure(PaymentTrackerStatus.ADVANCE_PAID),
+      statusFigure(PaymentTrackerStatus.PARTIAL_PAYMENT),
+    ]);
+
+  return {
+    records,
+    totalRecords,
+    orderCount,
+    totalOutstanding: aggregate._sum.pendingAmount ?? new Prisma.Decimal(0),
+    byStatus: { pending, advancePaid, partialPayment },
+    monthly,
+  };
+}
+
+interface MonthlyOutstandingRow {
+  month: string | null;
+  orderCount: bigint;
+  totalAmount: Prisma.Decimal | null;
+  paidAmount: Prisma.Decimal | null;
+  pendingAmount: Prisma.Decimal | null;
+}
+
+/**
+ * The same orders the Outstanding report lists, bucketed by the month of the event, oldest first.
+ * An order with no event date yet has no month, so it is kept as its own `null` bucket (sorted last)
+ * rather than dropped — the months then always add up to the report's total outstanding.
+ *
+ * Raw SQL for the same reason as listMonthlyRevenue: Prisma's groupBy cannot group by a date
+ * expression. Parameterised throughout, never interpolated.
+ */
+async function listMonthlyOutstanding(params: OutstandingReportParams) {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`o.company_id = ${params.companyId}`,
+    Prisma.sql`o.deleted_at IS NULL`,
+    Prisma.sql`o.status <> 'REJECTED'`,
+    Prisma.sql`o.pending_amount > 0`,
+  ];
+  if (params.customerId) conditions.push(Prisma.sql`o.customer_id = ${params.customerId}`);
+  if (params.eventTypeId) conditions.push(Prisma.sql`e.event_type_id = ${params.eventTypeId}`);
+  if (params.dateFrom) conditions.push(Prisma.sql`o.event_date >= ${params.dateFrom}`);
+  if (params.dateTo) conditions.push(Prisma.sql`o.event_date <= ${params.dateTo}`);
+
+  const rows = await prisma.$queryRaw<MonthlyOutstandingRow[]>`
+    SELECT DATE_FORMAT(o.event_date, '%Y-%m') AS month,
+           COUNT(*) AS orderCount,
+           SUM(o.total_amount) AS totalAmount,
+           SUM(o.paid_amount) AS paidAmount,
+           SUM(o.pending_amount) AS pendingAmount
+    FROM orders o
+    JOIN enquiries e ON e.id = o.enquiry_id
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    GROUP BY month
+    ORDER BY month IS NULL, month ASC
+  `;
+
+  // COUNT() comes back as BigInt, which JSON.stringify refuses to serialise.
+  return rows.map((row) => ({
+    month: row.month,
+    orderCount: Number(row.orderCount),
+    totalAmount: row.totalAmount ?? new Prisma.Decimal(0),
+    paidAmount: row.paidAmount ?? new Prisma.Decimal(0),
+    pendingAmount: row.pendingAmount ?? new Prisma.Decimal(0),
+  }));
 }
 
 export async function listEventsReport(params: EventReportParams) {

@@ -2,29 +2,28 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import DonutLargeIcon from '@mui/icons-material/DonutLarge';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
-import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
-import { DatePickerField } from '../../../components/DatePickerField';
 import { resolveStatusConfig } from '../../../components/statusConfig';
-import * as eventTypeService from '../../../services/eventTypeService';
 import * as reportService from '../../../services/reportService';
 import type { ExpenseGranularity } from '../../../types/report';
 import { formatCurrency } from '../../../utils/format';
-import { toOptionalId } from '../../../utils/ids';
 import { BreakdownBarList } from '../BreakdownBarList';
 import { DonutChart } from '../DonutChart';
 import { DurationControls } from '../DurationControls';
 import { MonthlyBarChart, type MonthlyBarPoint } from '../MonthlyBarChart';
 import { MonthlyLineChart } from '../MonthlyLineChart';
+import { PeriodFilter } from '../PeriodFilter';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { ReportPanel } from '../ReportPanel';
+import { useReportPeriod } from '../useReportPeriod';
 import { durationRange, fillPeriods, periodLabel, type Duration } from '../reportDuration';
 
 interface OrderReportTabProps {
   /**
-   * `filters` (default): the Reports page's date range + event type bar, grouped by month.
+   * `filters` (default): the Reports page's Month / Year bar, bucketed by day (month) or month (year).
    * `duration`: the Dashboard's single Duration dropdown inside the trend panel.
    */
   mode?: 'filters' | 'duration';
@@ -32,27 +31,20 @@ interface OrderReportTabProps {
 
 /** Orders over time, by status and by event type — placed in the window by their event date (orders with no event date set are left out). */
 export default function OrderReportTab({ mode = 'filters' }: OrderReportTabProps) {
-  const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
-  const [dateTo, setDateTo] = useState<Dayjs | null>(null);
-  const [eventTypeId, setEventTypeId] = useState('');
+  const period = useReportPeriod();
   const [duration, setDuration] = useState<Duration>('THIS_YEAR');
   const [customMonth, setCustomMonth] = useState<Dayjs>(dayjs().startOf('month'));
 
   const durationMode = mode === 'duration';
-  const range = durationMode ? durationRange(duration, customMonth) : null;
-  const granularity: ExpenseGranularity = range?.granularity ?? 'month';
-
-  const { data: eventTypes } = useQuery({
-    queryKey: ['event-types', 'active'],
-    queryFn: () => eventTypeService.listActive(),
-    enabled: !durationMode,
-  });
+  // The Dashboard picks a Duration; the Reports page picks a month or a year. Either way the window
+  // also decides how finely the trend is bucketed (day / week / month).
+  const range = durationMode ? durationRange(duration, customMonth) : period.range;
+  const granularity: ExpenseGranularity = range.granularity;
 
   const filters = {
     granularity,
-    dateFrom: range ? range.from : dateFrom?.format('YYYY-MM-DD'),
-    dateTo: range ? range.to : dateTo?.format('YYYY-MM-DD'),
-    eventTypeId: durationMode ? undefined : toOptionalId(eventTypeId),
+    dateFrom: range.from,
+    dateTo: range.to,
   };
 
   const { data } = useQuery({
@@ -61,20 +53,12 @@ export default function OrderReportTab({ mode = 'filters' }: OrderReportTabProps
     placeholderData: keepPreviousData,
   });
 
-  const filtersActive = Boolean(dateFrom || dateTo || eventTypeId);
-
-  function clearFilters() {
-    setDateFrom(null);
-    setDateTo(null);
-    setEventTypeId('');
-  }
-
   // Drawn at the granularity the data was fetched at — placeholder data from the previous duration
   // can briefly carry the other one, and its periods would not parse as the new format.
   const shownGranularity = data?.granularity ?? granularity;
   const trend = data
-    ? range && data.granularity === range.granularity
-      ? fillPeriods(data.trend, range, (period) => ({ period, orderCount: 0, amount: 0 }))
+    ? data.granularity === range.granularity
+      ? fillPeriods(data.trend, range, (key) => ({ period: key, orderCount: 0, amount: 0 }))
       : data.trend
     : [];
 
@@ -94,29 +78,8 @@ export default function OrderReportTab({ mode = 'filters' }: OrderReportTabProps
   return (
     <>
       {!durationMode && (
-        <ReportFilterBar onClear={clearFilters} active={filtersActive}>
-          <DatePickerField label="Date From" margin="none" value={dateFrom} onChange={setDateFrom} />
-          <DatePickerField
-            label="Date To"
-            margin="none"
-            value={dateTo}
-            onChange={setDateTo}
-            minDate={dateFrom ?? undefined}
-          />
-          <TextField
-            select
-            size="small"
-            label="Event Type"
-            value={eventTypeId}
-            onChange={(event) => setEventTypeId(event.target.value)}
-          >
-            <MenuItem value="">All Event Types</MenuItem>
-            {eventTypes?.map((type) => (
-              <MenuItem key={type.id} value={type.id}>
-                {type.eventName}
-              </MenuItem>
-            ))}
-          </TextField>
+        <ReportFilterBar onClear={period.reset} active={!period.isDefault}>
+          <PeriodFilter period={period} />
         </ReportFilterBar>
       )}
 

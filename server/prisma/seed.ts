@@ -37,7 +37,9 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
   },
   ORDERS: {
     'Super Admin': 'All',
-    Manager: 'All',
+    // Everything except Delete: removing an order takes its payments with it, so it stays with the
+    // Super Admin unless another group is granted it from Masters → User Groups.
+    Manager: ['canView', 'canCreate', 'canEdit', 'canCancel', 'canCompleteEvent', 'canExport'],
     'Sales Executive': ['canView'],
     'Event Coordinator': ['canView', 'canEdit', 'canCompleteEvent'],
     Accountant: ['canView'],
@@ -54,8 +56,9 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
     Manager: ['canView', 'canExport'],
     'Sales Executive': ['canView'],
     'Event Coordinator': ['canView'],
-    // user.md §Accountant — Payment Tracker is this group's working area.
-    Accountant: 'All',
+    // user.md §Accountant — Payment Tracker is this group's working area. Everything except Delete:
+    // deleting a receipt changes what an order owes, so it stays with the Super Admin unless granted.
+    Accountant: ['canView', 'canCreate', 'canEdit', 'canPrint', 'canExport'],
   },
   CUSTOMERS: {
     'Super Admin': 'All',
@@ -95,6 +98,13 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
     'Event Coordinator': ['canView'],
     Accountant: ['canView', 'canExport'],
   },
+  DASHBOARD_REPORTS: {
+    'Super Admin': 'All',
+    Manager: 'All',
+    'Sales Executive': ['canView'],
+    'Event Coordinator': ['canView'],
+    Accountant: ['canView'],
+  },
   MASTERS: {
     'Super Admin': 'All',
     Manager: ['canView', 'canCreate', 'canEdit'],
@@ -103,6 +113,15 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
     Accountant: 'No Access',
   },
   SETTINGS: {
+    'Super Admin': 'All',
+    Manager: 'No Access',
+    'Sales Executive': 'No Access',
+    'Event Coordinator': 'No Access',
+    Accountant: 'No Access',
+  },
+  // The audit trail names every user's actions, so it is administrator-only by default; other groups
+  // can be granted it from Masters → User Groups.
+  AUDIT_LOG: {
     'Super Admin': 'All',
     Manager: 'No Access',
     'Sales Executive': 'No Access',

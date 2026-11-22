@@ -113,3 +113,15 @@ export function listReceiptFiles(expenseId: number) {
 export function softDeleteExpense(id: number) {
   return prisma.expense.update({ where: { id }, data: { deletedAt: new Date() } });
 }
+
+/** An expense that has been soft-deleted, with its category — what a restore checks first. */
+export function findDeletedExpenseById(companyId: number, id: number) {
+  return prisma.expense.findFirst({
+    where: { id, companyId, deletedAt: { not: null } },
+    select: { id: true, amount: true, category: { select: { id: true, name: true, deletedAt: true } } },
+  });
+}
+
+export function restoreExpense(id: number) {
+  return prisma.expense.update({ where: { id }, data: { deletedAt: null } });
+}

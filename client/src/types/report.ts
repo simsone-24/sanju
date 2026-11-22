@@ -1,4 +1,5 @@
 import type { OrderStatus } from './order';
+import type { PaymentTrackerStatus } from './paymentTracker';
 
 export interface RevenueReportFilters {
   page: number;
@@ -6,16 +7,25 @@ export interface RevenueReportFilters {
   dateFrom?: string;
   dateTo?: string;
   eventTypeId?: number;
+  /** Narrows the orders table only; the summary cards still describe the whole period. */
+  paymentStatus?: PaymentTrackerStatus;
+  /** Narrows the orders table only: orders with money received (COLLECTED) or a balance owing (PENDING). */
+  orderBalance?: 'COLLECTED' | 'PENDING';
 }
 
-export interface RevenuePaymentRow {
+/** One order in the Revenue report's table — the same shape of row the Payment Tracker lists. */
+export interface RevenueOrderRow {
   id: number;
-  paymentDate: string;
-  paymentType: string;
-  amount: string;
-  paymentMethod: string;
-  receiptNumber: string;
-  order: { id: number; orderNumber: string; customer: { customerName: string } };
+  orderNumber: string;
+  /** Null on an order confirmed before its event date was known. */
+  eventDate: string | null;
+  status: OrderStatus;
+  totalAmount: string;
+  paidAmount: string;
+  pendingAmount: string;
+  customer: { id: number; customerName: string; mobile: string | null };
+  enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
+  paymentTracker: { paymentStatus: PaymentTrackerStatus; statusManual: boolean } | null;
 }
 
 export interface RevenueMethodBreakdown {
@@ -30,6 +40,14 @@ export interface RevenueMonthlyPoint {
   paymentCount: number;
 }
 
+/** Orders per Payment Tracker status. */
+export interface PaymentStatusCounts {
+  pending: number;
+  advancePaid: number;
+  partialPayment: number;
+  fullyPaid: number;
+}
+
 export interface RevenueReportSummary {
   /** Payment-date based: money that came in during the filtered window. */
   totalRevenue: string;
@@ -42,13 +60,20 @@ export interface RevenueReportSummary {
   expectedAmount: string;
   collectedAmount: string;
   pendingAmount: string;
+  /** The orders behind the three amounts above: all of them, those with money received, those with a balance. */
+  orderCount: number;
+  collectedOrderCount: number;
+  pendingOrderCount: number;
+  /** The Collected and Pending orders split by Payment Tracker status. */
+  collectedByStatus: PaymentStatusCounts;
+  pendingByStatus: PaymentStatusCounts;
   monthly: RevenueMonthlyPoint[];
   methodBreakdown: RevenueMethodBreakdown[];
 }
 
 export interface RevenueReportResult {
   summary: RevenueReportSummary;
-  payments: RevenuePaymentRow[];
+  orders: RevenueOrderRow[];
 }
 
 export interface OutstandingReportFilters {
@@ -58,21 +83,50 @@ export interface OutstandingReportFilters {
   dateTo?: string;
   eventTypeId?: number;
   customerId?: number;
+  /** Narrows the orders table only; the summary cards still describe the whole period. */
+  paymentStatus?: PaymentTrackerStatus;
 }
 
 export interface OutstandingOrderRow {
   id: number;
   orderNumber: string;
-  eventDate: string;
+  /** Null on an order confirmed before its event date was known. */
+  eventDate: string | null;
   totalAmount: string;
   paidAmount: string;
   pendingAmount: string;
   status: OrderStatus;
   customer: { id: number; customerName: string; mobile: string | null };
+  enquiry: { eventName: string | null; eventType: { eventName: string } } | null;
+  paymentTracker: { paymentStatus: PaymentTrackerStatus; statusManual: boolean } | null;
+}
+
+/** Outstanding orders in one Payment Tracker status, and the balance they still owe. */
+export interface OutstandingStatusFigure {
+  orderCount: number;
+  amount: string;
+}
+
+/** Outstanding orders bucketed by event month; `month` is `YYYY-MM`, or null for orders with no event date yet. */
+export interface OutstandingMonthlyRow {
+  month: string | null;
+  orderCount: number;
+  totalAmount: string;
+  paidAmount: string;
+  pendingAmount: string;
 }
 
 export interface OutstandingReportResult {
-  summary: { totalOutstanding: string; orderCount: number };
+  summary: {
+    totalOutstanding: string;
+    orderCount: number;
+    byStatus: {
+      pending: OutstandingStatusFigure;
+      advancePaid: OutstandingStatusFigure;
+      partialPayment: OutstandingStatusFigure;
+    };
+    monthly: OutstandingMonthlyRow[];
+  };
   orders: OutstandingOrderRow[];
 }
 

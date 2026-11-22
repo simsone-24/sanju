@@ -55,6 +55,8 @@ router.patch(
 // payment tracker, task plan and documents all go with it (service.ts remove). Guarded by the
 // module's own Delete permission, which no group holds until an admin grants it.
 router.delete('/:id', authorize(ModuleName.ENQUIRIES, 'canDelete'), enquiriesController.remove);
+// The inverse, from Audit Log → Deleted Items: brings back what the delete took with the enquiry.
+router.post('/:id/restore', authorize(ModuleName.ENQUIRIES, 'canDelete'), enquiriesController.restore);
 router.post(
   '/:id/follow-ups',
   authorize(ModuleName.ENQUIRIES, 'canCreate'),

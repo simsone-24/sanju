@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../../components/DataTable';
 import { SearchBar } from '../../../components/SearchBar';
 import { StatusBadge } from '../../../components/StatusBadge';
+import { PROFILE_QUERY_KEY } from '../../../hooks/useProfileSync';
 import { usePermission } from '../../../hooks/usePermission';
 import * as userService from '../../../services/userService';
 import { describeApiError } from '../../../utils/apiError';
@@ -56,6 +57,8 @@ export default function UsersTab() {
   function invalidateUsers() {
     queryClient.invalidateQueries({ queryKey: ['users'] });
     queryClient.invalidateQueries({ queryKey: ['user-options'] });
+    // A user's own permission overrides may have changed — re-read the signed-in user's permissions.
+    queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
   }
 
   function closeDialog() {

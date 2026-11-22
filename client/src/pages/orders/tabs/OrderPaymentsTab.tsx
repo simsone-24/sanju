@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -13,6 +14,7 @@ import { FormDialog } from '../../../components/FormDialog';
 import { resolveOrderPaymentBadge } from '../../../components/statusConfig';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { ViewField, ViewFieldGroup } from '../../../components/ViewField';
+import { useDeletePayment } from '../../../hooks/useDeletePayment';
 import { usePermission } from '../../../hooks/usePermission';
 import * as paymentService from '../../../services/paymentService';
 import type { ApiErrorResponse } from '../../../types/api';
@@ -34,6 +36,8 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
   const canCreate = usePermission('PAYMENTS', 'canCreate');
   const canExport = usePermission('PAYMENTS', 'canExport');
   const canEditPayments = usePermission('PAYMENTS', 'canEdit');
+  const canDelete = usePermission('PAYMENTS', 'canDelete');
+  const paymentDelete = useDeletePayment(order.orderNumber);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -131,6 +135,28 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
       render: (row) => row.referenceNumber ?? '—',
       exportValue: (row) => row.referenceNumber ?? '',
     },
+    ...(canDelete
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'center' as const,
+            render: (row: OrderPaymentSummary) => (
+              <Tooltip title="Delete payment">
+                <IconButton
+                  size="small"
+                  color="error"
+                  aria-label={`Delete receipt ${row.receiptNumber}`}
+                  onClick={() => paymentDelete.request(row)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ),
+            exportValue: () => '',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -173,6 +199,7 @@ export default function OrderPaymentsTab({ order }: OrderPaymentsTabProps) {
         exportFileName={`${order.orderNumber}-payments`}
         canExport={canExport}
       />
+      {paymentDelete.dialog}
 
       <Typography variant="h4" component="h2" sx={{ mt: 4, mb: 2 }}>
         Budget Changes

@@ -1029,3 +1029,52 @@ export async function getPdfForDownload(companyId: number, id: number) {
     fileName: `${quotation.quotationNumber}-v${quotation.version}.pdf`,
   };
 }
+
+/**
+ * Brings a deleted quotation back, with the images deleted along with it. Refused while the enquiry
+ * (or, for a quotation raised from an order, the order) it belongs to is itself deleted — restore that
+ * first, which brings its quotations back too.
+ *
+ * The enquiry shows its latest quotation's amount and version, so they are recomputed afterwards,
+ * exactly as deleting one recomputes them.
+ */
+export async function restore(companyId: number, actorId: number, id: number): Promise<void> {
+  const deleted = await quotationsRepository.findDeletedQuotationById(companyId, id);
+  if (!deleted || !deleted.deletedAt) throw new AppError(404, 'Deleted quotation not found.');
+
+  if (deleted.enquiry?.deletedAt) {
+    throw new AppError(
+      409,
+      `Its enquiry ${deleted.enquiry.enquiryNumber} is deleted. Restore the enquiry first — that brings its quotations back too.`,
+    );
+  }
+  if (deleted.sourceOrder?.deletedAt) {
+    throw new AppError(
+      409,
+      `Its order ${deleted.sourceOrder.orderNumber} is deleted. Restore the order first — that brings its quotations back too.`,
+    );
+  }
+
+  const stamp = deleted.deletedAt;
+  await prisma.$transaction(async (tx) => {
+    await quotationsRepository.restoreQuotation(tx, id, stamp);
+
+    if (deleted.source === QuotationSource.ENQUIRY && deleted.enquiry) {
+      const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, deleted.enquiry.id, tx);
+      await enquiriesRepository.updateEnquiry(
+        deleted.enquiry.id,
+        { quotationAmount: latest?.totalAmount ?? null, quotationVersion: latest?.version ?? null },
+        tx,
+      );
+    }
+  });
+
+  await logActivity({
+    companyId,
+    module: 'QUOTATIONS',
+    referenceId: id,
+    action: 'RESTORE',
+    description: `Quotation "${deleted.quotationNumber}" (v${deleted.version}) restored.`,
+    performedById: actorId,
+  });
+}

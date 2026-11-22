@@ -114,3 +114,15 @@ export async function replacePermissionOverrides(userId: number, overrides: Perm
 export function softDeleteUser(id: number) {
   return prisma.user.update({ where: { id }, data: { deletedAt: new Date() } });
 }
+
+/** A user that has been soft-deleted, with the group they sat in — what a restore checks first. */
+export function findDeletedUserById(companyId: number, id: number) {
+  return prisma.user.findFirst({
+    where: { id, companyId, deletedAt: { not: null } },
+    select: { id: true, fullName: true, username: true, userGroup: { select: { id: true, groupName: true, deletedAt: true } } },
+  });
+}
+
+export function restoreUser(id: number) {
+  return prisma.user.update({ where: { id }, data: { deletedAt: null }, select: { id: true } });
+}

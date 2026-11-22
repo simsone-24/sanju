@@ -73,3 +73,8 @@ export async function addFollowUp(
   const response = await apiClient.post<ApiSuccessResponse<EnquiryFollowUp>>(`/enquiries/${id}/follow-ups`, input);
   return response.data.data;
 }
+
+/** Brings a soft-deleted enquiry back, with what was deleted along with it (see Audit Log → Deleted Items). */
+export async function restore(id: number): Promise<void> {
+  await apiClient.post(`/enquiries/${id}/restore`);
+}

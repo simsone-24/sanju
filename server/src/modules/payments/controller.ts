@@ -44,3 +44,23 @@ export async function getById(req: Request<{ id: string }>, res: Response, next:
     next(error);
   }
 }
+
+export async function remove(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await paymentsService.remove(actor.companyId, actor.id, parseId(req.params.id));
+    sendSuccess(res, null, 'Payment deleted successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function restore(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await paymentsService.restore(actor.companyId, actor.id, parseId(req.params.id));
+    sendSuccess(res, null, 'Payment restored successfully.');
+  } catch (error) {
+    next(error);
+  }
+}

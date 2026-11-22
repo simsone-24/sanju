@@ -1,5 +1,6 @@
 import { AppointmentStatus, EnquiryStatus, EventTime, Prisma } from '@prisma/client';
 import { PrismaClientOrTx, prisma } from '../../config/prisma';
+import { restoreOrderDependants } from '../orders/repository';
 import { EnquiryStatsParams, ListEnquiriesParams } from './types';
 
 const enquiryListSelect = {
@@ -362,4 +363,62 @@ export function createFollowUp(data: Prisma.EnquiryFollowUpUncheckedCreateInput)
       createdBy: { select: { id: true, fullName: true } },
     },
   });
+}
+
+/** An enquiry that has been soft-deleted — the stamp tells a restore which records went with it. */
+export function findDeletedEnquiryById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
+  return client.enquiry.findFirst({
+    where: { id, companyId, deletedAt: { not: null } },
+    select: { id: true, enquiryNumber: true, deletedAt: true },
+  });
+}
+
+/**
+ * The inverse of softDeleteEnquiryCascade, on the caller's transaction: brings back the enquiry, the
+ * quotations and orders that went with it, and each order's payments, invoice, payment tracker, task
+ * plan and documents.
+ *
+ * Only records the delete itself took are returned — those carrying the enquiry's exact deletion
+ * instant. A quotation or payment someone had deleted on its own before the enquiry went keeps a
+ * different instant, so it stays deleted rather than reappearing as a side effect.
+ */
+export async function restoreEnquiryCascade(
+  tx: PrismaClientOrTx,
+  companyId: number,
+  enquiryId: number,
+  stamp: Date,
+) {
+  const orders = await tx.order.findMany({
+    where: { enquiryId, companyId, deletedAt: stamp },
+    select: { id: true },
+  });
+  const orderIds = orders.map((order) => order.id);
+
+  // Both the quotations raised against the enquiry and any raised later from its order.
+  const quotations = await tx.quotation.findMany({
+    where: {
+      companyId,
+      deletedAt: stamp,
+      OR: [{ enquiryId }, ...(orderIds.length ? [{ orderId: { in: orderIds } }] : [])],
+    },
+    select: { id: true },
+  });
+  const quotationIds = quotations.map((quotation) => quotation.id);
+
+  if (quotationIds.length) {
+    await tx.quotationImage.updateMany({
+      where: { quotationId: { in: quotationIds }, deletedAt: stamp },
+      data: { deletedAt: null },
+    });
+    await tx.quotation.updateMany({ where: { id: { in: quotationIds } }, data: { deletedAt: null } });
+  }
+
+  const { paymentCount, paymentTotal } = await restoreOrderDependants(tx, orderIds, stamp);
+  if (orderIds.length) {
+    await tx.order.updateMany({ where: { id: { in: orderIds } }, data: { deletedAt: null } });
+  }
+
+  await tx.enquiry.update({ where: { id: enquiryId }, data: { deletedAt: null } });
+
+  return { orderCount: orderIds.length, quotationCount: quotationIds.length, paymentCount, paymentTotal };
 }

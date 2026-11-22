@@ -22,6 +22,7 @@ interface StatCardSizeTokens {
   valueRow: string;
   value: string;
   subtext: string;
+  subtextFollowing: string;
   skeletonRow: string;
   skeletonBar: string;
 }
@@ -34,6 +35,7 @@ const SIZE: Record<StatCardSize, StatCardSizeTokens> = {
     valueRow: 'tw-mt-2',
     value: 'tw-text-[1.75rem]',
     subtext: 'tw-mt-1.5 tw-text-xs',
+    subtextFollowing: 'tw-mt-0.5 tw-text-xs',
     skeletonRow: 'tw-mt-3',
     skeletonBar: 'tw-h-7',
   },
@@ -46,6 +48,7 @@ const SIZE: Record<StatCardSize, StatCardSizeTokens> = {
     valueRow: 'tw-mt-0.5 sm:tw-mt-1.5',
     value: 'tw-text-base sm:tw-text-xl',
     subtext: 'tw-mt-0.5 tw-text-[0.625rem] sm:tw-mt-1 sm:tw-text-[0.6875rem]',
+    subtextFollowing: 'tw-mt-0.5 tw-text-[0.625rem] sm:tw-text-[0.6875rem]',
     skeletonRow: 'tw-mt-1 sm:tw-mt-2',
     skeletonBar: 'tw-h-4 sm:tw-h-5',
   },
@@ -56,7 +59,8 @@ interface StatCardProps {
   value: ReactNode;
   icon: ReactNode;
   tone: StatCardTone;
-  subtext?: string;
+  /** One line, or several (each on its own line) when a tile carries more than one detail. */
+  subtext?: string | string[];
   /** Makes the card a filter toggle (index-page KPI tiles). */
   onClick?: () => void;
   /** Marks this card's filter as the active one. */
@@ -81,6 +85,7 @@ export function StatCard({
   const tones = STAT_TONE[tone];
   const sizes = SIZE[size];
   const interactive = Boolean(onClick);
+  const subtextLines = (Array.isArray(subtext) ? subtext : [subtext]).filter((line): line is string => Boolean(line));
 
   return (
     <button
@@ -151,13 +156,16 @@ export function StatCard({
               />
             )}
           </div>
-          {subtext && (
+          {subtextLines.map((line, index) => (
             <span
-              className={`tw-hidden tw-truncate tw-text-ink-muted dark:tw-text-ink-dark-muted sm:tw-block ${sizes.subtext}`}
+              key={line}
+              className={`tw-hidden tw-truncate tw-text-ink-muted dark:tw-text-ink-dark-muted sm:tw-block ${
+                index === 0 ? sizes.subtext : sizes.subtextFollowing
+              }`}
             >
-              {subtext}
+              {line}
             </span>
-          )}
+          ))}
         </>
       )}
     </button>

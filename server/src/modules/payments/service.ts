@@ -120,3 +120,134 @@ export async function create(companyId: number, actorId: number, orderId: number
 
   return payment;
 }
+
+/**
+ * Deletes one payment (soft) and puts the order's money back the way it would be had the payment
+ * never been taken: the order's paid / pending amounts are recomputed from the payments that remain,
+ * and the Payment Tracker's derived status follows — all in one transaction, so the receipt and the
+ * order's figures can never disagree.
+ *
+ * The amounts are recomputed from the remaining payments rather than reduced by this one, so they
+ * stay right even if an earlier figure had drifted. A status the user pinned by hand is left as
+ * pinned (see PaymentTracker.statusManual). The receipt number is not reused.
+ */
+export async function remove(companyId: number, actorId: number, id: number): Promise<void> {
+  const payment = await paymentsRepository.findPaymentById(companyId, id);
+  if (!payment) throw new AppError(404, 'Payment not found.');
+
+  const { order } = payment;
+  const totalAmount = Number(order.totalAmount);
+
+  const { paidAmount, pendingAmount } = await prisma.$transaction(async (tx) => {
+    await paymentsRepository.softDeletePayment(id, tx);
+
+    const paid = await paymentsRepository.sumPaymentsForOrder(order.id, tx);
+    const pending = totalAmount - paid;
+    await ordersRepository.updateOrder(order.id, { paidAmount: paid, pendingAmount: pending }, tx);
+    await paymentTrackerRepository.syncTrackerStatus(order.id, totalAmount, paid, tx);
+
+    return { paidAmount: paid, pendingAmount: pending };
+  });
+
+  const amount = Number(payment.amount);
+
+  // The record's own entry — what the Audit Log's Deleted Items reads the deleter from.
+  await logActivity({
+    companyId,
+    module: 'PAYMENTS',
+    referenceId: id,
+    action: 'DELETE',
+    description: `Payment of ${amount} (receipt ${payment.receiptNumber}) deleted from order "${order.orderNumber}".`,
+    metadata: { orderId: order.id, amount, receiptNumber: payment.receiptNumber },
+    performedById: actorId,
+  });
+
+  // And one on the order, so its Timeline tab shows why the collected figure went down.
+  await logActivity({
+    companyId,
+    module: 'ORDERS',
+    referenceId: order.id,
+    action: 'UPDATE',
+    description: `Payment of ${amount} (receipt ${payment.receiptNumber}) deleted; collected is now ${paidAmount} and ${pendingAmount} is pending.`,
+    metadata: { paymentId: id, amount, paidAmount, pendingAmount },
+    performedById: actorId,
+  });
+}
+
+/**
+ * The money side of restoring one payment, on the caller's transaction: refuses if the order would end
+ * up collected beyond its budget, otherwise brings the payment back, recomputes the order's paid /
+ * pending amounts from the payments that then exist and lets the Payment Tracker's status follow.
+ * Exported so the whole sequence can be exercised in a transaction that is rolled back.
+ */
+export async function restorePaymentInTransaction(
+  tx: PrismaClientOrTx,
+  order: { id: number; totalAmount: Prisma.Decimal | number },
+  paymentId: number,
+  amount: number,
+): Promise<{ paidAmount: number; pendingAmount: number }> {
+  const totalAmount = Number(order.totalAmount);
+  const collectedNow = await paymentsRepository.sumPaymentsForOrder(order.id, tx);
+  const paid = collectedNow + amount;
+  if (paid > totalAmount) {
+    throw new AppError(
+      409,
+      `Restoring this payment would bring the collected amount to ${paid}, above the order's budget of ${totalAmount}.`,
+    );
+  }
+
+  await paymentsRepository.restorePayment(paymentId, tx);
+  const pending = totalAmount - paid;
+  await ordersRepository.updateOrder(order.id, { paidAmount: paid, pendingAmount: pending }, tx);
+  await paymentTrackerRepository.syncTrackerStatus(order.id, totalAmount, paid, tx);
+
+  return { paidAmount: paid, pendingAmount: pending };
+}
+
+/**
+ * Brings a deleted payment back and puts the order's money back with it: the paid / pending amounts
+ * are recomputed from the payments that then exist and the Payment Tracker's status follows, in one
+ * transaction — the inverse of `remove`.
+ *
+ * Refused while the payment's order is itself deleted (restore the order, which brings its payments
+ * back), and when taking the payment back would collect more than the order's budget — the budget may
+ * have been lowered since, and an order cannot be paid beyond what it is worth.
+ */
+export async function restore(companyId: number, actorId: number, id: number): Promise<void> {
+  const deleted = await paymentsRepository.findDeletedPaymentById(companyId, id);
+  if (!deleted) throw new AppError(404, 'Deleted payment not found.');
+
+  const { order } = deleted;
+  if (order.deletedAt) {
+    throw new AppError(
+      409,
+      `Its order ${order.orderNumber} is deleted. Restore the order first — that brings its payments back too.`,
+    );
+  }
+
+  const amount = Number(deleted.amount);
+
+  const { paidAmount, pendingAmount } = await prisma.$transaction((tx) =>
+    restorePaymentInTransaction(tx, order, id, amount),
+  );
+
+  await logActivity({
+    companyId,
+    module: 'PAYMENTS',
+    referenceId: id,
+    action: 'RESTORE',
+    description: `Payment of ${amount} (receipt ${deleted.receiptNumber}) restored to order "${order.orderNumber}".`,
+    metadata: { orderId: order.id, amount, receiptNumber: deleted.receiptNumber },
+    performedById: actorId,
+  });
+
+  await logActivity({
+    companyId,
+    module: 'ORDERS',
+    referenceId: order.id,
+    action: 'UPDATE',
+    description: `Payment of ${amount} (receipt ${deleted.receiptNumber}) restored; collected is now ${paidAmount} and ${pendingAmount} is pending.`,
+    metadata: { paymentId: id, amount, paidAmount, pendingAmount },
+    performedById: actorId,
+  });
+}

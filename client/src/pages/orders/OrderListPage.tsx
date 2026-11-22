@@ -1,5 +1,6 @@
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import EventIcon from '@mui/icons-material/Event';
@@ -41,12 +42,13 @@ import {
   type StatusBadgeType,
 } from '../../components/statusConfig';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useConfirmedAction } from '../../hooks/useConfirmedAction';
 import { usePermission } from '../../hooks/usePermission';
 import * as orderService from '../../services/orderService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
 import type { CustomerOption } from '../../types/masters';
-import type { OrderListItem, OrderStatus } from '../../types/order';
+import type { OrderListItem, OrderStatus, OrderStatusCounts } from '../../types/order';
 // Rows are ordered by event date (soonest first, server-side), so the date cell carries the
 // scanning weight: weekday for planning, plus how near the event is (eventProximity).
 import { DATE_RANGE_LABELS, dateRangeBounds, type DateRangePreset } from '../../utils/dateRange';
@@ -76,6 +78,16 @@ const ORDER_ROW_ACCENT: Record<OrderStatus, string> = {
   REJECTED: '#EF4444',
 };
 
+// A summary card's figures from its status breakdown: the headline is Yet To Start + In Progress
+// as one combined count, with the total (which also includes closed and rejected) beneath.
+function cardFigures(counts: OrderStatusCounts | undefined) {
+  const { yetToStart, inProgress, closed, rejected } = counts ?? { yetToStart: 0, inProgress: 0, closed: 0, rejected: 0 };
+  return {
+    value: yetToStart + inProgress,
+    subtext: `${yetToStart + inProgress + closed + rejected} total`,
+  };
+}
+
 // "md files/order/filter.md" §Date Filter — one-at-a-time named ranges over the event date, all
 // offered from the toolbar's single Date Range dropdown (the shared forward-looking set).
 export default function OrderListPage() {
@@ -93,6 +105,23 @@ export default function OrderListPage() {
     canCompleteEvent: usePermission('ORDERS', 'canCompleteEvent'),
   };
   const canViewPayments = usePermission('PAYMENTS', 'canView');
+  const canDelete = usePermission('ORDERS', 'canDelete');
+
+  // A soft delete that also takes the order's payments, invoice, tasks and documents — so the prompt
+  // says how much money goes with it, from the row already on screen.
+  const orderDelete = useConfirmedAction<OrderListItem>({
+    title: 'Delete order?',
+    message: (order) => (
+      <>
+        Delete order <strong>{order.orderNumber}</strong> for {order.customer.customerName}? Its payments (
+        {formatCurrency(order.paidAmount)} collected), invoice, tasks and documents are deleted with it, and its
+        enquiry can be converted to an order again. The record is kept and listed under Audit Log → Deleted Items.
+      </>
+    ),
+    action: (order) => orderService.remove(order.id),
+    invalidate: [['orders'], ['order'], ['payment-tracker'], ['calendar'], ['dashboard'], ['reports'], ['enquiries']],
+    fallbackError: 'Unable to delete the order. Please try again.',
+  });
 
   const [statusMenu, setStatusMenu] = useState<{ anchor: HTMLElement; row: OrderListItem } | null>(null);
   const [page, setPage] = useState(1);
@@ -480,6 +509,20 @@ export default function OrderListPage() {
               </IconButton>
             </Tooltip>
           )}
+          {canDelete && (
+            <Tooltip title="Delete order">
+              <IconButton
+                size="small"
+                color="error"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  orderDelete.request(row);
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Stack>
       ),
     },
@@ -527,7 +570,7 @@ export default function OrderListPage() {
       <div className="tw-mb-6 tw-grid tw-grid-cols-2 tw-gap-2 sm:tw-grid-cols-2 lg:tw-grid-cols-3 xl:tw-grid-cols-6 sm:tw-gap-4">
         <StatCard
           label="Total Orders"
-          value={stats?.total ?? 0}
+          {...cardFigures(stats?.byStatus?.total)}
           icon={<Inventory2Icon />}
           tone="blue"
           onClick={() => {
@@ -538,7 +581,7 @@ export default function OrderListPage() {
         />
         <StatCard
           label="Today Events"
-          value={stats?.todayEvents ?? 0}
+          {...cardFigures(stats?.byStatus?.today)}
           icon={<TodayIcon />}
           tone="cyan"
           onClick={() => toggleQuickRange('TODAY')}
@@ -546,7 +589,7 @@ export default function OrderListPage() {
         />
         <StatCard
           label="Tomorrow Events"
-          value={stats?.tomorrowEvents ?? 0}
+          {...cardFigures(stats?.byStatus?.tomorrow)}
           icon={<EventIcon />}
           tone="amber"
           onClick={() => toggleQuickRange('TOMORROW')}
@@ -554,7 +597,7 @@ export default function OrderListPage() {
         />
         <StatCard
           label="This Week Events"
-          value={stats?.thisWeekEvents ?? 0}
+          {...cardFigures(stats?.byStatus?.thisWeek)}
           icon={<CalendarViewWeekIcon />}
           tone="violet"
           onClick={() => toggleQuickRange('THIS_WEEK')}
@@ -562,7 +605,7 @@ export default function OrderListPage() {
         />
         <StatCard
           label="This Month Events"
-          value={stats?.thisMonthEvents ?? 0}
+          {...cardFigures(stats?.byStatus?.thisMonth)}
           icon={<CalendarMonthIcon />}
           tone="slate"
           onClick={() => toggleQuickRange('THIS_MONTH')}
@@ -746,6 +789,8 @@ export default function OrderListPage() {
           </MenuItem>
         ))}
       </Menu>
+
+      {orderDelete.dialog}
 
       <ConfirmDialog
         open={pendingStatus !== null}

@@ -10,6 +10,10 @@ const router = Router();
 
 router.use(authenticate);
 router.get('/:id', authorize(ModuleName.PAYMENTS, 'canView'), paymentsController.getById);
+// Soft delete: the order's paid / pending amounts and payment status are recomputed from what remains.
+router.delete('/:id', authorize(ModuleName.PAYMENTS, 'canDelete'), paymentsController.remove);
+// The inverse, from Audit Log → Deleted Items: puts the order's money back with the payment.
+router.post('/:id/restore', authorize(ModuleName.PAYMENTS, 'canDelete'), paymentsController.restore);
 
 export default router;
 

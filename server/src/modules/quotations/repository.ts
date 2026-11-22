@@ -586,3 +586,28 @@ export function updateQuotationImageCaption(id: number, caption: string | null, 
 export function softDeleteQuotationImage(id: number, client: PrismaClientOrTx = prisma) {
   return client.quotationImage.update({ where: { id }, data: { deletedAt: new Date() } });
 }
+
+/** A quotation that has been soft-deleted, with the parents it depends on — what a restore checks first. */
+export function findDeletedQuotationById(companyId: number, id: number, client: PrismaClientOrTx = prisma) {
+  return client.quotation.findFirst({
+    where: { id, companyId, deletedAt: { not: null } },
+    select: {
+      id: true,
+      quotationNumber: true,
+      version: true,
+      source: true,
+      deletedAt: true,
+      enquiry: { select: { id: true, enquiryNumber: true, deletedAt: true } },
+      sourceOrder: { select: { id: true, orderNumber: true, deletedAt: true } },
+    },
+  });
+}
+
+/**
+ * The inverse of softDeleteQuotation, on the caller's transaction. Brings back the images that were
+ * deleted with it (the same instant) — an image someone removed on its own earlier stays removed.
+ */
+export async function restoreQuotation(tx: PrismaClientOrTx, id: number, stamp: Date) {
+  await tx.quotationImage.updateMany({ where: { quotationId: id, deletedAt: stamp }, data: { deletedAt: null } });
+  return tx.quotation.update({ where: { id }, data: { deletedAt: null }, select: { id: true } });
+}

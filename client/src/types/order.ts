@@ -25,6 +25,13 @@ export interface OrderListItem {
   paymentTracker: { paymentStatus: PaymentTrackerStatus } | null;
 }
 
+export interface OrderStatusCounts {
+  yetToStart: number;
+  inProgress: number;
+  closed: number;
+  rejected: number;
+}
+
 export interface OrderStats {
   total: number;
   todayEvents: number;
@@ -32,6 +39,14 @@ export interface OrderStats {
   thisWeekEvents: number;
   thisMonthEvents: number;
   closed: number;
+  /** The same scopes as the counts above, each split by order status. */
+  byStatus: {
+    total: OrderStatusCounts;
+    today: OrderStatusCounts;
+    tomorrow: OrderStatusCounts;
+    thisWeek: OrderStatusCounts;
+    thisMonth: OrderStatusCounts;
+  };
 }
 
 export interface OrderPaymentSummary {

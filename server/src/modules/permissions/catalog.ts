@@ -23,8 +23,10 @@ export const ModuleName = {
   RENT: 'RENT',
   EXPENSES: 'EXPENSES',
   REPORTS: 'REPORTS',
+  DASHBOARD_REPORTS: 'DASHBOARD_REPORTS',
   MASTERS: 'MASTERS',
   SETTINGS: 'SETTINGS',
+  AUDIT_LOG: 'AUDIT_LOG',
 } as const;
 
 export type ModuleName = (typeof ModuleName)[keyof typeof ModuleName];
@@ -106,11 +108,13 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     label: 'Orders',
     description: 'Confirmed orders, event execution and documents',
     // Enforced by: modules/orders/routes.ts — canCancel and canCompleteEvent guard those two status
-    // transitions on PATCH /:id/status, every other transition stays on canEdit.
+    // transitions on PATCH /:id/status, every other transition stays on canEdit; canDelete guards
+    // DELETE /:id, a soft delete that also takes the order's payments, invoice, tasks and documents.
     actions: [
       VIEW,
       CREATE,
       EDIT,
+      DELETE,
       { key: 'canCancel', label: 'Cancel Order' },
       { key: 'canCompleteEvent', label: 'Complete Event' },
       EXPORT,
@@ -129,11 +133,13 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     module: ModuleName.PAYMENTS,
     label: 'Payment Tracker',
     description: 'Payments received, payment status and invoices',
-    // Enforced by: modules/payments, modules/payment-tracker and modules/invoices routes.
+    // Enforced by: modules/payments, modules/payment-tracker and modules/invoices routes; canDelete
+    // guards DELETE /payments/:id, a soft delete that takes the receipt out of the order's totals.
     actions: [
       VIEW,
       { key: 'canCreate', label: 'Create Payment' },
       { key: 'canEdit', label: 'Edit Payment' },
+      { key: 'canDelete', label: 'Delete Payment' },
       { key: 'canPrint', label: 'Print Receipt' },
       EXPORT,
     ],
@@ -184,6 +190,15 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     actions: [VIEW, EXPORT],
   },
   {
+    module: ModuleName.DASHBOARD_REPORTS,
+    label: 'Dashboard Reports',
+    description: 'Order and expense graphs on the Dashboard Reports tab',
+    // Enforced by: the Dashboard's Reports tab, and GET /reports/orders and /reports/expenses, which
+    // accept either this or the main Reports View (plus the Orders / Expenses View for the data).
+    // Separate from Reports so a group can see the dashboard graphs without the full Reports page.
+    actions: [VIEW],
+  },
+  {
     module: ModuleName.MASTERS,
     label: 'Masters',
     description: 'User groups, users and event types',
@@ -196,6 +211,15 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
     description: 'Company profile, branding and banking details',
     // Enforced by: modules/settings/routes.ts.
     actions: [VIEW, EDIT],
+  },
+  {
+    module: ModuleName.AUDIT_LOG,
+    label: 'Audit Log',
+    description: 'Who did what, and when, across the system',
+    // Enforced by: modules/audit-logs/routes.ts (canView on both endpoints) and the Export button on
+    // the page (canExport). Read-only by design — the log is written by the other modules as they
+    // act, never edited or deleted from here.
+    actions: [VIEW, EXPORT],
   },
 ];
 

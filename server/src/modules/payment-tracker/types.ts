@@ -1,12 +1,20 @@
 import { OrderStatus, PaymentMethod, PaymentTrackerStatus } from '@prisma/client';
 
-// "payment/payment.md" §Payment Tracker Dashboard — the three status cards collapse the four
-// statuses into three buckets (Advance Paid and Partial Payment are both "money in, not settled").
-// Kept here, not in the UI, so the cards, their click-through filter and the counts share one map.
+// "payment/payment.md" §Payment Tracker Dashboard — the Collected and Pending cards each span
+// several statuses (Collected = any order with a receipt; Pending = any order still carrying a
+// balance), so they overlap by design. The Total card is the unfiltered list and has no group.
+// Kept here, not in the UI, so the cards' click-through filter and their counts share one map.
 export const PAYMENT_TRACKER_STATUS_GROUPS = {
-  PENDING: [PaymentTrackerStatus.PENDING],
-  PARTIAL: [PaymentTrackerStatus.ADVANCE_PAID, PaymentTrackerStatus.PARTIAL_PAYMENT],
-  PAID: [PaymentTrackerStatus.FULLY_PAID],
+  COLLECTED: [
+    PaymentTrackerStatus.ADVANCE_PAID,
+    PaymentTrackerStatus.PARTIAL_PAYMENT,
+    PaymentTrackerStatus.FULLY_PAID,
+  ],
+  PENDING: [
+    PaymentTrackerStatus.PENDING,
+    PaymentTrackerStatus.ADVANCE_PAID,
+    PaymentTrackerStatus.PARTIAL_PAYMENT,
+  ],
 } as const satisfies Record<string, readonly PaymentTrackerStatus[]>;
 
 export type PaymentTrackerStatusGroup = keyof typeof PAYMENT_TRACKER_STATUS_GROUPS;

@@ -163,3 +163,13 @@ export async function addFollowUp(
     next(error);
   }
 }
+
+export async function restore(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    await enquiriesService.restore(actor, parseId(req.params.id));
+    sendSuccess(res, null, 'Enquiry restored successfully.');
+  } catch (error) {
+    next(error);
+  }
+}

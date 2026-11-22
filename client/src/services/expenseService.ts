@@ -97,3 +97,8 @@ export async function updateCategory(id: number, input: UpdateExpenseCategoryInp
 export async function deleteCategory(id: number): Promise<void> {
   await apiClient.delete(`/expense-categories/${id}`);
 }
+
+/** Brings a soft-deleted expense back (see Audit Log → Deleted Items). */
+export async function restore(id: number): Promise<void> {
+  await apiClient.post(`/expenses/${id}/restore`);
+}

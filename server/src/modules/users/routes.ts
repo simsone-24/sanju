@@ -32,5 +32,7 @@ router.post(
   usersController.uploadProfilePhoto,
 );
 router.delete('/:id', authorize(ModuleName.MASTERS, 'canDelete'), usersController.remove);
+// The inverse, from Audit Log → Deleted Items. Same permission as deleting.
+router.post('/:id/restore', authorize(ModuleName.MASTERS, 'canDelete'), usersController.restore);
 
 export default router;

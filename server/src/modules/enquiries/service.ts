@@ -608,3 +608,38 @@ export async function addFollowUp(
 
   return followUp;
 }
+
+/**
+ * Brings a deleted enquiry back with what went with it — its quotations, its order, and that order's
+ * payments, invoice, payment tracker, task plan and documents (repository restoreEnquiryCascade).
+ * Records that had been deleted on their own before the enquiry stay deleted.
+ *
+ * Nothing blocks it: while an enquiry is deleted nothing can be raised from it, so there is nothing
+ * for the restored records to collide with.
+ */
+export async function restore(actor: AuthenticatedUser, id: number): Promise<void> {
+  const deleted = await enquiriesRepository.findDeletedEnquiryById(actor.companyId, id);
+  if (!deleted || !deleted.deletedAt) throw new AppError(404, 'Deleted enquiry not found.');
+
+  const stamp = deleted.deletedAt;
+  const { orderCount, quotationCount, paymentCount, paymentTotal } = await prisma.$transaction((tx) =>
+    enquiriesRepository.restoreEnquiryCascade(tx, actor.companyId, id, stamp),
+  );
+
+  const returned = [
+    quotationCount > 0 ? `${quotationCount} quotation(s)` : null,
+    orderCount > 0
+      ? `${orderCount} order(s)${paymentCount > 0 ? ` with ${paymentCount} payment(s) totalling ${paymentTotal}` : ''}`
+      : null,
+  ].filter((part): part is string => part !== null);
+
+  await logActivity({
+    companyId: actor.companyId,
+    module: 'ENQUIRIES',
+    referenceId: id,
+    action: 'RESTORE',
+    description: `Enquiry "${deleted.enquiryNumber}" restored${returned.length ? `, along with ${returned.join(' and ')}` : ''}.`,
+    metadata: { orderCount, quotationCount, paymentCount, paymentTotal },
+    performedById: actor.id,
+  });
+}
