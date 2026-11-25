@@ -40,6 +40,7 @@ import * as quotationService from '../../services/quotationService';
 import * as userService from '../../services/userService';
 import { useToast } from '../../store/ToastContext';
 import type { ApiErrorResponse } from '../../types/api';
+import { describeApiError } from '../../utils/apiError';
 import type { QuotationGroupedRow, QuotationSource, QuotationStatus } from '../../types/quotation';
 import {
   DATE_RANGE_LABELS,
@@ -51,7 +52,7 @@ import { formatCurrency, formatDate } from '../../utils/format';
 import { toOptionalId } from '../../utils/ids';
 import { QuotationPreviewDialog } from './QuotationPreviewDialog';
 import { buildQuotationWhatsAppLink, canShareQuotation } from './quotationActions';
-import { isQuotationEditable } from './quotationStatusTransitions';
+import { isQuotationDeletable, isQuotationEditable } from './quotationStatusTransitions';
 
 const STATUS_OPTIONS: QuotationStatus[] = ['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'REVISED'];
 
@@ -71,6 +72,12 @@ const QUOTATION_ROW_ACCENT: Record<QuotationStatus, string> = {
   REJECTED: '#EF4444',
   REVISED: '#F59E0B',
 };
+
+// Why an approved row's delete icon and checkbox are disabled (see isQuotationDeletable).
+const APPROVED_DELETE_HINT = "Approved quotations can't be deleted. Change the status first.";
+
+// How many quotation numbers the bulk-delete prompt lists before summarising the rest.
+const BULK_DELETE_LISTED = 5;
 
 interface PendingAction {
   id: number;
@@ -222,6 +229,27 @@ export default function QuotationListPage() {
   const [previewQuotationId, setPreviewQuotationId] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<FlatRow | null>(null);
   const [menuState, setMenuState] = useState<{ anchor: HTMLElement; row: FlatRow } | null>(null);
+
+  // The bulk-delete selection belongs to the page of results it was made on: a new page, page size
+  // or filter starts a fresh one, so "Delete selected" can never reach rows that are off screen.
+  // Keyed by quotation id: a row's own id is an enquiry id for enquiry rows, which could collide
+  // with a standalone quotation's.
+  const listKey = [
+    page,
+    limit,
+    search,
+    status,
+    sourceFilter,
+    customerId,
+    assignedUserId,
+    dateFrom?.format('YYYY-MM-DD'),
+    dateTo?.format('YYYY-MM-DD'),
+  ].join('|');
+  const [selection, setSelection] = useState<{ listKey: string; ids: number[] }>({ listKey, ids: [] });
+  const selectedIds = selection.listKey === listKey ? selection.ids : [];
+  const setSelectedIds = (ids: number[]) => setSelection({ listKey, ids });
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<number | undefined>(
     () => (location.state as { highlightId?: number } | null)?.highlightId,
   );
@@ -311,14 +339,31 @@ export default function QuotationListPage() {
     onSuccess: onActionSettled,
   });
 
+  function onDeleteSettled() {
+    onActionSettled();
+    // The enquiry's own page shows its latest quotation, which a delete can change.
+    queryClient.invalidateQueries({ queryKey: ['enquiry'] });
+    queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+  }
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => quotationService.remove(id),
     onSuccess: () => {
-      onActionSettled();
-      // The enquiry's own page shows its latest quotation, which a delete can change.
-      queryClient.invalidateQueries({ queryKey: ['enquiry'] });
-      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
+      onDeleteSettled();
       showToast('Quotation deleted.');
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: number[]) => quotationService.removeMany(ids),
+    onSuccess: (deletedCount) => {
+      onDeleteSettled();
+      setSelectedIds([]);
+      setBulkDeleteOpen(false);
+      showToast(`${deletedCount} quotation${deletedCount === 1 ? '' : 's'} deleted.`);
+    },
+    onError: (error) => {
+      setBulkDeleteError(describeApiError(error, 'Unable to delete the selected quotations. Please try again.'));
     },
   });
 
@@ -411,6 +456,30 @@ export default function QuotationListPage() {
   }
 
   const rows = (data?.records ?? []).map(flatten);
+  // Read from the rows on screen, so a quotation that has since left the list is never sent.
+  const selectedRows = rows.filter((row) => selectedIds.includes(row.quotationId));
+
+  function openBulkDelete() {
+    setBulkDeleteError(null);
+    setBulkDeleteOpen(true);
+  }
+
+  function closeBulkDelete() {
+    if (bulkDeleteMutation.isPending) return;
+    setBulkDeleteOpen(false);
+    setBulkDeleteError(null);
+  }
+
+  function confirmBulkDelete() {
+    // The picked rows can leave the list while the prompt is open (a background refresh); with
+    // nothing left to delete there is nothing to send.
+    if (selectedRows.length === 0) {
+      closeBulkDelete();
+      return;
+    }
+    setBulkDeleteError(null);
+    bulkDeleteMutation.mutate(selectedRows.map((row) => row.quotationId));
+  }
 
   // Everything currently narrowing the list, as individually removable chips — so an unexpected
   // result count always has a visible cause, and one filter can be dropped without a full reset.
@@ -588,7 +657,7 @@ export default function QuotationListPage() {
       key: 'actions',
       header: 'Actions',
       align: 'center',
-      width: 125,
+      width: 155,
       render: (row) => (
         <div className="tw-flex tw-justify-center tw-gap-0.5">
           <IconButton
@@ -611,6 +680,19 @@ export default function QuotationListPage() {
               }}
             >
               <DownloadIcon fontSize="small" />
+            </IconButton>
+          )}
+          {canDelete && (
+            <IconButton
+              title={isQuotationDeletable(row.status) ? 'Delete quotation' : APPROVED_DELETE_HINT}
+              size="sm"
+              disabled={!isQuotationDeletable(row.status)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPendingAction({ id: row.quotationId, quotationNumber: row.quotationNumber, action: 'delete' });
+              }}
+            >
+              <DeleteIcon fontSize="small" className="tw-text-danger" />
             </IconButton>
           )}
           <IconButton
@@ -856,10 +938,38 @@ export default function QuotationListPage() {
       </div>
       )}
 
+      {/* Shown once rows are ticked: how many, a way to undo the pick, and the bulk action. */}
+      {canDelete && selectedRows.length > 0 && (
+        <div className="tw-mb-2 tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-rounded-card tw-border tw-border-brand/25 tw-bg-brand/5 tw-px-3 tw-py-2 dark:tw-border-brand-light/30 dark:tw-bg-brand-light/10">
+          <span className="tw-text-sm tw-font-semibold tw-tabular-nums tw-text-ink dark:tw-text-ink-dark">
+            {selectedRows.length} selected
+          </span>
+          <div className="tw-flex tw-items-center tw-gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
+              Clear selection
+            </Button>
+            <Button variant="danger" size="sm" startIcon={<DeleteIcon fontSize="small" />} onClick={openBulkDelete}>
+              Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         rows={rows}
         getRowId={(row) => row.rowId}
+        selection={
+          canDelete
+            ? {
+                selectedIds,
+                onChange: setSelectedIds,
+                getId: (row) => row.quotationId,
+                isSelectable: (row) => isQuotationDeletable(row.status),
+                disabledReason: APPROVED_DELETE_HINT,
+              }
+            : undefined
+        }
         loading={isLoading}
         meta={data?.meta}
         page={page}
@@ -991,18 +1101,6 @@ export default function QuotationListPage() {
             Reject
           </MenuItem>
         )}
-
-        {canDelete && menuRow && (
-          <MenuItem
-            icon={<DeleteIcon fontSize="small" />}
-            onClick={() => {
-              setPendingAction({ id: menuRow.quotationId, quotationNumber: menuRow.quotationNumber, action: 'delete' });
-              setMenuState(null);
-            }}
-          >
-            Delete
-          </MenuItem>
-        )}
       </Menu>
 
       {pendingAction && (
@@ -1016,6 +1114,48 @@ export default function QuotationListPage() {
           onClose={() => setPendingAction(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={`Delete ${selectedRows.length} Quotation${selectedRows.length === 1 ? '' : 's'}?`}
+        message={
+          <div className="tw-flex tw-flex-col tw-gap-3">
+            <span>
+              They will no longer appear in the app, but their records are kept and listed under Audit Log → Deleted
+              Items.
+            </span>
+            <ul className="tw-m-0 tw-flex tw-list-none tw-flex-wrap tw-gap-1.5 tw-p-0">
+              {selectedRows.slice(0, BULK_DELETE_LISTED).map((row) => (
+                <li
+                  key={row.quotationId}
+                  className="tw-rounded-full tw-bg-slate-100 tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-semibold tw-tabular-nums tw-text-ink dark:tw-bg-slate-700 dark:tw-text-ink-dark"
+                >
+                  {row.quotationNumber} v{row.version}
+                </li>
+              ))}
+              {selectedRows.length > BULK_DELETE_LISTED && (
+                <li className="tw-px-1 tw-py-0.5 tw-text-xs tw-text-ink-muted dark:tw-text-ink-dark-muted">
+                  +{selectedRows.length - BULK_DELETE_LISTED} more
+                </li>
+              )}
+            </ul>
+            {selectedRows.some((row) => row.revisionCount > 1) && (
+              <span className="tw-text-xs">
+                For an enquiry with several revisions, only the revision shown in the list is deleted.
+              </span>
+            )}
+            {bulkDeleteError && (
+              <div className="tw-rounded-card tw-border tw-border-danger/40 tw-bg-danger/10 tw-px-3 tw-py-2 tw-text-sm tw-text-danger">
+                {bulkDeleteError}
+              </div>
+            )}
+          </div>
+        }
+        danger
+        loading={bulkDeleteMutation.isPending}
+        onConfirm={confirmBulkDelete}
+        onClose={closeBulkDelete}
+      />
 
       <ConfirmDialog
         open={Boolean(shareTarget)}

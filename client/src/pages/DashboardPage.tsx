@@ -41,8 +41,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   // The Reports tab shows order and expense graphs from the Reports endpoints; each needs its own
-  // module's View permission as well as Dashboard Reports.
-  const canViewReports = usePermission('DASHBOARD_REPORTS', 'canView');
+  // module's View permission as well as the Dashboard's own Reports permission.
+  const canViewReports = usePermission('DASHBOARD', 'canViewReports');
   const canViewOrders = usePermission('ORDERS', 'canView');
   const canViewExpenses = usePermission('EXPENSES', 'canView');
   const showReportsTab = canViewReports && (canViewOrders || canViewExpenses);

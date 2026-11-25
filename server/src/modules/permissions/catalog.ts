@@ -23,7 +23,6 @@ export const ModuleName = {
   RENT: 'RENT',
   EXPENSES: 'EXPENSES',
   REPORTS: 'REPORTS',
-  DASHBOARD_REPORTS: 'DASHBOARD_REPORTS',
   MASTERS: 'MASTERS',
   SETTINGS: 'SETTINGS',
   AUDIT_LOG: 'AUDIT_LOG',
@@ -47,7 +46,15 @@ export type PermissionAction =
   | 'canConvertToOrder'
   | 'canCancel'
   | 'canCompleteEvent'
-  | 'canUpdateChecklist';
+  | 'canUpdateChecklist'
+  // Dashboard: the Reports tab's order and expense graphs.
+  | 'canViewReports'
+  // Reports page: one per tab, so each report can be granted on its own.
+  | 'canViewRevenueReport'
+  | 'canViewOutstandingReport'
+  | 'canViewCustomerReport'
+  | 'canViewOrderReport'
+  | 'canViewExpenseReport';
 
 export interface PermissionActionDefinition {
   key: PermissionAction;
@@ -73,10 +80,13 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
   {
     module: ModuleName.DASHBOARD,
     label: 'Dashboard',
-    description: 'Home dashboard and summary widgets',
+    description: 'Home dashboard, summary widgets and its Reports tab',
     // Enforced by: the sidebar/nav gate — the dashboard renders other modules' data, each of which
     // is authorized on its own endpoint, so there is no dashboard route of its own to guard.
-    actions: [VIEW],
+    // canViewReports: the Dashboard's Reports tab, and GET /reports/orders and /reports/expenses,
+    // which accept it in place of the matching Reports-page tab (each still needs Orders / Expenses
+    // View for the data itself).
+    actions: [VIEW, { key: 'canViewReports', label: 'Reports' }],
   },
   {
     module: ModuleName.ENQUIRIES,
@@ -185,18 +195,17 @@ export const PERMISSION_CATALOG: PermissionModuleDefinition[] = [
   {
     module: ModuleName.REPORTS,
     label: 'Reports',
-    description: 'Revenue, outstanding, customer and event reports',
-    // Enforced by: modules/reports/routes.ts.
-    actions: [VIEW, EXPORT],
-  },
-  {
-    module: ModuleName.DASHBOARD_REPORTS,
-    label: 'Dashboard Reports',
-    description: 'Order and expense graphs on the Dashboard Reports tab',
-    // Enforced by: the Dashboard's Reports tab, and GET /reports/orders and /reports/expenses, which
-    // accept either this or the main Reports View (plus the Orders / Expenses View for the data).
-    // Separate from Reports so a group can see the dashboard graphs without the full Reports page.
-    actions: [VIEW],
+    description: 'Reports page, one permission per tab (the Orders and Expenses tabs also need Orders / Expenses View)',
+    // Enforced by: modules/reports/routes.ts, one tab action per endpoint. There is no page-level
+    // View: the page and its sidebar entry show when any tab is granted.
+    actions: [
+      { key: 'canViewRevenueReport', label: 'Revenue' },
+      { key: 'canViewOutstandingReport', label: 'Outstanding' },
+      { key: 'canViewCustomerReport', label: 'Customers' },
+      { key: 'canViewOrderReport', label: 'Orders' },
+      { key: 'canViewExpenseReport', label: 'Expenses' },
+      EXPORT,
+    ],
   },
   {
     module: ModuleName.MASTERS,

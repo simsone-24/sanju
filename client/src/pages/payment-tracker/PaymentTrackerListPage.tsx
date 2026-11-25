@@ -1,5 +1,6 @@
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -27,7 +28,9 @@ import { Button } from '../../components/ui/Button';
 import { CARD_SURFACE } from '../../components/ui/Card';
 import { IconButton } from '../../components/ui/IconButton';
 import { SelectField } from '../../components/ui/Select';
+import { useConfirmedAction } from '../../hooks/useConfirmedAction';
 import { usePermission } from '../../hooks/usePermission';
+import * as orderService from '../../services/orderService';
 import * as paymentTrackerService from '../../services/paymentTrackerService';
 import type { CustomerOption } from '../../types/masters';
 import type { OrderStatus } from '../../types/order';
@@ -92,6 +95,23 @@ export default function PaymentTrackerListPage() {
   const canView = usePermission('PAYMENTS', 'canView');
   const canExport = usePermission('PAYMENTS', 'canExport');
   const canEdit = usePermission('PAYMENTS', 'canEdit');
+  const canDeleteOrder = usePermission('ORDERS', 'canDelete');
+
+  // The same soft delete as the Orders list: it takes the order's payments, invoice, tasks and
+  // documents with it, so the prompt says how much money goes along from the row on screen.
+  const orderDelete = useConfirmedAction<PaymentTrackerRecord>({
+    title: 'Delete order?',
+    message: (record) => (
+      <>
+        Delete order <strong>{record.orderNumber}</strong> for {record.customer.customerName}? Its payments (
+        {formatCurrency(record.paidAmount)} collected), invoice, tasks and documents are deleted with it, and its
+        enquiry can be converted to an order again. The record is kept and listed under Audit Log → Deleted Items.
+      </>
+    ),
+    action: (record) => orderService.remove(record.id),
+    invalidate: [['orders'], ['order'], ['payment-tracker'], ['calendar'], ['dashboard'], ['reports'], ['enquiries']],
+    fallbackError: 'Unable to delete the order. Please try again.',
+  });
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -403,7 +423,7 @@ export default function PaymentTrackerListPage() {
       key: 'actions',
       header: 'Actions',
       align: 'center' as const,
-      width: 130,
+      width: 165,
       render: (row) => (
         <div className="tw-flex tw-justify-center tw-gap-0.5">
           <IconButton
@@ -448,6 +468,18 @@ export default function PaymentTrackerListPage() {
           >
             <ReceiptIcon fontSize="small" />
           </IconButton>
+          {canDeleteOrder && (
+            <IconButton
+              title="Delete order"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                orderDelete.request(row);
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </div>
       ),
     } satisfies DataTableColumn<PaymentTrackerRecord>,
@@ -689,6 +721,8 @@ export default function PaymentTrackerListPage() {
         record={editRecord}
         onClose={() => setEditRecord(null)}
       />
+
+      {orderDelete.dialog}
 
       <PaymentHistoryDialog
         open={historyRecord !== null}

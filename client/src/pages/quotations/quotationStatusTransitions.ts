@@ -12,3 +12,12 @@ import type { QuotationStatus } from '../../types/quotation';
 export function isQuotationEditable(_status: QuotationStatus): boolean {
   return true;
 }
+
+/**
+ * Mirrors the status half of the server's delete rule (quotations/service.ts findDeleteBlock): a
+ * confirmed quotation has to be un-confirmed before it can be deleted. The other half (an order was
+ * raised from it) is only known to the server, which still refuses those.
+ */
+export function isQuotationDeletable(status: QuotationStatus): boolean {
+  return status !== 'APPROVED';
+}

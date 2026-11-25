@@ -115,6 +115,18 @@ export async function remove(id: number): Promise<void> {
   await apiClient.delete<ApiSuccessResponse<null>>(`/quotations/${id}`);
 }
 
+/**
+ * Soft-deletes several quotations at once. All or nothing: if any one is refused (an order was
+ * raised from it, or it is confirmed) none is deleted and the error names each refused quotation.
+ * Resolves to how many were deleted.
+ */
+export async function removeMany(ids: number[]): Promise<number> {
+  const response = await apiClient.post<ApiSuccessResponse<{ deletedCount: number }>>('/quotations/bulk-delete', {
+    ids,
+  });
+  return response.data.data.deletedCount;
+}
+
 export async function deleteImage(id: number, imageId: number): Promise<QuotationDetail> {
   const response = await apiClient.delete<ApiSuccessResponse<QuotationDetail>>(`/quotations/${id}/images/${imageId}`);
   return response.data.data;

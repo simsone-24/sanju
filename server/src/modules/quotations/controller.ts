@@ -10,6 +10,7 @@ import * as quotationsService from './service';
 import { logActivity } from '../../utils/activityLogger';
 import { parseId } from '../../utils/parseId';
 import {
+  BulkDeleteQuotationsSchema,
   ChangeQuotationStatusSchema,
   CreateQuotationSchema,
   UpdateQuotationImageSchema,
@@ -224,6 +225,24 @@ export async function remove(req: Request<{ id: string }>, res: Response, next: 
     const actor = requireUser(req);
     await quotationsService.remove(actor.companyId, actor.id, parseId(req.params.id));
     sendSuccess(res, null, 'Quotation deleted successfully.');
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function removeMany(
+  req: Request<Record<string, never>, unknown, BulkDeleteQuotationsSchema>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const actor = requireUser(req);
+    const result = await quotationsService.removeMany(actor.companyId, actor.id, req.body.ids);
+    sendSuccess(
+      res,
+      result,
+      `${result.deletedCount} quotation${result.deletedCount === 1 ? '' : 's'} deleted successfully.`,
+    );
   } catch (error) {
     next(error);
   }

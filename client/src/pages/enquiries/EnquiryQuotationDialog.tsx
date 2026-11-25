@@ -36,6 +36,7 @@ import { QUOTATION_CREATE_STATUSES, QUOTATION_EDIT_STATUSES } from '../../valida
 import { ImageThumb } from '../quotations/ImageThumb';
 import { SavedImageThumb } from '../quotations/SavedImageThumb';
 import {
+  MAX_QUOTATION_IMAGES,
   setStagedCaption,
   stageQuotationImages,
   useStagedImageUrls,
@@ -497,7 +498,7 @@ export function EnquiryQuotationDialog({ open, enquiry, quotationId, onClose, on
                   <input hidden type="file" accept="image/jpeg,image/png" multiple onChange={handleImageFiles} />
                 </Button>
                 <Typography variant="caption" color="text.secondary">
-                  JPEG or PNG, up to 12 images.
+                  JPEG or PNG, up to {MAX_QUOTATION_IMAGES} images.
                 </Typography>
               </Stack>
               {(isEdit ? (existingQuotation?.images.length ?? 0) : stagedImages.length) > 0 && (

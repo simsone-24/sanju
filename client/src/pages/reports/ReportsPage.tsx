@@ -22,27 +22,49 @@ import RevenueReportTab from './tabs/RevenueReportTab';
 // table's existing DataTable export button, same as every other list page in this app.
 
 export default function ReportsPage() {
-  const canView = usePermission('REPORTS', 'canView');
-  // The Expenses tab shows expense data, so it needs the Expenses module's View as well.
-  const canViewExpenses = usePermission('EXPENSES', 'canView');
+  // Each tab is granted on its own (Masters → User Groups → Reports).
+  const canViewRevenue = usePermission('REPORTS', 'canViewRevenueReport');
+  const canViewOutstanding = usePermission('REPORTS', 'canViewOutstandingReport');
+  const canViewCustomers = usePermission('REPORTS', 'canViewCustomerReport');
+  // The Orders and Expenses tabs show that module's own data, so they need its View as well.
+  const hasOrderReport = usePermission('REPORTS', 'canViewOrderReport');
+  const hasExpenseReport = usePermission('REPORTS', 'canViewExpenseReport');
   const canViewOrders = usePermission('ORDERS', 'canView');
+  const canViewExpenses = usePermission('EXPENSES', 'canView');
+  const canViewOrderReport = hasOrderReport && canViewOrders;
+  const canViewExpenseReport = hasExpenseReport && canViewExpenses;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Slug per tab, in tab order — the active tab lives in the query string so a report can be linked
   // to directly and survives a refresh.
   const tabs: (AppTabItem & { slug: string })[] = [
-    { slug: 'revenue', label: 'Revenue', icon: <TrendingUpIcon fontSize="small" />, content: <RevenueReportTab /> },
-    {
-      slug: 'outstanding',
-      label: 'Outstanding',
-      icon: <AccountBalanceWalletIcon fontSize="small" />,
-      content: <OutstandingReportTab />,
-    },
-    { slug: 'customers', label: 'Customers', icon: <PeopleAltOutlinedIcon fontSize="small" />, content: <CustomerReportTab /> },
-    ...(canViewOrders
+    ...(canViewRevenue
+      ? [{ slug: 'revenue', label: 'Revenue', icon: <TrendingUpIcon fontSize="small" />, content: <RevenueReportTab /> }]
+      : []),
+    ...(canViewOutstanding
+      ? [
+          {
+            slug: 'outstanding',
+            label: 'Outstanding',
+            icon: <AccountBalanceWalletIcon fontSize="small" />,
+            content: <OutstandingReportTab />,
+          },
+        ]
+      : []),
+    ...(canViewCustomers
+      ? [
+          {
+            slug: 'customers',
+            label: 'Customers',
+            icon: <PeopleAltOutlinedIcon fontSize="small" />,
+            content: <CustomerReportTab />,
+          },
+        ]
+      : []),
+    ...(canViewOrderReport
       ? [{ slug: 'orders', label: 'Orders', icon: <ShoppingBagOutlinedIcon fontSize="small" />, content: <OrderReportTab /> }]
       : []),
-    ...(canViewExpenses
+    ...(canViewExpenseReport
       ? [{ slug: 'expenses', label: 'Expenses', icon: <PaymentsIcon fontSize="small" />, content: <ExpenseReportTab /> }]
       : []),
   ];
@@ -65,7 +87,7 @@ export default function ReportsPage() {
     <Box>
       <PageHeader title="Reports" />
 
-      {canView ? (
+      {tabs.length > 0 ? (
         <AppTabs
           surface
           idPrefix="reports"

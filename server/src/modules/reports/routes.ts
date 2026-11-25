@@ -7,28 +7,31 @@ import * as reportsController from './controller';
 const router = Router();
 
 router.use(authenticate);
-router.get('/revenue', authorize(ModuleName.REPORTS, 'canView'), reportsController.revenue);
-router.get('/outstanding', authorize(ModuleName.REPORTS, 'canView'), reportsController.outstanding);
-router.get('/customers', authorize(ModuleName.REPORTS, 'canView'), reportsController.customers);
-router.get('/events', authorize(ModuleName.REPORTS, 'canView'), reportsController.events);
-// Order figures are order data, so seeing them needs the Orders module's View as well as Reports
-// (the main page) or Dashboard Reports (the dashboard tab).
+// One Reports-page tab per endpoint, each granted on its own.
+router.get('/revenue', authorize(ModuleName.REPORTS, 'canViewRevenueReport'), reportsController.revenue);
+router.get('/outstanding', authorize(ModuleName.REPORTS, 'canViewOutstandingReport'), reportsController.outstanding);
+router.get('/customers', authorize(ModuleName.REPORTS, 'canViewCustomerReport'), reportsController.customers);
+// No Reports tab reads this any more; it feeds the Dashboard's "upcoming events" tile, whose
+// neighbouring event tiles all come from the Calendar endpoints — so it answers to the same View.
+router.get('/events', authorize(ModuleName.CALENDAR, 'canView'), reportsController.events);
+// Order figures are order data, so seeing them needs the Orders module's View as well as the Orders
+// tab of the Reports page or the Dashboard's Reports tab.
 router.get(
   '/orders',
   authorizeAny(
-    { module: ModuleName.REPORTS, action: 'canView' },
-    { module: ModuleName.DASHBOARD_REPORTS, action: 'canView' },
+    { module: ModuleName.REPORTS, action: 'canViewOrderReport' },
+    { module: ModuleName.DASHBOARD, action: 'canViewReports' },
   ),
   authorize(ModuleName.ORDERS, 'canView'),
   reportsController.orders,
 );
-// Expense figures are expense data, so seeing them needs the Expenses module's View as well as Reports
-// (the main page) or Dashboard Reports (the dashboard tab).
+// Expense figures are expense data, so seeing them needs the Expenses module's View as well as the
+// Expenses tab of the Reports page or the Dashboard's Reports tab.
 router.get(
   '/expenses',
   authorizeAny(
-    { module: ModuleName.REPORTS, action: 'canView' },
-    { module: ModuleName.DASHBOARD_REPORTS, action: 'canView' },
+    { module: ModuleName.REPORTS, action: 'canViewExpenseReport' },
+    { module: ModuleName.DASHBOARD, action: 'canViewReports' },
   ),
   authorize(ModuleName.EXPENSES, 'canView'),
   reportsController.expenses,

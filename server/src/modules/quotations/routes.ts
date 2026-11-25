@@ -6,7 +6,9 @@ import { validate } from '../../middleware/validate';
 import { createPhotoUploader } from '../../middleware/upload';
 import { ModuleName } from '../permissions/catalog';
 import * as quotationsController from './controller';
+import { MAX_QUOTATION_IMAGES } from './types';
 import {
+  bulkDeleteQuotationsSchema,
   changeQuotationStatusSchema,
   createQuotationSchema,
   updateQuotationImageSchema,
@@ -63,6 +65,14 @@ router.patch(
 );
 // Soft delete — the row is kept with deleted_at set. See quotationsService.remove for what blocks it.
 router.delete('/:id', authorize(ModuleName.QUOTATIONS, 'canDelete'), quotationsController.remove);
+// Bulk soft delete for the list page's selection: the same rules as DELETE /:id, checked for every
+// quotation before any is removed. A POST because a body on DELETE isn't reliably passed through.
+router.post(
+  '/bulk-delete',
+  authorize(ModuleName.QUOTATIONS, 'canDelete'),
+  validate(bulkDeleteQuotationsSchema),
+  quotationsController.removeMany,
+);
 // The inverse, from Audit Log → Deleted Items. Same permission as deleting.
 router.post('/:id/restore', authorize(ModuleName.QUOTATIONS, 'canDelete'), quotationsController.restore);
 // Approval is gated on canApprove specifically, not canEdit — per the seeded matrix, Sales
@@ -73,7 +83,7 @@ router.patch('/:id/approve', authorize(ModuleName.QUOTATIONS, 'canApprove'), quo
 router.post(
   '/:id/images',
   authorize(ModuleName.QUOTATIONS, 'canEdit'),
-  imageUploader.array('images', 12),
+  imageUploader.array('images', MAX_QUOTATION_IMAGES),
   validate(uploadQuotationImagesSchema),
   quotationsController.uploadImages,
 );

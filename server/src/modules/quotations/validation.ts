@@ -114,9 +114,19 @@ export const listQuotationsQuerySchema = z.object({
   dateTo: z.coerce.date().optional(),
 });
 
+// Bulk delete from the list page. Capped at the list's largest page size, since a selection never
+// spans pages.
+export const bulkDeleteQuotationsSchema = z.object({
+  ids: z
+    .array(idSchema('Each selected quotation must be a valid id.'))
+    .min(1, 'Select at least one quotation to delete.')
+    .max(100, 'You can delete up to 100 quotations at a time.'),
+});
+
 export type CreateQuotationSchema = z.infer<typeof createQuotationSchema>;
 export type UpdateQuotationSchema = z.infer<typeof updateQuotationSchema>;
 export type ChangeQuotationStatusSchema = z.infer<typeof changeQuotationStatusSchema>;
+export type BulkDeleteQuotationsSchema = z.infer<typeof bulkDeleteQuotationsSchema>;
 export type ListQuotationsQuerySchema = z.infer<typeof listQuotationsQuerySchema>;
 
 // A short description of one sample image ("Stage", "Hall"…). Blank means no description.

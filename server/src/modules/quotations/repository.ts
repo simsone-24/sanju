@@ -344,8 +344,18 @@ export function findLatestQuotationForEnquiry(
   });
 }
 
-export function softDeleteQuotation(id: number, client: PrismaClientOrTx = prisma) {
-  return client.quotation.update({ where: { id }, data: { deletedAt: new Date() }, select: { id: true } });
+// One statement for any number of quotations, so a bulk delete stamps them all with the same instant.
+export function softDeleteQuotations(ids: number[], client: PrismaClientOrTx = prisma) {
+  return client.quotation.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt: new Date() } });
+}
+
+// Only what deleting needs: the fields its rules check, and the enquiry whose quotation summary has
+// to follow. Lighter than findQuotationById, which loads the whole document.
+export function findQuotationsForDelete(companyId: number, ids: number[], client: PrismaClientOrTx = prisma) {
+  return client.quotation.findMany({
+    where: { id: { in: ids }, companyId, deletedAt: null },
+    select: { id: true, quotationNumber: true, version: true, status: true, source: true, enquiryId: true },
+  });
 }
 
 export function findApprovedQuotationForEnquiry(
@@ -604,7 +614,7 @@ export function findDeletedQuotationById(companyId: number, id: number, client: 
 }
 
 /**
- * The inverse of softDeleteQuotation, on the caller's transaction. Brings back the images that were
+ * The inverse of softDeleteQuotations, on the caller's transaction. Brings back the images that were
  * deleted with it (the same instant) — an image someone removed on its own earlier stays removed.
  */
 export async function restoreQuotation(tx: PrismaClientOrTx, id: number, stamp: Date) {

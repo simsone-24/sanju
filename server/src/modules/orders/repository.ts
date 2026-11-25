@@ -237,6 +237,14 @@ export function findOrderByQuotationId(companyId: number, quotationId: number, c
   });
 }
 
+// Batch form of findOrderByQuotationId: every live order raised from any of the given quotations.
+export function findOrdersByQuotationIds(companyId: number, quotationIds: number[], client: PrismaClientOrTx = prisma) {
+  return client.order.findMany({
+    where: { quotationId: { in: quotationIds }, companyId, deletedAt: null },
+    select: { quotationId: true, orderNumber: true },
+  });
+}
+
 // Enquiries ready to convert (docs/02_BUSINESS_WORKFLOW.md §6: ORDER_CONFIRMED + not yet converted).
 // Approving a quotation is the only way an enquiry reaches ORDER_CONFIRMED (quotations/service.ts
 // `approve`), so each of these has exactly one approved quotation.

@@ -3,8 +3,8 @@ import { useEffect, useRef } from 'react';
 // Sample decor images on a quotation. Each carries a short description ("Stage", "Hall"…) that is
 // printed under it in the quotation PDF and its previews.
 
-/** The server's cap on images per quotation. */
-export const MAX_QUOTATION_IMAGES = 12;
+/** The server's cap on images per quotation (server: quotations/types.ts MAX_QUOTATION_IMAGES). */
+export const MAX_QUOTATION_IMAGES = 25;
 
 /** Longest description the server accepts. */
 export const QUOTATION_IMAGE_CAPTION_MAX = 100;

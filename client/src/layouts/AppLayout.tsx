@@ -46,7 +46,8 @@ import { useRef, useState } from 'react';
 import { usePreservedScroll } from '../hooks/usePreservedScroll';
 import { useScrollToAnchor } from '../hooks/useScrollToAnchor';
 import { useAuth, useLogout } from '../hooks/useAuth';
-import { hasPermission, type ModuleName } from '../hooks/usePermission';
+import { REPORT_TAB_ACTIONS } from '../constants/reportPermissions';
+import { hasPermission, type ModuleName, type PermissionAction } from '../hooks/usePermission';
 import { useProfilePhotoUrl } from '../hooks/useProfilePhotoUrl';
 import { useProfileSync } from '../hooks/useProfileSync';
 import { ProfileDialog } from '../pages/profile/ProfileDialog';
@@ -124,6 +125,11 @@ interface NavItem {
    * startsWith match would keep the parent lit on every child page.
    */
   exact?: boolean;
+  /**
+   * Shown when any of these actions on `module` is granted, instead of its View. For a module with
+   * no single View, such as Reports, whose page opens for anyone holding at least one tab.
+   */
+  anyOf?: readonly PermissionAction[];
 }
 
 interface NavSection {
@@ -172,7 +178,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'ADMINISTRATION',
     items: [
-      { label: 'Reports', path: '/reports', icon: <AssessmentIcon />, module: 'REPORTS' },
+      { label: 'Reports', path: '/reports', icon: <AssessmentIcon />, module: 'REPORTS', anyOf: REPORT_TAB_ACTIONS },
       { label: 'Masters', path: '/masters', icon: <SettingsIcon />, module: 'MASTERS' },
       { label: 'Users', path: '/masters?tab=users', icon: <PeopleIcon />, module: 'MASTERS' },
       { label: 'Audit Log', path: '/audit-log', icon: <HistoryIcon />, module: 'AUDIT_LOG' },
@@ -229,7 +235,9 @@ export default function AppLayout() {
 
   const filteredSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => hasPermission(permissions, item.module, 'canView')),
+    items: section.items.filter((item) =>
+      (item.anyOf ?? ['canView']).some((action) => hasPermission(permissions, item.module, action)),
+    ),
   })).filter((section) => section.items.length > 0);
 
   const userInitial = user?.fullName?.trim().charAt(0).toUpperCase() ?? '?';

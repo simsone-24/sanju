@@ -13,13 +13,22 @@ type GroupName = (typeof GROUP_NAMES)[number];
 
 type PermissionSpec = PermissionAction[] | 'All' | 'No Access';
 
+// Every tab of the Reports page — each is its own permission.
+const ALL_REPORT_TABS: PermissionAction[] = [
+  'canViewRevenueReport',
+  'canViewOutstandingReport',
+  'canViewCustomerReport',
+  'canViewOrderReport',
+  'canViewExpenseReport',
+];
+
 const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> = {
   DASHBOARD: {
     'Super Admin': 'All',
-    Manager: ['canView'],
-    'Sales Executive': ['canView'],
-    'Event Coordinator': ['canView'],
-    Accountant: ['canView'],
+    Manager: ['canView', 'canViewReports'],
+    'Sales Executive': ['canView', 'canViewReports'],
+    'Event Coordinator': ['canView', 'canViewReports'],
+    Accountant: ['canView', 'canViewReports'],
   },
   ENQUIRIES: {
     'Super Admin': 'All',
@@ -94,16 +103,9 @@ const PERMISSION_MATRIX: Record<ModuleName, Record<GroupName, PermissionSpec>> =
   REPORTS: {
     'Super Admin': 'All',
     Manager: 'All',
-    'Sales Executive': ['canView'],
-    'Event Coordinator': ['canView'],
-    Accountant: ['canView', 'canExport'],
-  },
-  DASHBOARD_REPORTS: {
-    'Super Admin': 'All',
-    Manager: 'All',
-    'Sales Executive': ['canView'],
-    'Event Coordinator': ['canView'],
-    Accountant: ['canView'],
+    'Sales Executive': ALL_REPORT_TABS,
+    'Event Coordinator': ALL_REPORT_TABS,
+    Accountant: [...ALL_REPORT_TABS, 'canExport'],
   },
   MASTERS: {
     'Super Admin': 'All',

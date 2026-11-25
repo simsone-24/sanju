@@ -13,7 +13,6 @@ export type ModuleName =
   | 'RENT'
   | 'EXPENSES'
   | 'REPORTS'
-  | 'DASHBOARD_REPORTS'
   | 'MASTERS'
   | 'SETTINGS'
   | 'AUDIT_LOG';
@@ -31,7 +30,15 @@ export type PermissionAction =
   | 'canConvertToOrder'
   | 'canCancel'
   | 'canCompleteEvent'
-  | 'canUpdateChecklist';
+  | 'canUpdateChecklist'
+  // Dashboard: the Reports tab's order and expense graphs.
+  | 'canViewReports'
+  // Reports page: one per tab.
+  | 'canViewRevenueReport'
+  | 'canViewOutstandingReport'
+  | 'canViewCustomerReport'
+  | 'canViewOrderReport'
+  | 'canViewExpenseReport';
 
 /** One granted permission — the unit stored against a user group or a user override. */
 export interface PermissionGrant {

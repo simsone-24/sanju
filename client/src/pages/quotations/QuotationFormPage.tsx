@@ -65,6 +65,7 @@ import {
 import { ImageThumb } from './ImageThumb';
 import { SavedImageThumb } from './SavedImageThumb';
 import {
+  MAX_QUOTATION_IMAGES,
   setStagedCaption,
   stageQuotationImages,
   useStagedImageUrls,
@@ -481,7 +482,7 @@ export default function QuotationFormPage() {
         else showToast('Unable to upload images.', 'error');
       }
     } else {
-      // Stage for upload after the quotation is created (cap at 12 total).
+      // Stage for upload after the quotation is created (capped at MAX_QUOTATION_IMAGES).
       setStagedImages((prev) => stageQuotationImages(prev, files));
     }
   }
@@ -657,7 +658,7 @@ export default function QuotationFormPage() {
   const imagesSection = (
     <FormSection
       title="Sample Decor Images"
-      subtitle="Shown to the customer and added to the quotation PDF on a single page."
+      subtitle="Shown to the customer and added to the quotation PDF's gallery pages."
     >
       <Box sx={{ gridColumn: '1 / -1' }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -671,7 +672,7 @@ export default function QuotationFormPage() {
             <input hidden type="file" accept="image/jpeg,image/png" multiple onChange={handleImageFiles} />
           </Button>
           <Typography variant="caption" color="text.secondary">
-            JPEG or PNG, up to 12 images.
+            JPEG or PNG, up to {MAX_QUOTATION_IMAGES} images.
           </Typography>
         </Stack>
 

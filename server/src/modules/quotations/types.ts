@@ -94,6 +94,16 @@ export interface ListQuotationsParams {
   dateTo?: Date;
 }
 
+/**
+ * Sample decor images one quotation can hold — the upload route's per-request file limit and the
+ * service's running total both read it. Client: pages/quotations/quotationImages.ts.
+ */
+export const MAX_QUOTATION_IMAGES = 25;
+
+export interface BulkDeleteQuotationsResult {
+  deletedCount: number;
+}
+
 // KPI tiles above the Quotations list. `revenue` is the total value of APPROVED quotations —
 // the pipeline value actually won, not the sum of every draft ever raised.
 export interface QuotationStatsResult {

@@ -1257,7 +1257,7 @@ export default function EnquiryFormPage() {
     setQuotationImages([]);
   }
 
-  // Capped at the same 12-image limit the server enforces on quotation image uploads.
+  // Capped at the same per-quotation image limit the server enforces (MAX_QUOTATION_IMAGES).
   function addQuotationImages(files: File[]) {
     setQuotationImages((prev) => stageQuotationImages(prev, files));
   }

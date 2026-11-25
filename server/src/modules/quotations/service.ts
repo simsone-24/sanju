@@ -16,9 +16,11 @@ import { generateQuotationPdf } from './pdf';
 import * as quotationsRepository from './repository';
 import { QuotationBaseRecord, QuotationDetailRecord } from './repository';
 import {
+  BulkDeleteQuotationsResult,
   CreateQuotationInput,
   CustomerSnapshot,
   ListQuotationsParams,
+  MAX_QUOTATION_IMAGES,
   QuotationItemInput,
   QuotationSectionInput,
   UpdateQuotationInput,
@@ -843,8 +845,6 @@ export async function approve(companyId: number, actorId: number, id: number) {
   return mapDetail(updated);
 }
 
-const MAX_QUOTATION_IMAGES = 12;
-
 // Attaches sample decor images to a quotation and regenerates the PDF so they appear on its gallery
 // page. `files` carry the already-stored relative path + original name, and the description typed for
 // each ("Stage", "Hall"…), if any.
@@ -918,6 +918,49 @@ export async function updateImageCaption(
   return mapDetail(refreshed ?? quotation);
 }
 
+// Why a quotation cannot be deleted. Shared by the single and the bulk delete, so both refuse exactly
+// the same quotations; each words the refusal for its own screen.
+type DeleteBlock = { reason: 'ORDER'; orderNumber: string } | { reason: 'APPROVED' };
+
+function findDeleteBlock(status: QuotationStatus, linkedOrderNumber: string | undefined): DeleteBlock | null {
+  if (linkedOrderNumber) return { reason: 'ORDER', orderNumber: linkedOrderNumber };
+  if (status === QuotationStatus.APPROVED) return { reason: 'APPROVED' };
+  return null;
+}
+
+interface DeletableQuotation {
+  id: number;
+  source: QuotationSource;
+  enquiryId: number | null;
+}
+
+// The enquiry shows its latest quotation's amount and version, so after its quotations are deleted
+// those follow the newest one left (or clear when none is). Runs on the caller's transaction.
+async function softDeleteWithEnquirySync(
+  companyId: number,
+  quotations: DeletableQuotation[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await quotationsRepository.softDeleteQuotations(
+    quotations.map((quotation) => quotation.id),
+    tx,
+  );
+
+  const enquiryIds = new Set(
+    quotations.flatMap((quotation) =>
+      quotation.source === QuotationSource.ENQUIRY && quotation.enquiryId !== null ? [quotation.enquiryId] : [],
+    ),
+  );
+  for (const enquiryId of enquiryIds) {
+    const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, enquiryId, tx);
+    await enquiriesRepository.updateEnquiry(
+      enquiryId,
+      { quotationAmount: latest?.totalAmount ?? null, quotationVersion: latest?.version ?? null },
+      tx,
+    );
+  }
+}
+
 /**
  * Soft-deletes a quotation: the row stays (deleted_at is set) and disappears from every list, view
  * and total. Refused while an order was raised from it, or while it is confirmed — a confirmed
@@ -928,27 +971,21 @@ export async function remove(companyId: number, actorId: number, id: number): Pr
   if (!existing) throw new AppError(404, 'Quotation not found.');
 
   const linkedOrder = await ordersRepository.findOrderByQuotationId(companyId, id);
-  if (linkedOrder) {
-    throw new AppError(400, `Cannot delete this quotation because order "${linkedOrder.orderNumber}" was raised from it.`);
+  const block = findDeleteBlock(existing.status, linkedOrder?.orderNumber);
+  if (block?.reason === 'ORDER') {
+    throw new AppError(400, `Cannot delete this quotation because order "${block.orderNumber}" was raised from it.`);
   }
-  if (existing.status === QuotationStatus.APPROVED) {
+  if (block?.reason === 'APPROVED') {
     throw new AppError(400, 'A confirmed quotation cannot be deleted. Change its status first, then delete it.');
   }
 
-  await prisma.$transaction(async (tx) => {
-    await quotationsRepository.softDeleteQuotation(id, tx);
-
-    // The enquiry shows its latest quotation's amount and version, so they follow the newest one
-    // that is left (or clear when none is).
-    if (existing.source === QuotationSource.ENQUIRY && existing.enquiry) {
-      const latest = await quotationsRepository.findLatestQuotationForEnquiry(companyId, existing.enquiry.id, tx);
-      await enquiriesRepository.updateEnquiry(
-        existing.enquiry.id,
-        { quotationAmount: latest?.totalAmount ?? null, quotationVersion: latest?.version ?? null },
-        tx,
-      );
-    }
-  });
+  await prisma.$transaction((tx) =>
+    softDeleteWithEnquirySync(
+      companyId,
+      [{ id: existing.id, source: existing.source, enquiryId: existing.enquiry?.id ?? null }],
+      tx,
+    ),
+  );
 
   await logActivity({
     companyId,
@@ -958,6 +995,64 @@ export async function remove(companyId: number, actorId: number, id: number): Pr
     description: `Quotation "${existing.quotationNumber}" (v${existing.version}) deleted.`,
     performedById: actorId,
   });
+}
+
+/**
+ * Bulk soft delete for the list page's selection, under the same rules as `remove`. All or nothing:
+ * every quotation is checked before any is touched, and if one is refused none is deleted. The reply
+ * names each refused quotation and why, so the list never ends up half-changed behind one error.
+ */
+export async function removeMany(companyId: number, actorId: number, ids: number[]): Promise<BulkDeleteQuotationsResult> {
+  const uniqueIds = [...new Set(ids)];
+  const [quotations, linkedOrders] = await Promise.all([
+    quotationsRepository.findQuotationsForDelete(companyId, uniqueIds),
+    ordersRepository.findOrdersByQuotationIds(companyId, uniqueIds),
+  ]);
+
+  if (quotations.length !== uniqueIds.length) {
+    throw new AppError(404, 'Some of the selected quotations no longer exist. Refresh the list and try again.');
+  }
+
+  // One entry per refused quotation (field = which one, message = why), under a headline that says
+  // nothing was touched — the client prints the headline followed by each entry.
+  const orderNumberByQuotationId = new Map(linkedOrders.map((order) => [order.quotationId, order.orderNumber]));
+  const refusals = quotations.flatMap((quotation) => {
+    const block = findDeleteBlock(quotation.status, orderNumberByQuotationId.get(quotation.id));
+    if (!block) return [];
+    return [
+      {
+        field: `${quotation.quotationNumber} (v${quotation.version})`,
+        message:
+          block.reason === 'ORDER'
+            ? `order "${block.orderNumber}" was raised from it.`
+            : 'it is confirmed; change its status first.',
+      },
+    ];
+  });
+  if (refusals.length > 0) {
+    throw new AppError(
+      400,
+      `Nothing was deleted. ${refusals.length === 1 ? 'This quotation' : `These ${refusals.length} quotations`} can't be deleted:`,
+      refusals,
+    );
+  }
+
+  await prisma.$transaction((tx) => softDeleteWithEnquirySync(companyId, quotations, tx));
+
+  await Promise.all(
+    quotations.map((quotation) =>
+      logActivity({
+        companyId,
+        module: 'QUOTATIONS',
+        referenceId: quotation.id,
+        action: 'DELETE',
+        description: `Quotation "${quotation.quotationNumber}" (v${quotation.version}) deleted (bulk delete of ${quotations.length}).`,
+        performedById: actorId,
+      }),
+    ),
+  );
+
+  return { deletedCount: quotations.length };
 }
 
 export async function removeImage(companyId: number, actorId: number, quotationId: number, imageId: number) {
@@ -1011,15 +1106,22 @@ export async function syncAdvanceFromEnquiry(
   return updated;
 }
 
-// Returns an absolute filesystem path to the PDF, generating it on demand if it was never rendered
-// or the file is missing (e.g. after a storage reset). Used by the authenticated download route.
+// Returns an absolute filesystem path to the PDF, generating it on demand if it was never rendered,
+// the file is missing (e.g. after a storage reset), or Company Settings changed after it was rendered
+// — the logo, bank details and terms all print on it, and a saved quotation is otherwise
+// only re-rendered when the quotation itself changes. Used by the authenticated download route.
 export async function getPdfForDownload(companyId: number, id: number) {
-  const quotation = await quotationsRepository.findQuotationById(companyId, id);
+  const [quotation, company] = await Promise.all([
+    quotationsRepository.findQuotationById(companyId, id),
+    settingsRepository.findCompanyById(companyId),
+  ]);
   if (!quotation) throw new AppError(404, 'Quotation not found.');
 
   let relativePath = quotation.pdfPath;
-  const exists = relativePath ? fs.existsSync(path.resolve(env.uploadPath, relativePath)) : false;
-  if (!relativePath || !exists) {
+  const absolute = relativePath ? path.resolve(env.uploadPath, relativePath) : null;
+  const exists = absolute ? fs.existsSync(absolute) : false;
+  const staleBranding = Boolean(absolute && exists && company && fs.statSync(absolute).mtime < company.updatedAt);
+  if (!relativePath || !exists || staleBranding) {
     relativePath = await regeneratePdf(companyId, quotation);
     if (!relativePath) throw new AppError(500, 'Unable to generate the quotation PDF.');
   }

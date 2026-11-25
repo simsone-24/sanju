@@ -27,6 +27,21 @@ export interface DataTableColumn<T> {
   width?: number | string;
 }
 
+/**
+ * A leading checkbox column for picking rows, e.g. for a bulk delete. The page owns the selection and
+ * the table only draws it. `getId` is the record's own key, which can differ from `getRowId` when one
+ * table mixes record types whose ids could collide.
+ */
+export interface DataTableSelection<T, K extends string | number> {
+  selectedIds: readonly K[];
+  onChange: (ids: K[]) => void;
+  getId: (row: T) => K;
+  /** Leaves a row's box disabled when the bulk action could never apply to it. */
+  isSelectable?: (row: T) => boolean;
+  /** Shown when hovering a disabled box, saying why that row can't be picked. */
+  disabledReason?: string;
+}
+
 interface EmptyStateConfig {
   icon: ReactNode;
   title: string;
@@ -35,7 +50,7 @@ interface EmptyStateConfig {
   action?: ReactNode;
 }
 
-interface DataTableProps<T> {
+interface DataTableProps<T, K extends string | number> {
   columns: DataTableColumn<T>[];
   rows: T[];
   /** Usually the record's primary key; report rows with no single key compose one from their parts. */
@@ -96,9 +111,43 @@ interface DataTableProps<T> {
    * sorted. Also written first in the CSV export.
    */
   showSerialNumber?: boolean;
+  /** Adds a leading checkbox column; see DataTableSelection. */
+  selection?: DataTableSelection<T, K>;
 }
 
 const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+
+const SELECTION_COLUMN_WIDTH = 48;
+
+// Brand blue at 8%: reads as "picked" on both the light and the dark card without hiding the
+// even-row banding or the status accent stripe.
+const SELECTED_ROW_BACKGROUND = 'rgba(37, 99, 235, 0.08)';
+
+interface SelectionCheckboxProps {
+  label: string;
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}
+
+// A native checkbox tinted with the brand colour. "Some but not all picked" has no HTML attribute,
+// so `indeterminate` is set on the element itself, on every render, to stay in step.
+function SelectionCheckbox({ label, checked, indeterminate = false, disabled = false, onChange }: SelectionCheckboxProps) {
+  return (
+    <input
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      ref={(element) => {
+        if (element) element.indeterminate = indeterminate;
+      }}
+      className="tw-m-0 tw-h-4 tw-w-4 tw-cursor-pointer tw-align-middle tw-accent-brand disabled:tw-cursor-not-allowed disabled:tw-opacity-40"
+    />
+  );
+}
 
 const ALIGN_TEXT = {
   left: 'tw-text-left',
@@ -179,7 +228,7 @@ function paginationItems(current: number, total: number): (number | 'gap')[] {
 //   implement a server-side `sort` query param yet.
 // - CSV export covers only the currently loaded page, not the full filtered result set, since
 //   fetching every page isn't wired up. Real Excel export is a separately deferred backend item.
-export function DataTable<T>({
+export function DataTable<T, K extends string | number = string | number>({
   columns,
   rows,
   getRowId,
@@ -205,7 +254,8 @@ export function DataTable<T>({
   rowAccentColor,
   dense = false,
   showSerialNumber = false,
-}: DataTableProps<T>) {
+  selection,
+}: DataTableProps<T, K>) {
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(
     () => new Set(columns.filter((column) => column.hideByDefault).map((column) => column.key)),
   );
@@ -216,7 +266,7 @@ export function DataTable<T>({
   // The server's own page and size when it sent them, so S.No stays right even if a parent's local
   // state is a render behind; tables with no pagination (meta absent) start from 1.
   const serialOffset = ((meta?.page ?? page) - 1) * (meta?.limit ?? limit);
-  const columnCount = visibleColumns.length + (showSerialNumber ? 1 : 0);
+  const columnCount = visibleColumns.length + (showSerialNumber ? 1 : 0) + (selection ? 1 : 0);
 
   const sortedRows = (() => {
     if (!sort) return rows;
@@ -225,6 +275,31 @@ export function DataTable<T>({
     const factor = sort.direction === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => cellValue(column, a).localeCompare(cellValue(column, b)) * factor);
   })();
+
+  // Selection is scoped to the rows on screen: the header box picks or clears every selectable row of
+  // this page, leaving any other picked ids alone.
+  const selectedSet = new Set<K>(selection?.selectedIds ?? []);
+  const isRowSelectable = (row: T) => selection?.isSelectable?.(row) ?? true;
+  const selectableRows = selection ? sortedRows.filter(isRowSelectable) : [];
+  const selectedOnPageCount = selection
+    ? selectableRows.filter((row) => selectedSet.has(selection.getId(row))).length
+    : 0;
+  const allOnPageSelected = selectableRows.length > 0 && selectedOnPageCount === selectableRows.length;
+
+  function toggleRowSelection(row: T) {
+    if (!selection) return;
+    const id = selection.getId(row);
+    selection.onChange(
+      selectedSet.has(id) ? selection.selectedIds.filter((selected) => selected !== id) : [...selection.selectedIds, id],
+    );
+  }
+
+  function togglePageSelection() {
+    if (!selection) return;
+    const pageIds = new Set(selectableRows.map((row) => selection.getId(row)));
+    const othersSelected = selection.selectedIds.filter((id) => !pageIds.has(id));
+    selection.onChange(allOnPageSelected ? othersSelected : [...othersSelected, ...pageIds]);
+  }
 
   function toggleSort(key: string) {
     setSort((current) => {
@@ -366,6 +441,26 @@ export function DataTable<T>({
         >
           <thead>
             <tr>
+              {selection && (
+                <th
+                  scope="col"
+                  style={{ width: SELECTION_COLUMN_WIDTH }}
+                  className={[
+                    cellPadding,
+                    'tw-text-center tw-border-b',
+                    headerStyle.cell,
+                    stickyHeader ? 'tw-sticky tw-top-0 tw-z-10' : '',
+                  ].join(' ')}
+                >
+                  <SelectionCheckbox
+                    label="Select all rows on this page"
+                    checked={allOnPageSelected}
+                    indeterminate={selectedOnPageCount > 0 && !allOnPageSelected}
+                    disabled={loading || selectableRows.length === 0}
+                    onChange={togglePageSelection}
+                  />
+                </th>
+              )}
               {showSerialNumber && (
                 <th
                   scope="col"
@@ -439,6 +534,7 @@ export function DataTable<T>({
             {loading &&
               Array.from({ length: Math.min(limit, 10) }).map((_, index) => (
                 <tr key={`skeleton-${index}`}>
+                  {selection && <td className={`${cellPadding} ${ROW_DIVIDER}`} />}
                   {showSerialNumber && (
                     <td className={`${cellPadding} ${ROW_DIVIDER}`}>
                       <span className="tw-mx-auto tw-block tw-h-4 tw-w-6 tw-animate-pulse tw-rounded tw-bg-slate-100 dark:tw-bg-slate-700" />
@@ -480,6 +576,15 @@ export function DataTable<T>({
             {!loading &&
               sortedRows.map((row, rowIndex) => {
                 const accentColor = rowAccentColor?.(row);
+                const selectable = Boolean(selection) && isRowSelectable(row);
+                const selected = selection ? selectedSet.has(selection.getId(row)) : false;
+                const rowStyle =
+                  accentColor || selected
+                    ? {
+                        ...(accentColor ? { boxShadow: `inset 4px 0 0 ${accentColor}` } : {}),
+                        ...(selected ? { backgroundColor: SELECTED_ROW_BACKGROUND } : {}),
+                      }
+                    : undefined;
                 return (
                   <tr
                     key={getRowId(row)}
@@ -492,8 +597,24 @@ export function DataTable<T>({
                         : 'tw-cursor-default',
                       getRowId(row) === highlightRowId ? 'row-highlight' : '',
                     ].join(' ')}
-                    style={accentColor ? { boxShadow: `inset 4px 0 0 ${accentColor}` } : undefined}
+                    style={rowStyle}
                   >
+                    {selection && (
+                      <td
+                        style={{ width: SELECTION_COLUMN_WIDTH }}
+                        title={selectable ? undefined : selection.disabledReason}
+                        className={[cellPadding, ROW_DIVIDER, 'tw-text-center tw-align-middle'].join(' ')}
+                        // Ticking a box, or just missing it inside its cell, must not also open the row.
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <SelectionCheckbox
+                          label={`Select row ${serialOffset + rowIndex + 1}`}
+                          checked={selected}
+                          disabled={!selectable}
+                          onChange={() => toggleRowSelection(row)}
+                        />
+                      </td>
+                    )}
                     {showSerialNumber && (
                       <td
                         style={{ width: 64 }}

@@ -9,7 +9,7 @@ type DashboardReport = 'orders' | 'expenses';
 /**
  * The Dashboard's Reports tab: a switch between the Orders graphs and the Expenses graphs, each with
  * its own Duration dropdown. Only the reports the user may read are offered — both draw on data from
- * another module, so each needs that module's View permission as well as Dashboard Reports.
+ * another module, so each needs that module's View permission as well as Dashboard → Reports.
  */
 export function DashboardReports() {
   const canViewOrders = usePermission('ORDERS', 'canView');
